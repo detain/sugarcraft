@@ -18,19 +18,30 @@ use SugarCraft\Widgets\Lang;
  * - `Tab` → next tab (wraps)
  * - `Shift+Tab` → previous tab (wraps)
  * - `1`–`9` → jump directly to tab N (1-indexed)
+ * - `Ctrl+W` → close the active tab (only on a closable bar, see
+ *   {@see Tabs::withClosable()})
  */
 final class TabsKeyMap implements KeyMap
 {
     /** @param list<Binding> */
     private readonly array $bindings;
 
+    /** Closes the active tab on a closable bar. */
+    public readonly Binding $closeTab;
+
+    /**
+     * `$closeTab` is optional so maps built positionally before the close
+     * binding existed keep working; null means the default `ctrl+w`.
+     */
     public function __construct(
         public readonly Binding $nextTab,
         public readonly Binding $prevTab,
         /** @var list<Binding> */
         public readonly array $jumpBindings,
+        ?Binding $closeTab = null,
     ) {
-        $this->bindings = [$nextTab, $prevTab, ...$jumpBindings];
+        $this->closeTab = $closeTab ?? self::defaultCloseTab();
+        $this->bindings = [$nextTab, $prevTab, ...$jumpBindings, $this->closeTab];
     }
 
     /**
@@ -48,6 +59,15 @@ final class TabsKeyMap implements KeyMap
                 help: new Help('shift+tab', Lang::t('tabs.prev_tab')),
             ),
             jumpBindings: self::jumpBindings(),
+            closeTab: self::defaultCloseTab(),
+        );
+    }
+
+    private static function defaultCloseTab(): Binding
+    {
+        return Binding::new(
+            keys: ['ctrl+w'],
+            help: new Help('ctrl+w', Lang::t('tabs.close_tab')),
         );
     }
 
@@ -74,6 +94,6 @@ final class TabsKeyMap implements KeyMap
     public function fullHelp(): array
     {
         $jumpCols = array_chunk($this->jumpBindings, 4);
-        return [$this->shortHelp(), ...$jumpCols];
+        return [$this->shortHelp(), ...$jumpCols, [$this->closeTab]];
     }
 }

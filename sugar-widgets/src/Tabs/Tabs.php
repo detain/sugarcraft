@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Widgets\Tabs;
 
 use SugarCraft\Widgets\Lang;
-use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
+use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Zones\Manager;
 use SugarCraft\Mouse\Zones\MsgZoneInBounds;
 
@@ -26,14 +27,37 @@ use SugarCraft\Mouse\Zones\MsgZoneInBounds;
  * - `Shift+Tab` — retreat to the previous tab (wraps by default)
  * - `1`–`9` — jump directly to tab N (1-indexed)
  *
- * Wrap-around can be disabled via {@see noWrap()}.
+ * - `Ctrl+W` — close the active tab (closable bars only)
+ *
+ * Wrap-around can be disabled via {@see noWrap()}. Keyboard input is
+ * routed to the focused bar only (the family law shared with Table and
+ * Tree); pointer input is never focus-gated.
  *
  * ## Mouse navigation
  *
- * When a {@see Manager} is supplied (via {@see withZoneManager()}),
- * each tab label is wrapped in a named zone. The parent component
- * should route `MouseMsg` through `Manager::anyInBoundsAndUpdate()`;
- * clicking a visible tab activates it.
+ * Three routes, all accepted whether or not the bar is focused:
+ *
+ * - **Manager zones** ({@see withZoneManager()}): each visible tab is
+ *   wrapped in a named zone; the parent routes `MouseMsg` through
+ *   `Manager::anyInBoundsAndUpdate()` and the resulting
+ *   {@see MsgZoneInBounds} reaches {@see update()}.
+ * - **Mark zones** ({@see withMark()}): the same zone markup through a
+ *   manager-free {@see Mark}, the way Breadcrumb and the candy-code
+ *   renderer publish zones; a host that scans the frame with a
+ *   `Scanner` hands the hit zone id to {@see clickZone()}.
+ * - **Spans** ({@see spans()}, {@see clickAt()}): no markup at all; the
+ *   host subtracts the bar's screen column and passes the bar column.
+ *
+ * A click on a tab activates it. On a closable bar
+ * ({@see withClosable()}) a click on the close affordance closes that
+ * tab and returns a `Cmd` carrying {@see TabClosedMsg}.
+ *
+ * ## Interactive bars
+ *
+ * {@see interactive()} builds a bar with zones attached in one call:
+ * `Tabs::interactive($labels, $zones)->withBadge(1, '3')->withClosable()`.
+ * Tabs reorder with {@see moveTab()} and close with {@see closeTab()};
+ * badges and the active tab follow the tab they belong to.
  *
  * ## Rendering
  *
@@ -51,8 +75,18 @@ use SugarCraft\Mouse\Zones\MsgZoneInBounds;
  */
 final class Tabs implements Model
 {
-    /** @param list<string> */
+    /** Default close-affordance glyph for {@see withClosable()}. */
+    public const CLOSE_GLYPH = '×';
+
+    /** @var list<string> */
     public readonly array $labels;
+
+    /**
+     * Per-tab badge text keyed by tab index (sanitized at render time).
+     *
+     * @var array<int, string>
+     */
+    public readonly array $badges;
 
     /** First tab index visible in the current scroll window (0-based). */
     public readonly int $scrollOffset;
@@ -87,12 +121,25 @@ final class Tabs implements Model
         public readonly string $zoneKey,
         array $labels = [],
         int $scrollOffset = 0,
+        array $badges = [],
+        public readonly bool $closable = false,
+        public readonly string $closeGlyph = self::CLOSE_GLYPH,
+        public readonly ?Style $badgeStyle = null,
+        public readonly ?Mark $mark = null,
+        public readonly string $placeholder = '',
     ) {
         $labelCount = count($labels);
         if ($active < 0 || ($labelCount > 0 && $active >= $labelCount)) {
             throw new \InvalidArgumentException(Lang::t('tabs.bad_index'));
         }
         $this->labels = array_values($labels);
+        foreach ($badges as $index => $badge) {
+            if (!is_int($index) || $index < 0 || $index >= $labelCount) {
+                throw new \InvalidArgumentException(Lang::t('tabs.bad_index'));
+            }
+        }
+        ksort($badges);
+        $this->badges = $badges;
         $this->scrollOffset = max(0, $scrollOffset);
         $this->scrollEnd = $this->computeScrollEnd();
     }
@@ -125,19 +172,34 @@ final class Tabs implements Model
     }
 
     /**
-     * @return array{0:Model, 1:?\Closure}
+     * A bar ready for pointer input: {@see new()} with its zones attached.
+     *
+     * `$zones` is either a {@see Manager} (clicks arrive as
+     * {@see MsgZoneInBounds} through {@see update()}) or a manager-free
+     * {@see Mark} (the host scans the frame and calls {@see clickZone()}).
+     * The bar starts blurred like every bar: clicks work at once, keys
+     * once the host calls {@see focus()}.
+     *
+     * @param list<string> $labels Tab labels in display order.
+     */
+    public static function interactive(array $labels, Manager|Mark $zones, int $width = 0): self
+    {
+        $bar = self::new($labels, $width);
+        return $zones instanceof Manager ? $bar->withZoneManager($zones) : $bar->withMark($zones);
+    }
+
+    /**
+     * Keyboard input is handled only while focused. Zone clicks
+     * ({@see MsgZoneInBounds}) are handled whether or not the bar is
+     * focused, and never grant focus. The `Cmd` is non-null only when a
+     * tab was closed; it yields a {@see TabClosedMsg}.
+     *
+     * @return array{0:Tabs, 1:?\Closure}
      */
     public function update(Msg $msg): array
     {
-        // Mouse click on a tab zone — activate that tab. Clicks are not gated
-        // on focus: a bar is clickable before any keyboard focus lands on it.
-        // Keyboard input still requires focus (it is routed to the focused bar).
         if ($msg instanceof MsgZoneInBounds) {
-            $tabIndex = $this->tabIndexFromZoneId($msg->zone->id);
-            if ($tabIndex !== null && $tabIndex >= $this->scrollOffset && $tabIndex <= $this->scrollEnd) {
-                return [$this->withActive($tabIndex), null];
-            }
-            return [$this, null];
+            return $this->clickZone($msg->zone->id);
         }
 
         if (!($msg instanceof KeyMsg) || !$this->focused) {
@@ -147,6 +209,10 @@ final class Tabs implements Model
         $count = count($this->labels);
         if ($count === 0) {
             return [$this, null];
+        }
+
+        if ($this->closable && $this->keyMap->closeTab->matches($msg)) {
+            return $this->closeWithMsg($this->active);
         }
 
         // Tab / Shift+Tab navigation
@@ -190,50 +256,192 @@ final class Tabs implements Model
      *     ~~        ^^^^^^        ~~~
      *     inactive   active    inactive
      *
-     * When a {@see Manager} is set, each tab label is wrapped in an APC
-     * zone marker so the parent can {@see Manager::scan()} to record
-     * bounding boxes for mouse routing.
+     * A badge renders after its label (` Inbox 3 `), and a closable bar
+     * appends the close affordance to every tab (` Home × `).
      *
-     * An empty label list renders the empty string — emptiness is never
-     * signalled (no placeholder hook ships; the parked emptyPlaceholder
-     * concept awaits an owner ruling, W-40/063).
+     * When a {@see Manager} or a {@see Mark} is attached, each visible tab
+     * is wrapped in a zone marker (`<zoneKey>tab-N`, and `<zoneKey>close-N`
+     * around the close affordance) so the parent can scan the frame for
+     * mouse routing. A Manager prefixes the ids with its own prefix; a Mark
+     * emits them as they are.
+     *
+     * An empty label list renders the placeholder set by
+     * {@see withPlaceholder()} in the inactive style, or the empty string
+     * when none is set (the default).
      */
     public function view(): string
     {
         if ($this->labels === []) {
+            return $this->viewPlaceholder();
+        }
+
+        $parts = $this->windowParts();
+
+        if (!$this->marksZones()) {
+            $line = implode(
+                $this->inactiveStyle->render($this->divider),
+                array_map(fn(array $part): string => $this->renderPieces($part[0]), $parts),
+            );
+            if ($this->width > 0 && Width::string($line) > $this->width) {
+                $line = Width::truncateAnsi($line, $this->width - 1) . '…';
+            }
+            return $line;
+        }
+
+        // M14: zone markup is invisible by Mark's zero-width contract, but
+        // Width::string scores each PUA sentinel as one cell — marking BEFORE
+        // pricing inflates every tab by phantom cells and lets truncateAnsi
+        // cut inside a marker pair, orphaning sentinels. Price and clip the
+        // unmarked content, then mark only the survivors.
+        if ($this->width > 0 && $this->plainWidth($parts) > $this->width) {
+            return $this->assembleMarked($this->clipParts($parts, $this->width - 1)) . '…';
+        }
+        return $this->assembleMarked($parts);
+    }
+
+    /**
+     * The cells each visible tab occupies on the frame {@see view()} draws,
+     * in display order — the hit-testing surface for hosts that route
+     * clicks by column instead of by zone markup.
+     *
+     * Columns are relative to the bar's first cell. Tabs scrolled out of
+     * the window are absent; a tab the width clips reports only its
+     * visible cells. An empty bar has no spans.
+     *
+     * @return list<TabSpan>
+     */
+    public function spans(): array
+    {
+        if ($this->labels === []) {
+            return [];
+        }
+
+        $parts = $this->windowParts();
+        $dividerWidth = Width::string($this->divider);
+        $bound = $this->width > 0 && $this->plainWidth($parts) > $this->width
+            ? $this->width - 1
+            : PHP_INT_MAX;
+
+        $spans = [];
+        $cursor = 0;
+        foreach ($parts as $k => [$pieces, $tabIndex]) {
+            if ($k > 0) {
+                $cursor += $dividerWidth;
+            }
+            $start = $cursor;
+            $closeStart = null;
+            foreach ($pieces as [$text, , $isClose]) {
+                if ($isClose) {
+                    $closeStart = $cursor;
+                }
+                $cursor += Width::string($text);
+            }
+            if ($tabIndex === null || $start >= $bound) {
+                continue;
+            }
+            $end = min($cursor, $bound);
+            $spans[] = new TabSpan(
+                index: $tabIndex,
+                start: $start,
+                end: $end,
+                closeStart: $closeStart !== null && $closeStart < $end ? $closeStart : null,
+            );
+        }
+        return $spans;
+    }
+
+    /**
+     * The visible tab under bar column `$col`, or null (a divider, an
+     * ellipsis, or past the end).
+     */
+    public function tabAt(int $col): ?int
+    {
+        foreach ($this->spans() as $span) {
+            if ($span->contains($col)) {
+                return $span->index;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Apply a click at bar column `$col` (0-based, relative to the bar's
+     * first cell): a click on a tab activates it, a click on a closable
+     * tab's close affordance closes it. Not focus-gated.
+     *
+     * @return array{0:Tabs, 1:?\Closure}
+     */
+    public function clickAt(int $col): array
+    {
+        foreach ($this->spans() as $span) {
+            if (!$span->contains($col)) {
+                continue;
+            }
+            if ($this->closable && $span->onClose($col)) {
+                return $this->closeWithMsg($span->index);
+            }
+            return [$this->withActive($span->index), null];
+        }
+        return [$this, null];
+    }
+
+    /**
+     * Apply a click on the zone named `$zoneId` — the id exactly as it
+     * appears in the frame (with the Manager prefix on a Manager bar, bare
+     * on a Mark bar). Ids minted by another bar, or naming a tab outside
+     * the visible window, leave the bar unchanged. Not focus-gated.
+     *
+     * @return array{0:Tabs, 1:?\Closure}
+     */
+    public function clickZone(string $zoneId): array
+    {
+        $tabIndex = $this->tabIndexFromZoneId($zoneId, 'tab-');
+        if ($tabIndex !== null && $this->isVisible($tabIndex)) {
+            return [$this->withActive($tabIndex), null];
+        }
+        if ($this->closable) {
+            $closeIndex = $this->tabIndexFromZoneId($zoneId, 'close-');
+            if ($closeIndex !== null && $this->isVisible($closeIndex)) {
+                return $this->closeWithMsg($closeIndex);
+            }
+        }
+        return [$this, null];
+    }
+
+    /** The empty-bar frame: the placeholder, styled and clipped, or nothing. */
+    private function viewPlaceholder(): string
+    {
+        if ($this->placeholder === '') {
             return '';
         }
-
-        $count = count($this->labels);
-
-        // Build per-tab styled segments, optionally wrapped in zone markers.
-        $segments = [];
-        foreach ($this->labels as $i => $label) {
-            $style = $i === $this->active ? $this->activeStyle : $this->inactiveStyle;
-            // While focused, the active tab gains an underline: the
-            // `focused` flag must DRAW something — otherwise focused and
-            // blurred frames are byte-identical and keyboard focus is
-            // invisible (an a11y affordance the flag promises).
-            if ($i === $this->active && $this->focused) {
-                $style = $style->underline();
-            }
-            $padded = ' ' . self::sanitizeLabel($label) . ' ';
-
-            // M14: zone markup is invisible by Mark's zero-width contract,
-            // but Width::string scores each PUA sentinel as one cell —
-            // marking BEFORE pricing inflates every tab by 4 + 2·strlen(id)
-            // phantom cells (spurious ellipses, dropped tabs) and lets
-            // truncateAnsi cut inside a marker pair, orphaning sentinels.
-            // All measuring and clipping happens on the unmarked content;
-            // mark only the segments that actually reach the frame.
-            $segments[$i] = [$padded, $style];
+        $text = self::sanitizeLabel($this->placeholder);
+        if ($this->width > 0 && Width::string($text) > $this->width) {
+            $text = Width::truncateAnsi($text, $this->width - 1) . '…';
         }
+        return $this->inactiveStyle->render($text);
+    }
 
-        // The stored scrollEnd IS the visible window's last index: it is
-        // computed once per state by computeScrollEnd() using this same bar's
-        // ellipsis reservation and sanitised widths (E736/bits-2.4), so view()
-        // consumes it instead of re-walking. scrollEnd >= visibleStart holds by
-        // construction — both derive from the same clamped start.
+    /** Whether view() wraps tabs in zone markup (a Manager or a Mark is attached). */
+    private function marksZones(): bool
+    {
+        return $this->zoneManager !== null || $this->mark !== null;
+    }
+
+    /**
+     * The parts view() draws, left to right: an optional left `…`, the
+     * tabs of the scroll window, an optional right `…`. Each part is its
+     * pieces plus the tab index it belongs to (null for an ellipsis).
+     *
+     * The stored scrollEnd IS the visible window's last index: it is
+     * computed once per state by computeScrollEnd() using the same ellipsis
+     * reservation and sanitized widths (E736/bits-2.4), so this consumes it
+     * instead of re-walking.
+     *
+     * @return list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}>
+     */
+    private function windowParts(): array
+    {
+        $count = count($this->labels);
         $visibleStart = 0;
         $visibleEnd = $count - 1;
         $leftEllipsis = false;
@@ -242,97 +450,181 @@ final class Tabs implements Model
         if ($this->width > 0) {
             $visibleStart = min($this->scrollOffset, $count - 1);
             $visibleEnd = $this->scrollEnd;
-
-            // Hidden tabs before the window get a left ellipsis — the very
-            // predicate computeScrollEnd() prices, shared via the helper so
-            // the walk and the draw can never disagree about its cost.
+            // The very predicate computeScrollEnd() prices, shared via the
+            // helper so the walk and the draw can never disagree about it.
             $leftEllipsis = $this->rendersLeftEllipsis();
-
-            // Show right ellipsis if there are tabs after visibleEnd.
             $rightEllipsis = $visibleEnd < $count - 1;
         }
 
-        // Build output: optional left ellipsis + visible tabs + optional right ellipsis.
         $parts = [];
         if ($leftEllipsis) {
-            $parts[] = ['…', null, null];
+            $parts[] = [[['…', null, false]], null];
         }
-
         for ($i = $visibleStart; $i <= $visibleEnd; $i++) {
-            [$padded, $style] = $segments[$i];
-            $parts[] = [$padded, $style, $i];
+            $parts[] = [$this->tabPieces($i), $i];
         }
-
         if ($rightEllipsis) {
-            $parts[] = ['…', null, null];
+            $parts[] = [[['…', null, false]], null];
         }
-
-        $inactiveDivider = $this->inactiveStyle->render($this->divider);
-
-        if ($this->zoneManager === null) {
-            $line = implode($inactiveDivider, array_map(
-                static fn(array $p): string => $p[1]?->render($p[0]) ?? $p[0],
-                $parts,
-            ));
-            if ($this->width > 0 && Width::string($line) > $this->width) {
-                $line = Width::truncateAnsi($line, $this->width - 1) . '…';
-            }
-            return $line;
-        }
-
-        // Zone-attached host: price on the unmarked content and mark only
-        // the survivors, so sentinel pairs are never born split (M14).
-        $plain = implode($this->divider, array_map(static fn(array $p): string => $p[0], $parts));
-        if ($this->width > 0 && Width::string($plain) > $this->width) {
-            return $this->assembleMarked($this->clipParts($parts, $this->width - 1)) . '…';
-        }
-        return $this->assembleMarked($parts);
+        return $parts;
     }
 
     /**
-     * Render each part, wrapping tab segments in their zone marker. The
-     * marking that used to happen per-segment before pricing now happens
-     * here — after the window and any clipping have been decided on the
-     * invisible markup's zero-width contract (M14).
+     * The styled pieces of tab `$i`: the padded label, then the badge,
+     * then the close affordance (flagged true). While focused the active
+     * tab gains an underline: the `focused` flag must DRAW something, or
+     * focused and blurred frames are byte-identical and keyboard focus is
+     * invisible.
      *
-     * @param list<array{0:string, 1:?Style, 2:?int}> $parts
+     * @return list<array{0:string, 1:?Style, 2:bool}>
+     */
+    private function tabPieces(int $i): array
+    {
+        $style = $i === $this->active ? $this->activeStyle : $this->inactiveStyle;
+        if ($i === $this->active && $this->focused) {
+            $style = $style->underline();
+        }
+        $texts = $this->tabTexts($i);
+        $pieces = [[$texts['label'], $style, false]];
+        if ($texts['badge'] !== null) {
+            $pieces[] = [$texts['badge'], $this->badgeStyle ?? $style, false];
+        }
+        if ($texts['close'] !== null) {
+            $pieces[] = [$texts['close'], $style, true];
+        }
+        return $pieces;
+    }
+
+    /**
+     * The sanitized, unstyled texts of tab `$i` — the single source both
+     * the draw ({@see tabPieces()}) and the pricing ({@see tabWidth()})
+     * read, so priced and drawn widths never drift.
+     *
+     * @return array{label:string, badge:?string, close:?string}
+     */
+    private function tabTexts(int $i): array
+    {
+        $badge = isset($this->badges[$i]) ? self::sanitizeLabel($this->badges[$i]) : '';
+        return [
+            'label' => ' ' . self::sanitizeLabel($this->labels[$i]) . ' ',
+            'badge' => $badge === '' ? null : $badge . ' ',
+            'close' => $this->closable ? $this->closeGlyph . ' ' : null,
+        ];
+    }
+
+    /** @param list<array{0:string, 1:?Style, 2:bool}> $pieces */
+    private function renderPieces(array $pieces): string
+    {
+        $out = '';
+        foreach ($pieces as [$text, $style]) {
+            $out .= $style?->render($text) ?? $text;
+        }
+        return $out;
+    }
+
+    /** @param list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}> $parts */
+    private function plainWidth(array $parts): int
+    {
+        $cells = 0;
+        foreach ($parts as $k => [$pieces]) {
+            if ($k > 0) {
+                $cells += Width::string($this->divider);
+            }
+            foreach ($pieces as [$text]) {
+                $cells += Width::string($text);
+            }
+        }
+        return $cells;
+    }
+
+    /**
+     * Render each part, wrapping a tab's label and badge in its tab zone
+     * and its close affordance in its close zone — after the window and
+     * any clipping have been decided on unmarked content (M14).
+     *
+     * A zone over a single piece is marked inside the piece's style (the
+     * bytes a plain tab has always rendered); a zone over several pieces
+     * wraps their rendered concatenation.
+     *
+     * @param list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}> $parts
      */
     private function assembleMarked(array $parts): string
     {
         $rendered = [];
-        foreach ($parts as [$text, $style, $tabIndex]) {
-            if ($tabIndex !== null) {
-                $text = $this->zoneManager->mark($this->zoneKey . "tab-{$tabIndex}", $text);
+        foreach ($parts as [$pieces, $tabIndex]) {
+            if ($tabIndex === null) {
+                $rendered[] = $this->renderPieces($pieces);
+                continue;
             }
-            $rendered[] = $style?->render($text) ?? $text;
+            $tabPieces = array_values(array_filter($pieces, static fn(array $p): bool => !$p[2]));
+            $closePieces = array_values(array_filter($pieces, static fn(array $p): bool => $p[2]));
+            $out = $this->markGroup($this->zoneKey . "tab-{$tabIndex}", $tabPieces);
+            if ($closePieces !== []) {
+                $out .= $this->markGroup($this->zoneKey . "close-{$tabIndex}", $closePieces);
+            }
+            $rendered[] = $out;
         }
         return implode($this->inactiveStyle->render($this->divider), $rendered);
     }
 
+    /** @param list<array{0:string, 1:?Style, 2:bool}> $pieces */
+    private function markGroup(string $id, array $pieces): string
+    {
+        if ($pieces === []) {
+            return '';
+        }
+        if (count($pieces) === 1) {
+            [$text, $style] = $pieces[0];
+            $marked = $this->markZone($id, $text);
+            return $style?->render($marked) ?? $marked;
+        }
+        return $this->markZone($id, $this->renderPieces($pieces));
+    }
+
+    /** Wrap `$content` in the zone `$id` through the attached Manager, else the Mark. */
+    private function markZone(string $id, string $content): string
+    {
+        if ($this->zoneManager !== null) {
+            return $this->zoneManager->mark($id, $content);
+        }
+        return $this->mark?->wrap($id, $content) ?? $content;
+    }
+
     /**
      * Clip unmarked parts to $budget cells (the trailing ellipsis lives
-     * outside the budget, mirroring the old whole-line truncate). A
-     * segment straddling the edge is kept truncated — still a whole
-     * marker pair once re-marked — and later segments drop.
+     * outside the budget, mirroring the whole-line truncate of the unmarked
+     * path). A part straddling the edge keeps its leading pieces, the
+     * straddling piece truncated — still whole marker pairs once re-marked
+     * — and later parts drop.
      *
-     * @param list<array{0:string, 1:?Style, 2:?int}> $parts
-     * @return list<array{0:string, 1:?Style, 2:?int}>
+     * @param list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}> $parts
+     * @return list<array{0:list<array{0:string, 1:?Style, 2:bool}>, 1:?int}>
      */
     private function clipParts(array $parts, int $budget): array
     {
         $dividerCells = Width::string($this->divider);
         $out = [];
         $used = 0;
-        foreach ($parts as [$text, $style, $tabIndex]) {
-            $cost = ($out === [] ? 0 : $dividerCells) + Width::string($text);
+        foreach ($parts as [$pieces, $tabIndex]) {
+            $lead = $out === [] ? 0 : $dividerCells;
+            $cost = $lead + $this->plainWidth([[$pieces, $tabIndex]]);
             if ($used + $cost <= $budget) {
-                $out[] = [$text, $style, $tabIndex];
+                $out[] = [$pieces, $tabIndex];
                 $used += $cost;
                 continue;
             }
-            $room = $budget - $used - ($out === [] ? 0 : $dividerCells);
-            if ($room > 0) {
-                $out[] = [Width::truncateAnsi($text, $room), $style, $tabIndex];
+            $room = $budget - $used - $lead;
+            $kept = [];
+            foreach ($pieces as [$text, $style, $isClose]) {
+                if ($room <= 0) {
+                    break;
+                }
+                $cells = Width::string($text);
+                $kept[] = [$cells <= $room ? $text : Width::truncateAnsi($text, $room), $style, $isClose];
+                $room -= $cells;
+            }
+            if ($kept !== []) {
+                $out[] = [$kept, $tabIndex];
             }
             break;
         }
@@ -351,6 +643,12 @@ final class Tabs implements Model
         return $this->labels;
     }
 
+    /** Badge text of tab `$index`, or null when the tab carries none. */
+    public function badge(int $index): ?string
+    {
+        return $this->badges[$index] ?? null;
+    }
+
     // ── with* mutators ───────────────────────────────────────────────────────
 
     /** @param list<string> */
@@ -362,11 +660,124 @@ final class Tabs implements Model
             $newActive = max(0, count($newLabels) - 1);
         }
         $newOffset = min($this->scrollOffset, max(0, count($newLabels) - 1));
-        return $this->copy(
+        // Badges are keyed by index: a slot that still exists keeps its
+        // badge, a slot past the new end loses it.
+        $newBadges = array_filter(
+            $this->badges,
+            static fn(int $i): bool => $i < count($newLabels),
+            ARRAY_FILTER_USE_KEY,
+        );
+        return $this->mutate(
             labels: $newLabels,
             active: $newActive,
             scrollOffset: $newOffset,
+            badges: $newBadges,
         );
+    }
+
+    /**
+     * Set the badge of tab `$index` (an unread count, a `!`, a dirty dot),
+     * rendered after the label. Null or the empty string removes it.
+     * Badge text is sanitized like labels, so it cannot forge zone markup.
+     *
+     * @throws \InvalidArgumentException when `$index` is not a tab.
+     */
+    public function withBadge(int $index, ?string $badge): self
+    {
+        $this->assertTab($index);
+        $badges = $this->badges;
+        if ($badge === null || $badge === '') {
+            unset($badges[$index]);
+        } else {
+            $badges[$index] = $badge;
+        }
+        return $this->mutate(badges: $badges);
+    }
+
+    /** Style for badges; null (the default) draws a badge in its tab's style. */
+    public function withBadgeStyle(?Style $style): self
+    {
+        return $this->mutate(badgeStyle: $style, badgeStyleSet: true);
+    }
+
+    /**
+     * Make every tab closable: each tab draws a close affordance after its
+     * label (and badge), a click on it closes the tab, and the keymap's
+     * `closeTab` binding (`ctrl+w`) closes the active tab while focused.
+     * Each close returns a `Cmd` carrying {@see TabClosedMsg}.
+     */
+    public function withClosable(bool $closable = true): self
+    {
+        return $this->mutate(closable: $closable);
+    }
+
+    /**
+     * Replace the close-affordance glyph (default {@see CLOSE_GLYPH}).
+     *
+     * @throws \InvalidArgumentException when the glyph is empty after sanitizing.
+     */
+    public function withCloseGlyph(string $glyph): self
+    {
+        $clean = self::sanitizeLabel($glyph);
+        if ($clean === '') {
+            throw new \InvalidArgumentException(Lang::t('tabs.close_glyph_empty'));
+        }
+        return $this->mutate(closeGlyph: $clean);
+    }
+
+    /**
+     * Text {@see view()} renders when the bar has no tabs (in the inactive
+     * style, clipped to the width). The empty string, the default, renders
+     * nothing. Sanitized like labels.
+     */
+    public function withPlaceholder(string $text): self
+    {
+        return $this->mutate(placeholder: $text);
+    }
+
+    /**
+     * Move tab `$from` to position `$to`; the tabs between shift by one.
+     * The tab keeps its badge, and the active tab stays the same tab (its
+     * index follows the move). The scroll window follows the active tab.
+     *
+     * @throws \InvalidArgumentException when either index is not a tab.
+     */
+    public function moveTab(int $from, int $to): self
+    {
+        $this->assertTab($from);
+        $this->assertTab($to);
+        if ($from === $to) {
+            return $this;
+        }
+        $order = range(0, count($this->labels) - 1);
+        $moved = array_splice($order, $from, 1);
+        array_splice($order, $to, 0, $moved);
+        return $this->reorder($order, $this->active);
+    }
+
+    /**
+     * Remove tab `$index`. Later tabs shift left with their badges. When
+     * the active tab closes, its right-hand neighbor becomes active (the
+     * left one when it was the last tab); closing another tab keeps the
+     * same tab active. Closing the only tab leaves an empty bar.
+     *
+     * This is the value verb; a close from a click or the close key also
+     * returns a {@see TabClosedMsg} `Cmd`.
+     *
+     * @throws \InvalidArgumentException when `$index` is not a tab.
+     */
+    public function closeTab(int $index): self
+    {
+        $this->assertTab($index);
+        $order = range(0, count($this->labels) - 1);
+        array_splice($order, $index, 1);
+        if ($order === []) {
+            return $this->mutate(labels: [], badges: [], active: 0, scrollOffset: 0);
+        }
+        $active = $this->active === $index
+            ? $order[min($index, count($order) - 1)]
+            : $this->active;
+        return $this->reorder($order, $active);
     }
 
     /**
@@ -390,27 +801,27 @@ final class Tabs implements Model
         if ($index < 0 || $index >= $count) {
             throw new \InvalidArgumentException(Lang::t('tabs.bad_index'));
         }
-        return $this->copy(active: $index)->adjustScroll($index);
+        return $this->mutate(active: $index)->adjustScroll($index);
     }
 
     public function withActiveStyle(Style $style): self
     {
-        return $this->copy(activeStyle: $style);
+        return $this->mutate(activeStyle: $style);
     }
 
     public function withInactiveStyle(Style $style): self
     {
-        return $this->copy(inactiveStyle: $style);
+        return $this->mutate(inactiveStyle: $style);
     }
 
     public function withDivider(string $divider): self
     {
-        return $this->copy(divider: $divider);
+        return $this->mutate(divider: $divider);
     }
 
     public function withKeyMap(TabsKeyMap $keyMap): self
     {
-        return $this->copy(keyMap: $keyMap);
+        return $this->mutate(keyMap: $keyMap);
     }
 
     public function withWidth(int $width): self
@@ -418,7 +829,7 @@ final class Tabs implements Model
         if ($width < 0) {
             throw new \InvalidArgumentException(Lang::t('tabs.neg_width'));
         }
-        return $this->copy(width: $width);
+        return $this->mutate(width: $width);
     }
 
     /**
@@ -432,7 +843,20 @@ final class Tabs implements Model
      */
     public function withZoneManager(?Manager $manager): self
     {
-        return $this->copy(zoneManager: $manager, zoneManagerSet: true);
+        return $this->mutate(zoneManager: $manager, zoneManagerSet: true);
+    }
+
+    /**
+     * Attach a manager-free {@see Mark} so {@see view()} publishes zone
+     * markers without a {@see Manager}: each visible tab is wrapped in
+     * `<zoneKey>tab-N` (and `<zoneKey>close-N` around a close affordance),
+     * unprefixed. The host scans the frame (a sugar-mouse `Scanner`) and
+     * passes the hit zone's id to {@see clickZone()}. A {@see Manager},
+     * when also attached, takes precedence. Null detaches.
+     */
+    public function withMark(?Mark $mark): self
+    {
+        return $this->mutate(mark: $mark, markSet: true);
     }
 
     /**
@@ -458,7 +882,7 @@ final class Tabs implements Model
         if ($key === '') {
             throw new \InvalidArgumentException(Lang::t('tabs.zone_key_empty'));
         }
-        return $this->copy(zoneKey: $key);
+        return $this->mutate(zoneKey: $key);
     }
 
     /**
@@ -468,7 +892,7 @@ final class Tabs implements Model
      */
     public function withScrollOffset(int $offset): self
     {
-        return $this->copy(scrollOffset: max(0, min($offset, count($this->labels) - 1)));
+        return $this->mutate(scrollOffset: max(0, min($offset, count($this->labels) - 1)));
     }
 
     /**
@@ -478,38 +902,39 @@ final class Tabs implements Model
      */
     public function noWrap(): self
     {
-        return $this->copy(wrap: false);
+        return $this->mutate(wrap: false);
     }
 
     /** Take focus; companion to {@see blur()} — a pure value verb. */
     public function focus(): self
     {
-        return $this->copy(focused: true);
+        return $this->mutate(focused: true);
     }
 
     public function blur(): self
     {
-        return $this->copy(focused: false);
+        return $this->mutate(focused: false);
     }
 
     // ── Internal helpers ─────────────────────────────────────────────────────
 
     /**
-     * Parse a zone ID minted by THIS bar and return its tab index, or null.
+     * Parse a zone id minted by THIS bar and return its tab index, or null.
      *
-     * Ids are minted as "[manager prefix][zoneKey]tab-N". The bar only
-     * accepts an id that carries its own manager prefix and zone key, so a
-     * click aimed at a sibling bar on the same manager (or at a bar on a
-     * different manager) never lands here. The match is exact on the
-     * prefix and key, so a manager prefix that itself contains "tab-<digits>"
-     * cannot mis-route the click (N13).
+     * Ids are minted as "[manager prefix][zoneKey]<kind>N" (`tab-` or
+     * `close-`); a Mark bar has no manager prefix. The bar only accepts an
+     * id that carries its own prefix and zone key, so a click aimed at a
+     * sibling bar on the same manager (or at a bar on a different manager)
+     * never lands here. The match is exact on the prefix and key, so a
+     * manager prefix that itself contains "tab-<digits>" cannot mis-route
+     * the click (N13).
      */
-    private function tabIndexFromZoneId(string $id): ?int
+    private function tabIndexFromZoneId(string $id, string $kind): ?int
     {
-        if ($this->zoneManager === null) {
+        if (!$this->marksZones()) {
             return null;
         }
-        $expected = $this->zoneManager->prefix() . $this->zoneKey . 'tab-';
+        $expected = ($this->zoneManager?->prefix() ?? '') . $this->zoneKey . $kind;
         if (!str_starts_with($id, $expected)) {
             return null;
         }
@@ -519,6 +944,61 @@ final class Tabs implements Model
         }
         $idx = (int) $suffix;
         return $idx >= 0 && $idx < count($this->labels) ? $idx : null;
+    }
+
+    /** Whether tab `$i` is inside the current scroll window. */
+    private function isVisible(int $i): bool
+    {
+        return $i >= $this->scrollOffset && $i <= $this->scrollEnd;
+    }
+
+    /** @throws \InvalidArgumentException when `$index` is not a tab. */
+    private function assertTab(int $index): void
+    {
+        if ($index < 0 || $index >= count($this->labels)) {
+            throw new \InvalidArgumentException(Lang::t('tabs.bad_index'));
+        }
+    }
+
+    /**
+     * Close tab `$index` and pair the result with the {@see TabClosedMsg}
+     * Cmd describing the tab as it was.
+     *
+     * @return array{0:Tabs, 1:\Closure}
+     */
+    private function closeWithMsg(int $index): array
+    {
+        $label = $this->labels[$index];
+        return [
+            $this->closeTab($index),
+            Cmd::send(TabClosedMsg::new($index, $label, $this->zoneKey)),
+        ];
+    }
+
+    /**
+     * Rebuild the bar from `$order` (new position => old index): labels and
+     * badges follow their tab, `$activeOld` (an old index) stays active,
+     * and the scroll window follows it.
+     *
+     * @param list<int> $order
+     */
+    private function reorder(array $order, int $activeOld): self
+    {
+        $labels = [];
+        $badges = [];
+        foreach ($order as $new => $old) {
+            $labels[] = $this->labels[$old];
+            if (isset($this->badges[$old])) {
+                $badges[$new] = $this->badges[$old];
+            }
+        }
+        $active = (int) array_search($activeOld, $order, true);
+        return $this->mutate(
+            labels: $labels,
+            badges: $badges,
+            active: $active,
+            scrollOffset: min($this->scrollOffset, count($labels) - 1),
+        )->adjustScroll($active);
     }
 
     /**
@@ -578,7 +1058,7 @@ final class Tabs implements Model
      * bold active tab could silently vanish (r87 review MAJOR). The
      * first tab after the offset is included even if it alone overflows
      * — an empty bar is worse than a clipped one. Widths ride the same
-     * control-char sanitisation view() renders, so the stored window and
+     * control-char sanitization view() renders, so the stored window and
      * the drawn window cannot drift.
      */
     private function computeScrollEnd(): int
@@ -633,17 +1113,21 @@ final class Tabs implements Model
         return Sanitize::untrustedForMarkedFrames(Sanitize::controlChars($label));
     }
 
-    /** Rendered cell width of one tab: padded, sanitised — zone markup is invisible. */
+    /** Rendered cell width of one tab (label, badge, close affordance) — zone markup is invisible. */
     private function tabWidth(int $i): int
     {
-        return Width::string(' ' . self::sanitizeLabel($this->labels[$i]) . ' ');
+        $cells = 0;
+        foreach ($this->tabTexts($i) as $text) {
+            $cells += $text === null ? 0 : Width::string($text);
+        }
+        return $cells;
     }
 
     /**
-     * Internal copy-with-overrides helper — rebuilds the Tabs via the
-     * constructor with the same pattern as Tree::copy() / Table::mutate().
+     * The single construction seam behind every `with*()` setter — rebuilds
+     * the Tabs via the constructor, the same pattern as Table::mutate().
      */
-    private function copy(
+    private function mutate(
         ?int $active = null,
         ?Style $activeStyle = null,
         ?Style $inactiveStyle = null,
@@ -657,6 +1141,14 @@ final class Tabs implements Model
         ?string $zoneKey = null,
         ?array $labels = null,
         ?int $scrollOffset = null,
+        ?array $badges = null,
+        ?bool $closable = null,
+        ?string $closeGlyph = null,
+        ?Style $badgeStyle = null,
+        bool $badgeStyleSet = false,
+        ?Mark $mark = null,
+        bool $markSet = false,
+        ?string $placeholder = null,
     ): self {
         return new self(
             active: $active ?? $this->active,
@@ -674,6 +1166,12 @@ final class Tabs implements Model
             zoneKey: $zoneKey ?? $this->zoneKey,
             labels: $labels ?? $this->labels,
             scrollOffset: $scrollOffset ?? $this->scrollOffset,
+            badges: $badges ?? $this->badges,
+            closable: $closable ?? $this->closable,
+            closeGlyph: $closeGlyph ?? $this->closeGlyph,
+            badgeStyle: $badgeStyleSet ? $badgeStyle : $this->badgeStyle,
+            mark: $markSet ? $mark : $this->mark,
+            placeholder: $placeholder ?? $this->placeholder,
         );
     }
 

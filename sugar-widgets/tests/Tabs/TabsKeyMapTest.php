@@ -53,12 +53,40 @@ final class TabsKeyMapTest extends TestCase
     {
         $km = TabsKeyMap::new();
         $full = $km->fullHelp();
-        // fullHelp = [shortHelp (2 bindings), jumpCols (3 columns: 4+4+1)]
-        $this->assertCount(4, $full);
+        // fullHelp = [shortHelp (2 bindings), jumpCols (3 columns: 4+4+1), [closeTab]]
+        $this->assertCount(5, $full);
         $this->assertSame([$km->nextTab, $km->prevTab], $full[0]);
         $this->assertCount(4, $full[1]);
         $this->assertCount(4, $full[2]);
         $this->assertCount(1, $full[3]);
+        $this->assertSame([$km->closeTab], $full[4]);
+    }
+
+    public function testDefaultHasCloseTabBinding(): void
+    {
+        $km = TabsKeyMap::new();
+        $this->assertSame(['ctrl+w'], $km->closeTab->keys);
+        $this->assertSame('ctrl+w', $km->closeTab->help->key);
+        $this->assertSame('close tab', $km->closeTab->help->desc);
+    }
+
+    /**
+     * Maps built positionally before the close binding existed still
+     * construct, and get the default close binding.
+     */
+    public function testThreeArgumentConstructorDefaultsCloseTab(): void
+    {
+        $base = TabsKeyMap::new();
+        $km = new TabsKeyMap($base->nextTab, $base->prevTab, $base->jumpBindings);
+        $this->assertSame(['ctrl+w'], $km->closeTab->keys);
+    }
+
+    public function testCustomCloseTabBindingIsKept(): void
+    {
+        $base = TabsKeyMap::new();
+        $custom = Binding::new(keys: ['ctrl+x']);
+        $km = new TabsKeyMap($base->nextTab, $base->prevTab, $base->jumpBindings, $custom);
+        $this->assertSame($custom, $km->closeTab);
     }
 
     public function testJumpBindingsHaveCorrectHelpDescriptions(): void
