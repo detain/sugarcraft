@@ -527,6 +527,15 @@ Worth adding to it in another repo: the open-fd count (`/proc/self/fd`), child p
   - The test asserts two arrivals and no `alone` file. That is the property itself (they overlapped), with
     no clock in it.
   - **Negative control:** a lone fixture writes `alone.*`. 30/30 green at load 39-67.
+- **An upper bound on elapsed time should separate the two outcomes the test distinguishes, not "fast"
+  from "slow".**
+  - Case `ClaudeCodeMcpClientDeadlineTest::testAnUnansweredHandshakeFailsOnTheBudgetAndReapsTheChild`
+    (a352dac45f): `connect()` with a 0.5 s budget against a silent server was bounded at < 5.0 s.
+  - Alone it took 1.01-1.06 s (30/30), but a K=32 run at load 49 measured 5.64 s.
+  - What the bound has to tell apart: the budget firing, against the **60 s default** a lost budget would
+    fall back to. 15 s does that with a 4× margin and is out of reach of load.
+  - Find the alternative the bound guards against before choosing the number, and write it in a comment
+    next to the bound.
 - **Real performance claims** belong in a separate group run at K=1, not in the main suite.
 
 **B. Accumulation and pollution**
@@ -575,6 +584,35 @@ different branches from run to run; make each branch an explicit case.
 
 **Verification standard for any flake fix:** the test is green in the run shape that used to fail it (same K,
 seed and batch size), and in a 30-iteration repeat under that condition. Record it in the ledger.
+
+### 6.8 Tests that cannot run on some hosts: conditional skips, never silent ones
+
+Some tests can only prove something on hosts where a precondition holds: bubblewrap starts, the OS is
+Windows, a phar can be written, or (swoole, above) php can start with `TMPDIR=/` at all. Skip them there,
+but in a way that cannot hide a regression:
+1. **Probe the precondition, not a proxy for it.** SugarCraft's `SuiteSkipRoster::rootTmpdirChildStarts()`
+   runs `php -r 'exit(0);'` in the same minimal environment the test's child gets, **without** the code
+   under test. So it answers "can php start", never "does the guard work", and a broken guard still runs
+   red. Checking `extension_loaded('swoole')` would be a proxy: wrong once swoole fixes the bug, and blind to
+   any other extension with the same crash.
+2. **A probe that cannot run answers "the test can run"**, so a broken host reports its real failure instead
+   of skipping it away.
+3. **Memoize the probe per process,** and make the **same predicate** the test body's skip gate. Then the
+   roster below and the skip cannot drift apart.
+4. **Roster every allowed skip** in a guard that fails the run on any skip it does not list
+   (SugarCraft's `SuiteSkipRoster`, a PHPUnit subscriber plus a shutdown check). A conditional entry is
+   lifted exactly where the predicate says the test runs. A rostered test that stops skipping is red too, so
+   the roster cannot go stale.
+5. **The pinned suite figure stays in CI's shape.**
+   - A skip that only happens on some hosts makes the local skipped count higher, and the assertion count
+     lower, than CI's. That was +2 and -7 for the swoole skip.
+   - Build the figure as CI will count it, write the local difference down next to it, and keep the skipped
+     tests assertion-deterministic (no assertions in loops), so the difference is a constant.
+6. **Insert new methods between methods, never between a doc-comment and its declaration.** The swoole
+   predicate first landed between `windowsSmokeRuns()`'s doc-comment and its `function` line, which orphans
+   that doc-comment. SugarCraft has a guard for stacked doc-comments (`RuntimeNoticeSinkDeliveryTest`) that
+   caught it (14e1084fa5). Without one, nothing would.
+
 
 ---
 
@@ -728,7 +766,7 @@ SugarCraft's switch is def100a6f5.
   extension left out (`PHP_INI_SCAN_DIR=<copy of conf.d without it>`).
   - Seen 2026-11-21: swoole 6.2.0, enabled mid-session, aborted **every** CLI `php` started with `TMPDIR=/`
     (`std::out_of_range ... basic_string::at`). Two tests that prove the suite refuses that temp dir went red.
-  - The fix was `phpdismod -s cli swoole`.
+  - The owner wanted swoole kept on, so the fix was a **conditional skip** (§6.8).
 
 ---
 
@@ -790,6 +828,9 @@ SugarCraft's switch is def100a6f5.
 | Zombie window | Rare red on a group check | Bounded poll | 7048410906, 12a8094d1a |
 | One-branch assert of a two-branch contract | Red at load 62 | Drive the sweep, then assert | bfa2e485f |
 | CI | Shard runner | Test job on `scripts/paratest.sh` + conservation; coverage left on shards (§7.5) | def100a6f5 |
+| Assertion counts that vary between runs | Exact conservation check fails at random | Assert once after a wait, not per poll or per beat (§7.2) | 3cd77b3aa6 |
+| Swoole aborts php with `TMPDIR=/` | 2 child-php tests red (exit 134) on one host | Conditional, rostered skip on a precondition probe (§6.8) | 47cad22304, 14e1084fa5 |
+| A "never hang" bound sized like a speed claim | 5.64 s against 5.0 s at load 49 | Bound against the 60 s fallback it guards against (15 s) | a352dac45f |
 
 Results:
 - **candy-code:** 33,817 tests went from 407 s (ParaTest K=32, alphabetical) and 302 s (the old K=24 shards)
