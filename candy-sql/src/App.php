@@ -351,7 +351,11 @@ final class App implements Model
         }
         if ($this->ui->pane === Pane::Admin) {
             $page = $this->admin->page;
-            if ($page !== null && ($msg->type === KeyType::Escape || $page->isModal())) {
+            // A page may also claim individual keys ahead of the pane cycle
+            // and the page picker (PageBase::claimsKey()): the Connections
+            // detail-tab bar, once focused, takes Tab and 1-3 (AUD §2 #19).
+            if ($page !== null
+                && ($msg->type === KeyType::Escape || $page->isModal() || $page->claimsKey($msg))) {
                 [$newPage, $cmd] = $page->update($msg);
                 assert($newPage instanceof PageBase);
                 return [$this->withAdminPage($newPage), $cmd];
@@ -1179,7 +1183,8 @@ final class App implements Model
      * {@see RowNavigable}; row-navigable pages receive j/k/arrows through
      * the delegation below so their in-table cursors work. Keys that are
      * globally consumed in update() BEFORE reaching this method at all:
-     * Tab (pane cycle) and Escape/Ctrl+C (quit). Everything else — Space,
+     * Tab (pane cycle) and Escape/Ctrl+C (quit), plus any key the page
+     * claims through {@see PageBase::claimsKey()} (sent straight to it). Everything else — Space,
      * 'a', 'w', 's', 'h', 'l', '/' and any other editing keys — is
      * delegated to the active page's update() so pages like VariablesPage
      * and PerfSchemaPage can respond. The page returned by update() is

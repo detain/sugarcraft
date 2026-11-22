@@ -373,6 +373,7 @@
 <tr><td><code>__construct(public readonly ServerContextInterface $context)</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
@@ -820,6 +821,9 @@
 <tr><td><code>withFilters(ConnectionFilters $filters): self</code></td><td>Return a new instance with updated filters.</td></tr>
 <tr><td><code>detailTab(): string</code></td><td>Get the current detail tab.</td></tr>
 <tr><td><code>withDetailTab(string $tab): self</code></td><td>Return a new instance with the detail tab set.</td></tr>
+<tr><td><code>detailTabBar(): Tabs</code></td><td>The detail-tab bar, zones attached. Its Tabs::view() carries the Mark zone markers a host scans; the page&#039;s own view() renders the same bar without them.</td></tr>
+<tr><td><code>detailTabsFocused(): bool</code></td><td>True while the detail-tab bar owns the tab keys (after Enter, until Esc).</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>While the detail-tab bar is focused the page claims the keys that drive it — Tab, Shift+Tab and the digits 1-3 — so App routes them here instead of cycling panes or picking an admin page. A blurred bar claims nothing.</td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td>Handle keyboard shortcuts for connection navigation and filtering.</td></tr>
 <tr><td><code>selectedThread(): ?ProcesslistResult</code></td><td>Get the selected thread for detail view.</td></tr>
 <tr><td><code>selectedIndex(): int</code></td><td>Get the current selected index in the filtered processlist.</td></tr>
@@ -893,6 +897,7 @@
 <tr><td><code>alertNotifier(): AlertNotifierInterface</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
 </tbody>
@@ -1022,6 +1027,7 @@
 <tr><td><code>cursor(): int</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -1208,6 +1214,7 @@
 <tr><td><code>threads(): array</code></td><td></td></tr>
 <tr><td><code>timers(): array</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -1483,6 +1490,7 @@
 <tr><td><code>lastExportCsv(): ?string</code></td><td>Get the CSV from the most recent export.</td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -1608,6 +1616,7 @@
 <tr><td><code>withQuit(): self</code></td><td>Return a clone (quit is handled by the parent controller).</td></tr>
 <tr><td><code>replicaProvider(): ReplicaStatusProvider</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
 </tbody>
@@ -1720,6 +1729,7 @@
 <tr><td><code>isModal(): bool</code></td><td>The edit/confirm dialog is open — it owns every keystroke.</td></tr>
 <tr><td><code>editor(): ?VariableEditor</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>

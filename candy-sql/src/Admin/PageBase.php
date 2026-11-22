@@ -7,6 +7,7 @@ namespace SugarCraft\Sql\Admin;
 use SugarCraft\Sql\Lang;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Style\Style;
 use SugarCraft\Sql\CellValue;
@@ -59,6 +60,20 @@ abstract class PageBase implements Model
      * Non-modal pages keep the default false.
      */
     public function isModal(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Whether this page claims `$msg` ahead of the App's own Admin-pane
+     * chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).
+     *
+     * Narrower than {@see isModal()}: a claimed key goes to the page, every
+     * other key keeps its app-level meaning. A page claims a key only while
+     * a focused component of its own binds it, so a blurred page leaves the
+     * global keys alone. Non-claiming pages keep the default false.
+     */
+    public function claimsKey(KeyMsg $msg): bool
     {
         return false;
     }

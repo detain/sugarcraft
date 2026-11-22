@@ -69,6 +69,7 @@ final class KeyMap
         ['cell' => '[s]', 'text' => 'help.ad_search'],
         ['cell' => '[f]', 'text' => 'help.ad_sleeping_filter'],
         ['cell' => 'K / X', 'text' => 'help.ad_kill'],
+        ['cell' => '[Enter] / [Esc]', 'text' => 'help.ad_detail_tabs'],
         ['cell' => 'y', 'text' => 'help.ad_confirm'],
         ['cell' => '[c]', 'text' => 'help.ad_stage'],
         ['cell' => '[c]', 'text' => 'help.ad_units'],

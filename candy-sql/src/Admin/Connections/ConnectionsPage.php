@@ -9,7 +9,12 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scanner;
 use SugarCraft\Sql\Admin\AsyncCachingServerContext;
 use SugarCraft\Sql\Admin\PageBase;
 use SugarCraft\Sql\Admin\RowNavigable;
@@ -18,13 +23,24 @@ use SugarCraft\Sql\Admin\StatusSnapshot;
 use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Style\Style;
 use SugarCraft\Table\{Column, Row, RowData, Table};
+use SugarCraft\Widgets\Tabs\Tabs;
 
 /**
  * Connections page component integrating processlist, counters, filters, and actions.
  *
  * Uses sugar-table Table for the processlist grid with columns for
- * Id, User, Host, DB, Command, Time, State, Info. Provides detail tabs
- * for selected threads.
+ * Id, User, Host, DB, Command, Time, State, Info. The detail tabs for the
+ * selected thread (Details / Attributes / MDL) are a sugar-widgets
+ * {@see Tabs} bar built with {@see Tabs::interactive()}, so it publishes
+ * Mark zones for mouse clicks.
+ *
+ * Detail-tab keys (AUD §2 #19). In the app, Tab cycles the focus pane and
+ * the digits pick admin pages before any page sees them, so the old
+ * page-level Tab / 1 / 2 / 3 arms could never fire. The bar now follows the
+ * Tabs focus law: Enter focuses it, and while it is focused the page claims
+ * Tab, Shift+Tab and 1-3 through {@see claimsKey()}, which App consults
+ * ahead of its own pane and page chords. Esc hands the keyboard back. A
+ * blurred bar claims nothing, so every global key keeps its meaning.
  *
  * @see Mirrors jorgerojas26/lazysql connections page
  */
@@ -55,7 +71,20 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      * PAGE_SIZE parity with DebugPage / VariablesPage::GRID_WINDOW).
      */
     private const ROW_WINDOW = 50;
-    private string $activeDetailTab = self::DETAIL_TAB_DETAILS;
+
+    /**
+     * The detail-tab bar: its active index is the active detail tab (in
+     * {@see DETAIL_TAB_ORDER}), its focus flag says whether the bar owns
+     * the tab keys. One instance per page, so its zone key stays stable
+     * across clones and a scanned click still names this bar.
+     */
+    private Tabs $detailBar;
+
+    /**
+     * True only for the internal pass that renders the frame with zone
+     * markers for hit-testing; the frame App paints never carries them.
+     */
+    private bool $publishZones = false;
 
     /** Connection awaiting a kill confirmation (null = no pending kill). */
     private ?ProcesslistResult $pendingKill = null;
@@ -89,6 +118,13 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     ) {
         parent::__construct($context);
         $this->filters = ConnectionFilters::new();
+        $this->detailBar = Tabs::interactive(
+            [Lang::t('conn.tab_details'), Lang::t('conn.tab_attributes'), Lang::t('conn.tab_mdl')],
+            Mark::new(),
+        )
+            ->withDivider('│')
+            ->withActiveStyle(Style::new()->bold()->foreground(Color::hex('#fde047')))
+            ->withInactiveStyle(Style::new()->foreground(Color::hex('#6b7280')));
     }
 
     /**
@@ -160,7 +196,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     public function detailTab(): string
     {
-        return $this->activeDetailTab;
+        return self::DETAIL_TAB_ORDER[$this->detailBar->active()];
     }
 
     /**
@@ -168,11 +204,57 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      */
     public function withDetailTab(string $tab): self
     {
-        if (!\in_array($tab, self::DETAIL_TAB_ORDER, true)) {
+        $index = \array_search($tab, self::DETAIL_TAB_ORDER, true);
+        if ($index === false) {
+            return $this;
+        }
+        return $this->withDetailBar($this->detailBar->withActive($index));
+    }
+
+    /**
+     * The detail-tab bar, zones attached. Its {@see Tabs::view()} carries
+     * the Mark zone markers a host scans; the page's own {@see view()}
+     * renders the same bar without them.
+     */
+    public function detailTabBar(): Tabs
+    {
+        return $this->detailBar;
+    }
+
+    /** True while the detail-tab bar owns the tab keys (after Enter, until Esc). */
+    public function detailTabsFocused(): bool
+    {
+        return $this->detailBar->focused;
+    }
+
+    /**
+     * While the detail-tab bar is focused the page claims the keys that
+     * drive it — Tab, Shift+Tab and the digits 1-3 — so App routes them
+     * here instead of cycling panes or picking an admin page. A blurred
+     * bar claims nothing.
+     */
+    public function claimsKey(KeyMsg $msg): bool
+    {
+        if (!$this->detailBar->focused || $this->pendingKill !== null) {
+            return false;
+        }
+        if ($msg->type === KeyType::Tab) {
+            return true;
+        }
+        if ($msg->type !== KeyType::Char || $msg->ctrl || $msg->alt) {
+            return false;
+        }
+        $index = (int) $msg->rune - 1;
+        return \ctype_digit($msg->rune) && $index >= 0 && $index < \count(self::DETAIL_TAB_ORDER);
+    }
+
+    private function withDetailBar(Tabs $bar): self
+    {
+        if ($bar === $this->detailBar) {
             return $this;
         }
         $clone = clone $this;
-        $clone->activeDetailTab = $tab;
+        $clone->detailBar = $bar;
         return $clone;
     }
 
@@ -234,6 +316,10 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             return [$clone, null];
         }
 
+        if ($msg instanceof MouseMsg) {
+            return [$this->withMouseClick($msg), null];
+        }
+
         // Early exit for non-key messages
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
@@ -260,21 +346,19 @@ final class ConnectionsPage extends PageBase implements RowNavigable
             return [$this->withNavigateUp(), null];
         }
 
-        // Tab cycles through detail tabs (Details → Attributes → MDL → Details)
-        if ($type === KeyType::Tab && !$msg->shift) {
-            return [$this->withCycleDetailTab(), null];
+        // Enter focuses the detail-tab bar; Esc hands the keyboard back.
+        // While focused, the bar's own key map drives it: Tab / Shift+Tab
+        // cycle Details → Attributes → MDL, and 1/2/3 jump (AUD §2 #19).
+        if ($type === KeyType::Enter && !$this->detailBar->focused) {
+            return [$this->withDetailBar($this->detailBar->focus()), null];
         }
-
-        // 1/2/3 switch to specific detail tabs — UNREACHABLE while App
-        // maps digits 1-8 to panes (review F1).
-        if ($ch === '1') {
-            return [$this->withDetailTab(self::DETAIL_TAB_DETAILS), null];
+        if ($type === KeyType::Escape && $this->detailBar->focused) {
+            return [$this->withDetailBar($this->detailBar->blur()), null];
         }
-        if ($ch === '2') {
-            return [$this->withDetailTab(self::DETAIL_TAB_ATTRIBUTES), null];
-        }
-        if ($ch === '3') {
-            return [$this->withDetailTab(self::DETAIL_TAB_MDL), null];
+        if ($this->claimsKey($msg)) {
+            [$bar] = $this->detailBar->update($msg);
+            assert($bar instanceof Tabs);
+            return [$this->withDetailBar($bar), null];
         }
 
         // f toggles hide-sleeping filter
@@ -367,13 +451,29 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     }
 
     /**
-     * Return a new instance with the detail tab cycled to the next one.
+     * Route a left-button press through the detail bar's Mark zones.
+     *
+     * The coordinates are page-relative and 1-based (column 1, row 1 is
+     * the first cell of this page's frame), the Scanner's convention; the
+     * host subtracts the page's screen origin before forwarding. The frame
+     * is re-rendered with zone markers, scanned, and a hit on a tab zone
+     * activates that tab. A click never grants keyboard focus (the Tabs
+     * law), and a miss leaves the page unchanged.
      */
-    private function withCycleDetailTab(): self
+    private function withMouseClick(MouseMsg $msg): self
     {
-        $current = \array_search($this->activeDetailTab, self::DETAIL_TAB_ORDER, true);
-        $next = ($current + 1) % \count(self::DETAIL_TAB_ORDER);
-        return $this->withDetailTab(self::DETAIL_TAB_ORDER[$next]);
+        if ($msg->action !== MouseAction::Press || $msg->button !== MouseButton::Left) {
+            return $this;
+        }
+        $marked = clone $this;
+        $marked->publishZones = true;
+        $zone = Scanner::new()->scan($marked->view())->hit($msg->x, $msg->y);
+        if ($zone === null) {
+            return $this;
+        }
+        [$bar] = $this->detailBar->clickZone($zone->id);
+        assert($bar instanceof Tabs);
+        return $this->withDetailBar($bar);
     }
 
     /**
@@ -527,10 +627,23 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         }
 
         $lines[] = '';
+        $lines[] = $this->renderDetailTabBar();
         $lines[] = $this->table()->View();
         $lines[] = $this->renderKeyHints();
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * The detail-tab bar line. The painted frame never carries zone
+     * markers (the renderer prices every cell, and a stray marker is a
+     * visible box on some terminals); only the hit-test pass in
+     * {@see withMouseClick()} renders them.
+     */
+    private function renderDetailTabBar(): string
+    {
+        $bar = $this->publishZones ? $this->detailBar : $this->detailBar->withMark(null);
+        return ' ' . $bar->view();
     }
 
     /**
@@ -569,6 +682,9 @@ final class ConnectionsPage extends PageBase implements RowNavigable
         $hints = $this->filteredProcesslist() === []
             ? Lang::t('conn.help_empty')
             : Lang::t('conn.help_full');
+        if ($this->detailBar->focused) {
+            $hints = Lang::t('conn.help_tabs') . '  ' . $hints;
+        }
 
         return Style::new()->foreground(Color::hex('#6b7280'))->render($hints);
     }

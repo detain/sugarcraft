@@ -225,6 +225,7 @@ final class HelpOverlayTest extends TestCase
             '[s]' => ['tests/Admin/Variables/VariablesPageTest.php'],
             '[f]' => ['tests/Admin/Connections/ConnectionsPageTest.php'],
             'K / X' => ['tests/Admin/Connections/ConnectionsPageTest.php'],
+            '[Enter] / [Esc]' => ['tests/Admin/Connections/ConnectionDetailTabsRoutingTest.php'],
             'y' => ['tests/Admin/Connections/ConnectionsPageTest.php'],
             '[c]' => ['tests/Admin/PerfSchema/PerfSchemaPageTest.php', 'tests/Admin/Reports/ReportsPageTest.php'],
             '[x]' => ['tests/Admin/Reports/ReportsPageTest.php'],

@@ -145,9 +145,30 @@ final class ConnectionsPageTest extends TestCase
         $this->assertNotSame($page, $newPage);
     }
 
-    public function testUpdateCyclesDetailTabsForTabKey(): void
+    /**
+     * The detail-tab bar follows the Tabs focus law (AUD §2 #19): Enter
+     * focuses it, then Tab / 1 / 2 / 3 drive it.
+     */
+    private function focusedPage(): ConnectionsPage
+    {
+        [$page] = ConnectionsPage::new($this->context)->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($page->detailTabsFocused());
+        return $page;
+    }
+
+    public function testBlurredBarIgnoresTheTabKeys(): void
     {
         $page = ConnectionsPage::new($this->context);
+
+        foreach ([new KeyMsg(KeyType::Tab), new KeyMsg(KeyType::Char, '2'), new KeyMsg(KeyType::Char, '3')] as $key) {
+            [$next] = $page->update($key);
+            $this->assertSame(ConnectionsPage::DETAIL_TAB_DETAILS, $next->detailTab());
+        }
+    }
+
+    public function testUpdateCyclesDetailTabsForTabKey(): void
+    {
+        $page = $this->focusedPage();
 
         // Start at details
         $this->assertSame(ConnectionsPage::DETAIL_TAB_DETAILS, $page->detailTab());
@@ -167,7 +188,7 @@ final class ConnectionsPageTest extends TestCase
 
     public function testUpdateSelectsDetailTabFor1Key(): void
     {
-        $page = ConnectionsPage::new($this->context);
+        $page = $this->focusedPage();
         $page = $page->withDetailTab(ConnectionsPage::DETAIL_TAB_MDL);
 
         [$newPage, ] = $page->update(new KeyMsg(KeyType::Char, '1'));
@@ -177,7 +198,7 @@ final class ConnectionsPageTest extends TestCase
 
     public function testUpdateSelectsDetailTabFor2Key(): void
     {
-        $page = ConnectionsPage::new($this->context);
+        $page = $this->focusedPage();
 
         [$newPage, ] = $page->update(new KeyMsg(KeyType::Char, '2'));
 
@@ -186,7 +207,7 @@ final class ConnectionsPageTest extends TestCase
 
     public function testUpdateSelectsDetailTabFor3Key(): void
     {
-        $page = ConnectionsPage::new($this->context);
+        $page = $this->focusedPage();
 
         [$newPage, ] = $page->update(new KeyMsg(KeyType::Char, '3'));
 

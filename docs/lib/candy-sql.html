@@ -271,7 +271,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
       <div class="feature"><strong>ServerVersion</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast($major, $minor = 0, $release = 0)</code> compares versions safely.</span></div>
       <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI colored tree; <code>toArray()</code> returns JSON-serializable structure.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
-      <div class="feature"><strong>ConnectionsPage</strong><span>Processlist browser with keyboard navigation (<code>j/k/↑/↓</code>), detail tab cycling (<code>Tab</code>/<code>1</code>/<code>2</code>/<code>3</code> — page-level handlers; in-app <code>Tab</code> cycles focus panes and digits pick admin pages, so these fire only in standalone use), hide-sleeping filter (<code>f</code>), and async refresh (<code>r</code>) via <code>Cmd::send()</code>. Memoized <code>cachedFilteredProcesslist</code> avoids 2–3× DB fetch per render.</span></div>
+      <div class="feature"><strong>ConnectionsPage</strong><span>Processlist browser with keyboard navigation (<code>j/k/↑/↓</code>), a sugar-widgets <code>Tabs</code> detail-tab bar (Details/Attributes/MDL, built with <code>Tabs::interactive()</code> so it publishes Mark zones for mouse clicks; <code>Enter</code> focuses it, then <code>Tab</code>/<code>Shift+Tab</code>/<code>1</code>–<code>3</code> switch tabs ahead of the pane cycle and page picker, <code>Esc</code> releases them), hide-sleeping filter (<code>f</code>), and async refresh (<code>r</code>) via <code>Cmd::send()</code>. Memoized <code>cachedFilteredProcesslist</code> avoids 2–3× DB fetch per render.</span></div>
       <div class="feature"><strong>ConnectionFilters</strong><span>Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate (0.5–30s). All fields are readonly; paired <code>$Set</code> sentinels for nullability.</span></div>
       <div class="feature"><strong>ConnectionCounters</strong><span>Connection metrics from <code>SHOW GLOBAL STATUS</code>: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes <code>connectionUsageRatio()</code> lazily (0.0–1.0); <code>isConnectionUsageCritical()</code> returns true ≥80%.</span></div>
       <div class="feature"><strong>ConnectionDetailTabs</strong><span>Three detail tabs (Details/Attributes/MDL) per processlist thread. Details from <code>performance_schema.threads</code>; Attributes from <code>session_connect_attrs</code>; MDL from <code>performance_schema.metadata_locks</code> with fallback to <code>information_schema.metadata_lock_info</code>. Returns <code>null</code> on permission errors (1142/1146/1227).</span></div>
@@ -380,7 +380,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td>AdminProviderInterface</td><td>refresh()</td><td>Force a refresh of all cached values</td></tr>
 <tr><td>MysqlAdminProvider</td><td>—</td><td>AdminProviderInterface adapter over ServerContext (SHOW GLOBAL STATUS/VARIABLES/PLUGINS issued by the context); fetchProcesslist prefers performance_schema.threads, falls back to SHOW FULL PROCESSLIST</td></tr>
 <tr><td>ConnectionsPage</td><td>new(context, maxConnections?)</td><td>Factory creating fully-wired instance with ProcesslistProvider, ConnectionActions, ConnectionDetailTabs, ConnectionCounters</td></tr>
-<tr><td>ConnectionsPage</td><td>update(Msg)</td><td>Handle keyboard: j/k/↑/↓ navigate, f toggle filter, r refresh, y confirms a pending kill (any other key cancels). Tab/1/2/3 detail-tab handlers are page-level: in-app App consumes Tab (pane cycle) and digits (page picker) first. Returns [newPage, ?Closure]. Mirrors <code>mysql-workbench</code> client connections panel.</td></tr>
+<tr><td>ConnectionsPage</td><td>update(Msg)</td><td>Handle keyboard: j/k/↑/↓ navigate, f toggle filter, r refresh, y confirms a pending kill (any other key cancels). Enter focuses the detail-tab bar; while it is focused claimsKey() routes Tab/Shift+Tab/1–3 to it ahead of the pane cycle and page picker, and Esc releases them. A left-button press (page-relative coordinates) on a tab zone activates that tab. Returns [newPage, ?Closure]. Mirrors <code>mysql-workbench</code> client connections panel.</td></tr>
 <tr><td>ConnectionsPage</td><td>table()</td><td>Get the sugar-table Table with columns: Id, User, Host, DB, Command, Time, State, Info</td></tr>
 <tr><td>ConnectionsPage</td><td>filters() / counters() / detailTab() / selectedThread()</td><td>Read current filter state, counters, active detail tab, and selected process thread</td></tr>
 <tr><td>ConnectionFilters</td><td>new()</td><td>Default filters: no hiding, no auto-refresh</td></tr>
@@ -886,6 +886,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>__construct(public readonly ServerContextInterface $context)</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
@@ -1333,6 +1334,9 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>withFilters(ConnectionFilters $filters): self</code></td><td>Return a new instance with updated filters.</td></tr>
 <tr><td><code>detailTab(): string</code></td><td>Get the current detail tab.</td></tr>
 <tr><td><code>withDetailTab(string $tab): self</code></td><td>Return a new instance with the detail tab set.</td></tr>
+<tr><td><code>detailTabBar(): Tabs</code></td><td>The detail-tab bar, zones attached. Its Tabs::view() carries the Mark zone markers a host scans; the page&#039;s own view() renders the same bar without them.</td></tr>
+<tr><td><code>detailTabsFocused(): bool</code></td><td>True while the detail-tab bar owns the tab keys (after Enter, until Esc).</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>While the detail-tab bar is focused the page claims the keys that drive it — Tab, Shift+Tab and the digits 1-3 — so App routes them here instead of cycling panes or picking an admin page. A blurred bar claims nothing.</td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td>Handle keyboard shortcuts for connection navigation and filtering.</td></tr>
 <tr><td><code>selectedThread(): ?ProcesslistResult</code></td><td>Get the selected thread for detail view.</td></tr>
 <tr><td><code>selectedIndex(): int</code></td><td>Get the current selected index in the filtered processlist.</td></tr>
@@ -1406,6 +1410,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>alertNotifier(): AlertNotifierInterface</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
 </tbody>
@@ -1535,6 +1540,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>cursor(): int</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -1721,6 +1727,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>threads(): array</code></td><td></td></tr>
 <tr><td><code>timers(): array</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -1996,6 +2003,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>lastExportCsv(): ?string</code></td><td>Get the CSV from the most recent export.</td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
 <tr><td><code>isModal(): bool</code></td><td>Whether the page currently owns an open modal editing surface.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
@@ -2121,6 +2129,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>withQuit(): self</code></td><td>Return a clone (quit is handled by the parent controller).</td></tr>
 <tr><td><code>replicaProvider(): ReplicaStatusProvider</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
 </tbody>
@@ -2233,6 +2242,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 <tr><td><code>isModal(): bool</code></td><td>The edit/confirm dialog is open — it owns every keystroke.</td></tr>
 <tr><td><code>editor(): ?VariableEditor</code></td><td></td></tr>
 <tr><td><code>refresh(): self</code></td><td>Refresh data and return new instance.</td></tr>
+<tr><td><code>claimsKey(KeyMsg $msg): bool</code></td><td>Whether this page claims <code>$msg</code> ahead of the App&#039;s own Admin-pane chords (the Tab pane cycle, the 1-{n} page picker, q, p, r).</td></tr>
 <tr><td><code>init(): ?\Closure</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
