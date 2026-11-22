@@ -791,7 +791,7 @@ support are flagged as planned-or-missing rather than papered over.
 | Signal injection (SIGINT/TERM/KILL) | ✅ `Child::kill($signal)` | ✅ `cmd.Process.Signal()` | ✅ `Child::kill()` | ✅ `pty.kill(signal)` |
 | EOF / VEOF handling | ✅ `PosixPump` writes VEOF on stdin EOF | ⚠️ caller drives termios | ⚠️ caller drives termios | ⚠️ caller writes `\x04` |
 | Non-blocking master I/O | ✅ `setBlocking(false)` + `stream_select` | ✅ `os.File` non-blocking | ✅ `set_nonblocking()` | ✅ event-driven |
-| Byte pump abstraction | ✅ `PosixPump::run()` w/ EOF grace + keepalive | ❌ caller copies bytes | ❌ caller copies bytes | ✅ libuv-driven |
+| Byte pump abstraction | ✅ `PosixPump::run()` w/ EOF grace + `onIdle` hook | ❌ caller copies bytes | ❌ caller copies bytes | ✅ libuv-driven |
 | Async / threaded operation | ⚠️ single-loop pump only (ReactPHP-friendly) | ✅ goroutines built-in | ✅ thread / async runtime | ✅ libuv worker thread |
 | Windows ConPTY | ✅ `Windows\ConPtySystem` (FFI; Win10 1809+ / PHP 8.4+; no ctty/signals/streams — see Known limitations) | ❌ Linux/macOS only | ✅ `ConPtySystem` | ✅ `winpty` / ConPTY |
 | Dependency-free DI seam | ✅ `Contract\PtySystem` interface | ❌ concrete `*Pty` only | ✅ `PtySystem` trait | ❌ concrete bindings |
