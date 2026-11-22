@@ -676,7 +676,7 @@ All in-process `STDIN` uses outside candy-code are harmless except one:
     the deferred end-of-plan figure refresh.
 - **§10 step 4 (flakes)** was not started. Class A starts with McpConcurrentStartupTest.
 
-Round 2 took on the floor; see §11.8.
+Round 2 took on the floor (§11.8), the flakes and the CI switch (§11.9).
 
 ### 11.8 Round 2: candy-code wall-time fixes
 
@@ -744,6 +744,81 @@ globs the real temp directory 7 times:
 Each glob reads the whole directory. On this box's `/tmp` (472,439 entries) that adds 2.4 s to every launch:
 an offline `-p` run takes 3.3 s, against 0.83 s with an empty TMPDIR. One readdir pass would remove about six
 sevenths of that. The suite is unaffected, because its children get a 1.5k-entry sandbox TMPDIR.
+
+### 11.9 Round 2: flaky tests and the CI switch
+
+**The §6.3 protocol** ran on the tree after §11.8's fixes. It made 7 full runs of 33,816 tests, each with
+`--display-warnings`, `--display-notices` and `--display-deprecations`:
+
+| Run | Cause it tests | Shape | Wall |
+|---|---|---|---|
+| r0 | baseline | K=32, longest-first (the §11.8 run) | 152.6 s |
+| r1 | load | K=64 | 117 s |
+| r2 | isolation | K=32, `--max-batch-size 1` | 251 s |
+| s101, s202, s303 | order | K=32, random order with those seeds | 157, 159, 166 s |
+| r6 | accumulation | K=2 | 1,415 s |
+
+All 7 completed. The ledger (`flake-ledger.php`) found:
+- **ALWAYS, 7/7:** the 6 known drift reds and nothing else.
+- **FLAKY, 3/7:** McpConcurrentStartupTest's timing test, red at K=64 and at K=32, under both orders.
+- **FLAKY, 1/7:** three AgentWorkerPoolCancelKeepsLoopLiveTest tests, only in s101.
+- **Not seen again:** the 2 unidentified warnings of the merged-tree run, and BackgroundShellRegistryTest's
+  orphaned-group red (one sighting before the protocol).
+
+**The contention watchlist** (`contention-sensitivity.php`, K=64 against K=32 and K=2) covers the 1,730 tests
+whose fastest time is at least 0.3 s:
+- 213 of them ran 3x or more slower at K=64 than at K=2, and 65 ran 5x or more.
+- Nearly all spawn children: MCP and LSP servers, or `bin/candy-code`. None of them failed. Watch them if K
+  goes up.
+- The tool labels runs by file basename, so give its inputs distinct names. Three files all named
+  `junit.xml` produce an empty table.
+
+Fixes:
+
+| Commit | Test | Cause and fix |
+|---|---|---|
+| d91a372783 | McpConcurrentStartupTest | **Cause:** a §8 class A stopwatch. It timed two 2 s handshakes against a 3.5 s bound, and they took 5.72 s at K=64. **Fix:** the test is now `testTwoSlowServersHandshakeAtTheSameTime`. Each fixture server waits at a 2-party barrier and writes `arrived.<pid>`; it writes `alone.<pid>` if the other has not arrived within 20 s. The test asserts two arrivals and no `alone` file, which is the claim (the handshakes overlap) with no clock in it. The negative control is a lone fixture, which writes `alone.*`. 30/30 green at load 39-67. |
+| 9a781dfe59 | AgentWorkerPoolCancelKeepsLoopLiveTest x3 | **Cause, a product bug:** `EgressProxy::servePolicy()` installed SIGTERM and SIGHUP handlers and made STDIN non-blocking, and never restored either. EgressProxyTest runs it in-process. A worker that ran EgressProxyTest first then forked pool workers that inherited the handler, so cancel's SIGTERM only interrupted their `sleep()`, and they reported Completed instead of Stopped. **How it was found:** logging `pcntl_signal_get_handler()` changes after each test, then replaying worker 13's 65-file sequence serially, which reproduced the 3 reds. **Fix:** servePolicy() saves both handlers and the STDIN mode and restores them in a `finally`. A new EgressProxyTest case pins it. |
+| 7048410906, 12a8094d1a | BackgroundShellRegistryTest | **Cause:** one-shot `posix_kill(-$pgid, 0)` asserts right after a KILL. A killed group's members are reaped one at a time, so the group can still answer for a moment. **Fix:** the five call sites wait on `groupGone()`, a bounded poll through the class's existing `waitFor()`. The race was not reproduced in 1,600 local trials, and the docblock says so. The first version had its own `usleep` loop, which BoundedPollCensusTest flagged: 3 sleep sites against a roster of 2. |
+| bfa2e485f8 | ForkChannelReplyAfterCancelTest | **Cause:** red once at load 62 in a probe run. The test asserted that the cancel reaped the cancelled child, but EngineBackend's documented contract is that the child is either reaped or handed to the straggler sweep (`reapChildAsync()` polls only 20 x 5 ms). **Fix:** the test drives the sweep, bounded at 5 s, then asserts that the child is gone. |
+
+**Suite-wide leak probe.** The EgressProxy leak raised a broader question: does any other test leave process
+state behind for the next test in the same worker?
+- **The probe:** a PHPUnit extension that records changes after every test against a baseline taken when it
+  starts. It watches 10 signal handlers, `pcntl_async_signals()`, STDIN's blocking mode, the cwd and the
+  umask. It is registered as an extension because PHPUnit 10 seals the event facade before the ParaTest
+  parent loads the bootstrap.
+- **Positive control:** a test that leaks on purpose was caught.
+- **Result after the fixes,** at K=32 with 33,817 tests and only the 6 known reds: the only change in any of
+  the 32 workers is PHPUnit's own SIGALRM handler, once per worker. No other test leaks that state.
+
+**The CI switch.** The candy-code test cell now runs `scripts/paratest.sh -p $K --durations
+scripts/parallel-tests-durations.tsv --against-json candy-code/tests/Config/Support/suite-figure.json
+--print-failures --timeout 2400`, with K = cores capped at 4, as before. New in `paratest.sh`:
+- `--against-json` runs `scripts/paratest-conservation.php` on the run's junit. Tests, assertions, failures
+  and skipped must equal the figure, and errors must be 0: the shard runner's rule, with skipped counted as
+  `<testcase><skipped/>` elements. A miss turns exit 0 into 1. A junit that is missing or unreadable is
+  exit 2, never a pass. `tools/tests/ParatestConservationTest.php` pins every exit.
+- `--print-failures` prints the failure section of `paratest.log` after a red run, since CI shows only the
+  console.
+- A stale `$OUT/junit.xml` is removed before the run, so a killed run cannot be judged on an old log.
+- `scripts/affected-libs.php` treats `paratest.sh` and the three scripts it calls like `parallel-tests.sh`:
+  a change to any of them runs the full matrix.
+
+Under ParaTest, conservation catches less than it did under the shard runner. Every file runs, and an
+unlisted one is queued first, so the check no longer guards the durations table. It catches a run that lost
+tests, and a suite whose shape changed without a figure refresh.
+
+**Coverage stays on the shard runner.** The coverage cell was first switched to
+`paratest.sh -- --coverage-clover` too, but at K=32 that run died with rc 255:
+- **Why it died:** the ParaTest parent applies phpunit.xml's `memory_limit=1G`. It ran out in
+  `CoverageMerger` while including a 107 MB worker `.cov`.
+- **Measured with no limit:** the run completes, but the parent peaks at 3.17 GB RSS on 1.74 GB of serialized
+  `.cov`. Each `.cov` holds every covering test id for each line, so the total is set by the suite, not by K.
+- **Decision:** the coverage cell stays on `parallel-tests.sh --clover` plus `scripts/merge-clover.php`, whose
+  shard clovers are small, and phpunit.xml's 1G guard stays. `ci.yml` records why.
+- **Alternative (owner's call):** a `--memory-limit` override for coverage runs only. It is unverified on a
+  16 GB, 4-vCPU runner.
 
 ---
 
