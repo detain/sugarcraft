@@ -106,8 +106,9 @@ final class KeyMapTest extends TestCase
 
     public function testTokenBearingSpaceIsRefusedNamingThePath(): void
     {
-        // Chords are a declared v1 non-goal; the loader refuses the shape
-        // rather than accepting a token no decoder can ever produce.
+        // Chords are spelled with '+' ("ctrl+q", sugar-core's chord
+        // grammar); a space-separated "ctrl q" is a typo, and the loader
+        // refuses it rather than accepting a token no decoder can produce.
         $this->expectRefusal('{"quit": ["ctrl q"]}');
     }
 

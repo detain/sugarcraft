@@ -165,6 +165,43 @@ final class KeyBindingsFromFileTest extends TestCase
         KeyBindings::fromFile($slot, self::base());
     }
 
+    public function testAFileUnderAMissingDirectoryIsStillNoOverrides(): void
+    {
+        $base = self::base();
+
+        self::assertSame($base, KeyBindings::fromFile($this->dir . '/gone/deeper/keys.json', $base));
+    }
+
+    public function testAFileBehindAnUnsearchableDirectoryThrowsInsteadOfVanishing(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            self::markTestSkipped('root bypasses directory search permission');
+        }
+        $locked = $this->dir . '/locked';
+        mkdir($locked, 0700);
+        file_put_contents($locked . '/keys.json', '{"quit": ["x"]}');
+        chmod($locked, 0000);
+
+        try {
+            KeyBindings::fromFile($locked . '/keys.json', self::base());
+            self::fail('an unsearchable slot must not read as a missing file');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString($locked . '/keys.json', $e->getMessage());
+        } finally {
+            chmod($locked, 0700);
+            unlink($locked . '/keys.json');
+        }
+    }
+
+    public function testAFileUnderANonDirectoryParentThrows(): void
+    {
+        $parent = $this->write('config', 'not a directory');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage($parent . '/keys.json');
+        KeyBindings::fromFile($parent . '/keys.json', self::base());
+    }
+
     public function testOversizedFileIsRefusedBeforeParsing(): void
     {
         $path = $this->write('keys.json', '{"quit": ["q"]}' . str_repeat(' ', 1048576));

@@ -225,9 +225,10 @@ final class KeyBindings
      * instead of throwing at the host.
      * With no $base the result holds only the actions the file names, and a
      * missing file yields an empty registry that matches nothing, so an app
-     * with defaults must pass them. Anything else wrong — a slot that is
-     * not a plain file (symlink, FIFO, socket: refused by lstat, never
-     * followed or opened), an oversized file, malformed JSON, a bad shape or
+     * with defaults must pass them. Anything else wrong — a slot hidden
+     * behind an unsearchable directory or a non-directory parent, a slot
+     * that is not a plain file (symlink, FIFO, socket: refused by lstat,
+     * never followed or opened), an oversized file, malformed JSON, a bad shape or
      * a token {@see parseChord()} rejects — throws, and nothing is applied:
      * a typo must not half-load and strand a binding mid-session.
      *
@@ -237,9 +238,16 @@ final class KeyBindings
     {
         $base ??= self::new();
 
+        clearstatcache();
         $slot = @lstat($path);
         if ($slot === false) {
-            return $base;
+            // lstat fails on EACCES/ENOTDIR as well as ENOENT; only a slot
+            // that is truly absent is "no overrides", so a keys.json hidden
+            // behind an unsearchable directory throws instead of vanishing.
+            if (self::slotIsAbsent($path)) {
+                return $base;
+            }
+            throw new \RuntimeException(Lang::t('keys.file_unreadable', ['path' => $path]));
         }
         if (($slot['mode'] & 0o170000) !== 0o100000) {
             throw new \RuntimeException(Lang::t('keys.file_not_regular', ['path' => $path]));
@@ -648,6 +656,27 @@ final class KeyBindings
     private static function reject(string $chord): never
     {
         throw new \InvalidArgumentException(Lang::t('keys.bad_chord', ['chord' => self::visible($chord)]));
+    }
+
+    /**
+     * Whether a slot lstat() could not see is genuinely absent (ENOENT)
+     * rather than hidden. PHP gives no errno, so it walks up: the slot is
+     * absent when the nearest ancestor that exists is a searchable
+     * directory. An ancestor that is a plain file (ENOTDIR) or a directory
+     * without search permission (EACCES) means the slot is not "missing",
+     * and the caller throws.
+     */
+    private static function slotIsAbsent(string $path): bool
+    {
+        $dir = dirname($path);
+        if ($dir === $path) {
+            return false;
+        }
+        if (@stat($dir) === false) {
+            return self::slotIsAbsent($dir);
+        }
+
+        return is_dir($dir) && is_executable($dir);
     }
 
     /**
