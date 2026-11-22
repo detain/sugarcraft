@@ -17,6 +17,7 @@ use SugarCraft\Sql\Admin\AdminPane;
 use SugarCraft\Sql\Admin\Connections\ConnectionsPage;
 use SugarCraft\Sql\Admin\ServerContext;
 use SugarCraft\Sql\App;
+use SugarCraft\Sql\App\BrowseState;
 use SugarCraft\Sql\App\ConnectionState;
 use SugarCraft\Sql\Db\Flavor;
 use SugarCraft\Sql\Pane;
@@ -153,6 +154,34 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
 
         [$digit,] = $a->update(new KeyMsg(KeyType::Char, '2'));
         $this->assertSame(AdminPane::Variables, $digit->admin->pane);
+    }
+
+    public function testAnOpenExportPathLineOutranksTheFocusedBarsDigitClaim(): void
+    {
+        $db = new FakeDatabase();
+        $a = new App(
+            ConnectionState::new($db, Flavor::MySQL, new ServerContext($db)),
+            BrowseState::new()
+                ->withTables(['posts'])
+                ->withSelectedTable('posts')
+                ->withRows([['id' => 1]]),
+        );
+        for ($i = 0; $i < 3; $i++) {
+            [$a,] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        }
+        $this->assertSame(Pane::Admin, $a->ui->pane);
+        [$a,] = $a->update(new KeyMsg(KeyType::Enter));
+        $this->assertTrue($this->connections($a)->detailTabsFocused());
+
+        [$a,] = $a->update(new KeyMsg(type: KeyType::Char, rune: 's', ctrl: true));
+        $this->assertTrue($a->io->isPromptOpen(), 'Ctrl+S raises the export line on the Admin pane');
+
+        foreach (mb_str_split('ex2.csv') as $ch) {
+            [$a,] = $a->update(new KeyMsg(KeyType::Char, $ch));
+        }
+
+        $this->assertSame('ex2.csv', $a->io->buffer, 'the digit belongs to the path, not the bar');
+        $this->assertSame(ConnectionsPage::DETAIL_TAB_DETAILS, $this->connections($a)->detailTab(), 'the detail tab does not switch');
     }
 
     public function testTheFocusedBarClaimsOnlyItsOwnKeys(): void

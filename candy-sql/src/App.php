@@ -358,8 +358,12 @@ final class App implements Model
             // A page may also claim individual keys ahead of the pane cycle
             // and the page picker (PageBase::claimsKey()): the Connections
             // detail-tab bar, once focused, takes Tab and 1-3 (AUD §2 #19).
+            // An open export/import or edit line outranks that claim: its
+            // digits are path or value characters, never tab switches.
             if ($page !== null
-                && ($msg->type === KeyType::Escape || $page->isModal() || $page->claimsKey($msg))) {
+                && ($msg->type === KeyType::Escape
+                    || $page->isModal()
+                    || (!$this->io->isPromptOpen() && !$this->edit->isOpen() && $page->claimsKey($msg)))) {
                 [$newPage, $cmd] = $page->update($msg);
                 assert($newPage instanceof PageBase);
                 return [$this->withAdminPage($newPage), $cmd];
