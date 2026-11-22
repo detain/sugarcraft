@@ -2907,7 +2907,7 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**33,817 tests / 797,204 assertions, 0 failures, 10 skipped** — the whole of `candy-code/tests/` on PHP 8.3.37, run under ParaTest (K=32) through `scripts/paratest.sh` at a352dac45f (wall 140s). These are CI's counts: on the host that measured them swoole 6.2.0 aborts php under `TMPDIR=/`, so `SuiteRootRunRefusalTest`'s two child arms skipped there (12 skipped, 797,197 assertions).
+**33,817 tests / 794,378 assertions, 0 failures, 10 skipped** — the whole of `candy-code/tests/` on PHP 8.3.37, run under ParaTest (K=32) through `scripts/paratest.sh` at b6414ff58c (wall 177s). These are CI's counts: on the host that measured them swoole 6.2.0 aborts php under `TMPDIR=/`, so `SuiteRootRunRefusalTest`'s two child arms skipped there (12 skipped, 794,371 assertions).
 The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);
 a timing for this pinned count is owed. The skips are expected and rostered, and the
 roster is a Linux figure that moves with the platform: each skip is a gate that
