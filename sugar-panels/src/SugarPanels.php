@@ -143,8 +143,13 @@ final class SugarPanels
     /** @var array<int, array{under: list<string>, drawn: bool}> Previous frame's divider records by op index */
     private array $previousDividers = [];
 
-    /** Whether the previous display list may be repainted leaf by leaf (see dirtySafe()) */
-    private bool $previousSafe = false;
+    /**
+     * Whether the previous display list may be repainted leaf by leaf (see
+     * dirtySafe()); null until a same-structure frame first asks. A fresh
+     * instance per frame, or a layout that changes every frame (a Splitter
+     * drag), never reaches the dirty path, so it never pays for the check.
+     */
+    private ?bool $previousSafe = null;
 
     /** Leaves painted by the last render() (see paintedLeaves()) */
     private int $paintedLeaves = 0;
@@ -365,7 +370,8 @@ final class SugarPanels
         }
         $prev = $this->previousFrame;
 
-        if ($this->previousSafe && $this->previousOps !== null && $this->sameStructure($this->previousOps, $ops)) {
+        if ($this->previousOps !== null && $this->sameStructure($this->previousOps, $ops)
+            && ($this->previousSafe ??= $this->dirtySafe($this->previousOps, $width, $height))) {
             // Same geometry, same frames, same dividers: start from the cells
             // on screen and repaint only the leaves whose inputs changed. The
             // buffer is patched at exactly the changed cells instead of being
@@ -452,7 +458,7 @@ final class SugarPanels
         $this->prevWidth = $width;
         $this->prevHeight = $height;
         if ($structureChanged) {
-            $this->previousSafe = $this->dirtySafe($ops, $width, $height);
+            $this->previousSafe = null;
         }
     }
 
@@ -592,57 +598,82 @@ final class SugarPanels
      */
     private function dirtySafe(array $ops, int $width, int $height): bool
     {
-        $rects = [];
+        // One pass over the grid instead of a test per op pair: a pairwise
+        // check made a layout of n leaves cost O(n^2) per structure change.
+        // $leafAt maps a cell to the leaf covering it, $frameAt to the last
+        // frame whose border crosses it (cells keyed y * width + x).
+        $leafAt  = [];
+        $frameAt = [];
         foreach ($ops as $i => $op) {
-            $rects[$i] = $this->clipRect($op, $width, $height);
+            if ($op['t'] !== 'leaf' && $op['t'] !== 'frame') {
+                continue;
+            }
+            [$x0, $y0, $x1, $y1] = $this->clipRect($op, $width, $height);
+            if ($x0 >= $x1 || $y0 >= $y1) {
+                continue;
+            }
+            if ($op['t'] === 'leaf') {
+                // Two leaves sharing a cell: the later one paints over the
+                // earlier, so neither region is blank before its own paint.
+                for ($cy = $y0; $cy < $y1; $cy++) {
+                    for ($k = $cy * $width + $x0, $end = $cy * $width + $x1; $k < $end; $k++) {
+                        if (isset($leafAt[$k])) {
+                            return false;
+                        }
+                        $leafAt[$k] = $i;
+                    }
+                }
+                continue;
+            }
+            // A frame writes only its perimeter (and nothing below 2x2).
+            if ($op['w'] < 2 || $op['h'] < 2) {
+                continue;
+            }
+            $top    = $op['y'];
+            $bottom = $op['y'] + $op['h'] - 1;
+            $left   = $op['x'];
+            $right  = $op['x'] + $op['w'] - 1;
+            foreach ([$top, $bottom] as $cy) {
+                if ($cy >= $y0 && $cy < $y1) {
+                    for ($cx = $x0; $cx < $x1; $cx++) {
+                        $frameAt[$cy * $width + $cx] = $i;
+                    }
+                }
+            }
+            foreach ([$left, $right] as $cx) {
+                if ($cx >= $x0 && $cx < $x1) {
+                    for ($cy = \max($y0, $top + 1), $end = \min($y1, $bottom); $cy < $end; $cy++) {
+                        $frameAt[$cy * $width + $cx] = $i;
+                    }
+                }
+            }
         }
 
+        // A frame border crossing a leaf writes into it, whichever comes first.
+        foreach ($frameAt as $k => $_) {
+            if (isset($leafAt[$k])) {
+                return false;
+            }
+        }
+
+        // A divider must not overwrite a leaf painted after it (that leaf's
+        // region would not be blank), and no leaf or frame painted after a
+        // divider may overwrite the divider's span.
         foreach ($ops as $i => $op) {
-            if ($op['t'] === 'frame') {
+            if ($op['t'] === 'leaf' || $op['t'] === 'frame') {
                 continue;
             }
-            $mine = $rects[$i];
-            if ($mine[0] >= $mine[2] || $mine[1] >= $mine[3]) {
-                continue;
-            }
-            foreach ($ops as $j => $other) {
-                if ($j === $i) {
-                    continue;
-                }
-                $otherIsPaint = $other['t'] === 'leaf' || $other['t'] === 'frame';
-                $leaf = $op['t'] === 'leaf';
-                $relevant = $j < $i ? $leaf : $otherIsPaint;
-                if ($relevant && $this->paintsInto($other, $rects[$j], $mine)) {
-                    return false;
+            [$x0, $y0, $x1, $y1] = $this->clipRect($op, $width, $height);
+            for ($cy = $y0; $cy < $y1; $cy++) {
+                for ($k = $cy * $width + $x0, $end = $cy * $width + $x1; $k < $end; $k++) {
+                    if (($leafAt[$k] ?? -1) > $i || ($frameAt[$k] ?? -1) > $i) {
+                        return false;
+                    }
                 }
             }
         }
 
         return true;
-    }
-
-    /**
-     * Does $op (clipped to $rect) write any cell of $target? A frame writes
-     * only its perimeter, so a target inside the frame's interior is safe.
-     *
-     * @param array<string, mixed>      $op
-     * @param array{int, int, int, int} $rect
-     * @param array{int, int, int, int} $target
-     */
-    private function paintsInto(array $op, array $rect, array $target): bool
-    {
-        if ($rect[0] >= $target[2] || $target[0] >= $rect[2] || $rect[1] >= $target[3] || $target[1] >= $rect[3]) {
-            return false;
-        }
-        if ($op['t'] !== 'frame') {
-            return true;
-        }
-        if ($op['w'] < 2 || $op['h'] < 2) {
-            return false;
-        }
-
-        return !($target[0] >= $op['x'] + 1 && $target[2] <= $op['x'] + $op['w'] - 1
-            && $target[1] >= $op['y'] + 1 && $target[3] <= $op['y'] + $op['h'] - 1);
     }
 
     /**
@@ -2173,7 +2204,7 @@ final class SugarPanels
         $this->previousCellList = null;
         $this->previousOps = null;
         $this->previousDividers = [];
-        $this->previousSafe = false;
+        $this->previousSafe = null;
         $this->prevWidth = null;
         $this->prevHeight = null;
     }
