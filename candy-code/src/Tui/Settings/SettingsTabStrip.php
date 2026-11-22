@@ -7,21 +7,26 @@ namespace SugarCraft\Code\Tui\Settings;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 use SugarCraft\Code\Theme;
+use SugarCraft\Widgets\Tabs\ScrollWindow;
+use SugarCraft\Widgets\Tabs\Tabs;
+use SugarCraft\Widgets\Tabs\TabSpan;
 
 /**
  * The settings view's category strip: one line, the active tab highlighted,
  * scrolled sideways so the active tab is always on it.
  *
- * Local rather than `sugar-widgets`' `Tabs` because that one hit-tests through
- * the `SugarCraft\Mouse\Zones` Manager while this app's clicks run on the
- * `sugar-mouse` Mark/Scan layer; the strip reports
- * each painted tab's column span instead, and the shell records those as
- * `settings:tab:<n>` zones (the `MenuBar` pane-tab pattern).
+ * Drawn by sugar-widgets Tabs (P2-2), configured to the frame the strip drew
+ * with its own scroll arithmetic: a bare `│` divider, ` label ` cells,
+ * `‹`/`›` scroll marks joined to the tabs, and the first window that keeps
+ * the active tab. The strip and its hit spans both come from that one bar.
+ * Hit-testing reads {@see Tabs::spans()} rather than the bar's Mark zones:
+ * the shell records each span as a `settings:tab:<n>` zone from columns (the
+ * `MenuBar` pane-tab pattern), and the settings frame carries no zone
+ * scanner, so zone markup would reach the terminal. The bar is never focused
+ * and never sees a key; SettingsEditor keeps its own tab keys.
  */
 final class SettingsTabStrip
 {
-    private const SEPARATOR = '│';
-
     private function __construct()
     {
     }
@@ -38,66 +43,29 @@ final class SettingsTabStrip
             return ['', []];
         }
 
-        $cells = array_map(static fn (string $label): string => ' ' . $label . ' ', $labels);
-        $first = self::firstVisible($cells, $active, $width);
+        $mark = Style::new()->foreground($theme->shellMuted);
 
-        $line = '';
-        $spans = [];
-        $col = 0;
-        if ($first > 0) {
-            $line .= Style::new()->foreground($theme->shellMuted)->render('‹');
-            $col = 1;
+        // Narrow-width guard: when the active tab cannot fit with the marks
+        // around it, the strip has always drawn the marks alone, with no tab
+        // and no hit span; Tabs would draw the active tab clipped instead.
+        $marks = ($active > 0 ? 1 : 0) + ($active < \count($labels) - 1 ? 1 : 0);
+        if (Width::string(' ' . $labels[$active] . ' ') + $marks > $width) {
+            return [($active > 0 ? $mark->render('‹') : '') . $mark->render('›'), []];
         }
 
-        for ($i = $first, $n = \count($cells); $i < $n; $i++) {
-            $cell = $cells[$i];
-            $w = Width::string($cell);
-            $sep = $i > $first ? 1 : 0;
-            // Keep a cell for the "more" mark when tabs remain to the right.
-            $reserve = $i < $n - 1 ? 1 : 0;
-            if ($col + $sep + $w + $reserve > $width) {
-                $line .= Style::new()->foreground($theme->shellMuted)->render('›');
-                break;
-            }
+        $bar = Tabs::new($labels, $width)
+            ->withDivider('│')
+            ->withDividerStyle(Style::new()->foreground($theme->shellSeparator))
+            ->withActiveStyle(Style::new()->foreground($theme->shellPrimary)->bold()->reverse())
+            ->withInactiveStyle(Style::new()->foreground($theme->shellForeground))
+            ->withLabelPadding(1, 1)
+            ->withScrollMarks('‹', '›', $mark, separatorAfterLeft: false, separatorBeforeRight: false)
+            ->withScrollWindow(ScrollWindow::FirstKeepingActive)
+            ->withActive($active);
 
-            if ($sep === 1) {
-                $line .= Style::new()->foreground($theme->shellSeparator)->render(self::SEPARATOR);
-                $col++;
-            }
-
-            $style = $i === $active
-                ? Style::new()->foreground($theme->shellPrimary)->bold()->reverse()
-                : Style::new()->foreground($theme->shellForeground);
-            $line .= $style->render($cell);
-            $spans[] = [$col, $col + $w, $i];
-            $col += $w;
-        }
-
-        return [$line, $spans];
-    }
-
-    /**
-     * The leftmost tab to paint so that `$active` still fits.
-     *
-     * @param list<string> $cells
-     */
-    private static function firstVisible(array $cells, int $active, int $width): int
-    {
-        $first = 0;
-        while ($first < $active) {
-            $used = $first > 0 ? 1 : 0;
-            for ($i = $first; $i <= $active; $i++) {
-                $used += Width::string($cells[$i]) + ($i > $first ? 1 : 0);
-            }
-
-            // One more cell for the "›" mark if anything is right of $active.
-            if ($used + ($active < \count($cells) - 1 ? 1 : 0) <= $width) {
-                return $first;
-            }
-
-            $first++;
-        }
-
-        return $first;
+        return [
+            $bar->view(),
+            array_map(static fn (TabSpan $span): array => [$span->start, $span->end, $span->index], $bar->spans()),
+        ];
     }
 }
