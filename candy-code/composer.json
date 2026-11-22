@@ -68,7 +68,8 @@
         "sugarcraft/sugar-pty": "@dev",
         "sugarcraft/sugar-video": "@dev",
         "sugarcraft/sugar-plugins": "@dev",
-        "sugarcraft/sugar-serve-protocol": "@dev"
+        "sugarcraft/sugar-serve-protocol": "@dev",
+        "sugarcraft/sugar-widgets": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
