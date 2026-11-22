@@ -244,7 +244,10 @@ final class KeyBindings
             );
         }
 
-        if ($entries !== [] && array_is_list($entries)) {
+        // The decoded shape cannot tell an object from an array: json_decode
+        // turns {"0": [...]} into a PHP list. The decode succeeded, so the
+        // first non-whitespace byte is '{' or '[' and settles it.
+        if ($entries !== [] && ltrim($raw, " \t\n\r")[0] !== '{') {
             throw new \RuntimeException(Lang::t('keys.file_not_object', ['path' => $path]));
         }
 

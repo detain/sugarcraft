@@ -81,6 +81,17 @@ final class KeyBindingsFromFileTest extends TestCase
         self::assertNull($b->actionFor(new KeyMsg(KeyType::Char, 'q')), 'the replaced chord is gone');
     }
 
+    public function testAnObjectWithSequentialNumericKeysIsStillAnObject(): void
+    {
+        $path = $this->write('keys.json', " \n{\"0\": [\"x\"], \"1\": \"y\"}");
+
+        $b = KeyBindings::fromFile($path, KeyBindings::fromMap(['0' => ['q'], '1' => ['w']]));
+
+        self::assertSame(['0', '1'], $b->actions(), 'no phantom action is created');
+        self::assertSame(['x'], $b->tokens('0'));
+        self::assertSame(['y'], $b->tokens('1'));
+    }
+
     public function testAFileMayDeclareNewActionsOnAnEmptyBase(): void
     {
         $path = $this->write('keys.json', '{"jump": ["g"]}');
