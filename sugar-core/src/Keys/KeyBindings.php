@@ -152,10 +152,14 @@ final class KeyBindings
     private const MODIFIERS = ['ctrl', 'alt', 'shift'];
 
     /**
-     * Longest chord accepted, in bytes. The longest chord {@see chordOf()}
-     * can produce, `ctrl+alt+shift+media_fast_forward`, is 33; anything past
-     * this is not a key name, and a help column cannot absorb it without
-     * lying about what the key is.
+     * Longest chord accepted, in bytes: 40. The longest chord
+     * {@see chordOf()} can produce today, `ctrl+alt+shift+media_fast_forward`,
+     * is 33 bytes, so the cap admits every chord a key press can present,
+     * with 7 bytes of headroom so a longer {@see KeyType} name added later
+     * still binds without a cap change (a regression test round-trips every
+     * named key under all three modifiers). Input past 40 bytes is not a key
+     * name, and a help column cannot absorb it without lying about what the
+     * key is.
      */
     private const MAX_CHORD_BYTES = 40;
 
