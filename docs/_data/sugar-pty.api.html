@@ -110,7 +110,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(int $chunkBytes = self::DEFAULT_CHUNK_BYTES, int $selectTimeoutUs = self::DEFAULT_SELECT_TIMEOUT_US, float $flushDeadlineSec = self::DEFAULT_FLUSH_DEADLINE_SEC, float $stdinEofGraceSec = self::DEFAULT_STDIN_EOF_GRACE_SEC, string $veof = self::DEFAULT_VEOF, ?\Closure $onIdle = null, ?\Closure $onResize = null, ?\Closure $onChildExit = null, ?\SugarCraft\Core\Recorder $recorder = null, ?int $pumpDeadlineUs = null)</code></td><td></td></tr>
+<tr><td><code>__construct(int $chunkBytes = self::DEFAULT_CHUNK_BYTES, int $selectTimeoutUs = self::DEFAULT_SELECT_TIMEOUT_US, float $flushDeadlineSec = self::DEFAULT_FLUSH_DEADLINE_SEC, float $stdinEofGraceSec = self::DEFAULT_STDIN_EOF_GRACE_SEC, string $veof = self::DEFAULT_VEOF, null $removedKeepalive = null, ?\Closure $onIdle = null, ?\Closure $onResize = null, ?\Closure $onChildExit = null, ?\SugarCraft\Core\Recorder $recorder = null, ?int $pumpDeadlineUs = null)</code></td><td></td></tr>
 <tr><td><code>static sshDefault(): self</code></td><td>SSH-session-tuned preset — historically the values hardcoded in InProcessTransport. Those values BECAME the class defaults, so this is now an alias for <code>new self()</code>: every field equals its <code>DEFAULT_*</code> constant. Kept as a named entry point for call sites that mean &quot;pump an interactive SSH session&quot; rather than &quot;whatever the defaults happen to be&quot;.</td></tr>
 <tr><td><code>withChunkBytes(int $v): self</code></td><td></td></tr>
 <tr><td><code>withSelectTimeoutUs(int $v): self</code></td><td></td></tr>

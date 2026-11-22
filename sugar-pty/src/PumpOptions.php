@@ -163,11 +163,20 @@ final class PumpOptions
      * @param int<1, max>                    $selectTimeoutUs
      * @param float<0, max>                  $flushDeadlineSec
      * @param float<0, max>                  $stdinEofGraceSec
+     * @param null                          $removedKeepalive reserved slot, must stay null (see below)
      * @param (\Closure(): void)|null       $onIdle
      * @param (\Closure(int, int): void)|null $onResize
      * @param (\Closure(int): void)|null     $onChildExit
      * @param \SugarCraft\Core\Recorder|null $recorder
      * @param int<1, max>|null               $pumpDeadlineUs
+     *
+     * `$removedKeepalive` holds the sixth slot the removed keepalive hook
+     * used (P1-8e). Dropping the slot outright would shift onIdle,
+     * onResize, onChildExit and the rest one place left, silently
+     * rebinding a positional caller's closures to the wrong hook. Typed
+     * `null`, the slot keeps a positional `null` binding as before and
+     * turns a positional closure into a TypeError; register an idle
+     * hook through `$onIdle` instead.
      */
     public function __construct(
         int $chunkBytes = self::DEFAULT_CHUNK_BYTES,
@@ -175,6 +184,7 @@ final class PumpOptions
         float $flushDeadlineSec = self::DEFAULT_FLUSH_DEADLINE_SEC,
         float $stdinEofGraceSec = self::DEFAULT_STDIN_EOF_GRACE_SEC,
         string $veof = self::DEFAULT_VEOF,
+        null $removedKeepalive = null,
         ?\Closure $onIdle = null,
         ?\Closure $onResize = null,
         ?\Closure $onChildExit = null,

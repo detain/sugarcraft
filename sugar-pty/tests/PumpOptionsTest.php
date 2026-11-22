@@ -259,4 +259,28 @@ final class PumpOptionsTest extends TestCase
         $this->assertNotContains('keepalive', $params);
         $this->assertNotContains('onSigwinch', $params);
     }
+
+    public function testAPositionalCallPastVeofStillBindsEachHookToItsOwnSlot(): void
+    {
+        // The removed keepalive slot is reserved, so a positional caller
+        // written against the old signature is not shifted one hook left.
+        $onIdle = static fn (): null => null;
+        $onResize = static fn (int $c, int $r): null => null;
+        $onChildExit = static fn (int $code): null => null;
+
+        $opts = new PumpOptions(4096, 50000, 0.5, 0.3, "\x04", null, $onIdle, $onResize, $onChildExit, null, 1000);
+
+        $this->assertSame($onIdle, $opts->onIdle);
+        $this->assertSame($onResize, $opts->onResize);
+        $this->assertSame($onChildExit, $opts->onChildExit);
+        $this->assertNull($opts->recorder);
+        $this->assertSame(1000, $opts->pumpDeadlineUs);
+        $this->assertSame($onIdle, $opts->withChunkBytes(8)->onIdle);
+    }
+
+    public function testAClosureInTheRemovedKeepaliveSlotFailsLoudly(): void
+    {
+        $this->expectException(\TypeError::class);
+        new PumpOptions(4096, 50000, 0.5, 0.3, "\x04", static fn (): null => null);
+    }
 }
