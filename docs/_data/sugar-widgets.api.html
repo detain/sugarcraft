@@ -482,7 +482,7 @@
 <tr><td><code>__construct(public readonly Binding $nextTab, public readonly Binding $prevTab, public readonly array $jumpBindings, ?Binding $closeTab = null)</code></td><td><code>$closeTab</code> is optional so maps built positionally before the close binding existed keep working; null means the default <code>ctrl+w</code>.</td></tr>
 <tr><td><code>static new(): self</code></td><td>Default keymap: Tab / Shift+Tab for navigation, 1-9 for direct jump.</td></tr>
 <tr><td><code>shortHelp(): array</code></td><td></td></tr>
-<tr><td><code>fullHelp(): array</code></td><td></td></tr>
+<tr><td><code>fullHelp(): array</code></td><td>Navigation and jump columns. The <code>closeTab</code> binding is left out because the map cannot see whether its bar is closable, and a plain bar ignores <code>ctrl+w</code>; a host rendering help for a closable bar appends <code>[$keyMap-&gt;closeTab]</code> itself.</td></tr>
 </tbody>
 </table>
 <h3>SugarCraft\Widgets\Timer</h3>

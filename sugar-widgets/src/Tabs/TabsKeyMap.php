@@ -90,10 +90,17 @@ final class TabsKeyMap implements KeyMap
         return [$this->nextTab, $this->prevTab];
     }
 
-    /** @return list<list<Binding>> */
+    /**
+     * Navigation and jump columns. The `closeTab` binding is left out
+     * because the map cannot see whether its bar is closable, and a plain
+     * bar ignores `ctrl+w`; a host rendering help for a closable bar
+     * appends `[$keyMap->closeTab]` itself.
+     *
+     * @return list<list<Binding>>
+     */
     public function fullHelp(): array
     {
         $jumpCols = array_chunk($this->jumpBindings, 4);
-        return [$this->shortHelp(), ...$jumpCols, [$this->closeTab]];
+        return [$this->shortHelp(), ...$jumpCols];
     }
 }

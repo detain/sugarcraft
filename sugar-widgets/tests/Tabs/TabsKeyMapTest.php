@@ -53,13 +53,24 @@ final class TabsKeyMapTest extends TestCase
     {
         $km = TabsKeyMap::new();
         $full = $km->fullHelp();
-        // fullHelp = [shortHelp (2 bindings), jumpCols (3 columns: 4+4+1), [closeTab]]
-        $this->assertCount(5, $full);
+        // fullHelp = [shortHelp (2 bindings), jumpCols (3 columns: 4+4+1)]
+        $this->assertCount(4, $full);
         $this->assertSame([$km->nextTab, $km->prevTab], $full[0]);
         $this->assertCount(4, $full[1]);
         $this->assertCount(4, $full[2]);
         $this->assertCount(1, $full[3]);
-        $this->assertSame([$km->closeTab], $full[4]);
+    }
+
+    /**
+     * The map cannot tell whether its bar is closable, and a plain bar
+     * ignores ctrl+w, so full help must not advertise the close binding.
+     */
+    public function testFullHelpDoesNotAdvertiseCloseTab(): void
+    {
+        $km = TabsKeyMap::new();
+        foreach ($km->fullHelp() as $column) {
+            $this->assertNotContains($km->closeTab, $column);
+        }
     }
 
     public function testDefaultHasCloseTabBinding(): void
