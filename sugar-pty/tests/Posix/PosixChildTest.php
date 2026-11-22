@@ -51,9 +51,6 @@ final class PosixChildTest extends TestCase
             $child = new PosixChild($status['pid'], $process);
             $this->assertSame($child->pid(), $child->pid);
 
-            $legacy = new \SugarCraft\Pty\Child($status['pid'], $process);
-            $this->assertSame($legacy->pid(), $legacy->pid);
-
             $plain = new PosixProcess($status['pid'], $process);
             $this->assertSame($plain->pid(), $plain->pid);
         } finally {

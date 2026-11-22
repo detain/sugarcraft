@@ -112,8 +112,9 @@ in-tree callers were migrated. `Pty::open($cols, $rows)` is
 `(new PosixPtySystem())->open($cols, $rows)` (or `PtySystemFactory::new()`
 for the host backend), `$pty->spawn(...)` is `$pair->slave()->spawn(...)`,
 and the read/write/resize/size/stream/close calls live on
-`$pair->master()`. The `Child` class a spawn returns is still a
-`@deprecated` base of `Posix\PosixChild`, scheduled to be folded into it.
+`$pair->master()`. The old `SugarCraft\Pty\Child` base class has been
+folded into `Posix\PosixChild`, which a POSIX spawn returns; type against
+`Contract\Child`.
 (`PtySystemFactory::default()` — the old name of `::new()` — has already
 been deleted too: it carried no behaviour of its own and its last live
 callers were migrated in-tree, so `::new()` is the single factory entry

@@ -181,7 +181,7 @@ final class SignalForwarder
     /**
      * Install a `SIGCHLD` handler that calls `$reaper()` whenever
      * any child terminates. The reaper typically iterates known
-     * {@see Child} instances and probes `proc_get_status()` on each.
+     * {@see \SugarCraft\Pty\Contract\Child} instances and probes `proc_get_status()` on each.
      *
      * It replaces the loop's SIGCHLD handler, so a pending
      * {@see \SugarCraft\Pty\Posix\PosixChild::onExit()} listener would stop

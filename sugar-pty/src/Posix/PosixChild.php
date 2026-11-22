@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty\Posix;
 
-use SugarCraft\Pty\Child as ChildProcess;
 use SugarCraft\Pty\Contract\Child;
 use SugarCraft\Pty\TerminationPolicy;
 
@@ -20,14 +19,15 @@ use SugarCraft\Pty\TerminationPolicy;
  * contract requires extension); consumers needing polymorphism type
  * against {@see \SugarCraft\Pty\Contract\Child}.
  *
- * Migration note: it extends the deprecated {@see \SugarCraft\Pty\Child}
- * alias only to inherit the shared constructor, the promoted `$pid`
- * property and the {@see ChildPollTrait} plumbing — the alias stays
- * alive as long as this class needs it. The v2.0 plan folds that
- * plumbing into this class and deletes the alias; the `public readonly
- * int $pid` property survives the fold, but contract-typed code should
- * call `pid()` (the {@see \SugarCraft\Pty\Contract\Child} interface
- * declares the method only, never the property).
+ * The lifecycle plumbing comes from {@see ChildPollTrait}. The former
+ * `SugarCraft\Pty\Child` base class was folded into this one (P1-8e);
+ * the `public readonly int $pid` property survived the fold, but
+ * contract-typed code should call `pid()` (the
+ * {@see \SugarCraft\Pty\Contract\Child} interface declares the method
+ * only, never the property).
+ *
+ * Mirrors charmbracelet/x/xpty.Cmd's lifecycle hooks (`Wait`,
+ * `ProcessState.Exited`).
  *
  * Kill on drop is opt-in ({@see withKillOnDrop()}). By default, destroying
  * the handle reaps a child that has already exited and leaves a running one
@@ -37,8 +37,10 @@ use SugarCraft\Pty\TerminationPolicy;
  * @see creack/pty.Cmd
  * @see portable-pty.Process
  */
-final class PosixChild extends ChildProcess implements Child
+final class PosixChild implements Child
 {
+    use ChildPollTrait;
+
     /** The teardown this handle runs when dropped; null keeps the default drop. */
     private ?TerminationPolicy $dropPolicy = null;
 
@@ -57,6 +59,19 @@ final class PosixChild extends ChildProcess implements Child
      * its destructor on exit, so only this process may run the teardown.
      */
     private ?int $dropPid = null;
+
+    /**
+     * @param resource $process the proc_open() handle
+     */
+    public function __construct(
+        public readonly int $pid,
+        $process,
+    ) {
+        if (!\is_resource($process)) {
+            throw new \InvalidArgumentException('Child requires a live proc_open() resource');
+        }
+        $this->process = $process;
+    }
 
     /**
      * A handle on the same child that tears it down when the handle is
@@ -113,7 +128,22 @@ final class PosixChild extends ChildProcess implements Child
             // Destructors must not throw; a child the policy could not stop
             // stays running, and the reap below leaves it alone.
         }
-        parent::__destruct();
+        $this->pollDestruct();
+    }
+
+    /**
+     * A second handle on the same child: a clone whose process handle and
+     * exit-code cache are bound by reference to this one's, so a reap or a
+     * close through either handle is seen by both. The base of the with*()
+     * views and of exitWatchHandle().
+     */
+    private function shareHandle(): self
+    {
+        $view = clone $this;
+        $view->process = &$this->process;
+        $view->exitCode = &$this->exitCode;
+
+        return $view;
     }
 
     /**

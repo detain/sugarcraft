@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Child;
 use SugarCraft\Pty\Master;
+use SugarCraft\Pty\Posix\PosixChild;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\Spawn;
@@ -42,7 +42,7 @@ final class SpawnProcTest extends TestCase
         try {
             $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/true']);
 
-            $this->assertInstanceOf(Child::class, $child);
+            $this->assertInstanceOf(PosixChild::class, $child);
             $this->assertGreaterThan(0, $child->pid, 'pid must be a positive integer');
             $this->assertSame(0, $child->wait());
             $this->assertTrue($child->exited());
@@ -198,7 +198,7 @@ final class SpawnProcTest extends TestCase
         try {
             $child = Spawn::proc(new Master($pty->fd(), $pair->slavePath()), ['/bin/true'], null, true);
 
-            $this->assertInstanceOf(Child::class, $child);
+            $this->assertInstanceOf(PosixChild::class, $child);
             $this->assertGreaterThan(0, $child->pid);
             $this->assertSame(0, $child->wait());
             $this->assertTrue($child->exited());

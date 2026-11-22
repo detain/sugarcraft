@@ -471,7 +471,7 @@ final class InProcessTransport implements Transport, ChildSpawner, KeepaliveArmi
 
             // Track the child PID so handleSignal() can forward signals.
             // pid() is the Contract\Child accessor — a bare ->pid property
-            // read only works for implementations extending Pty\Child and
+            // read only works for implementations that promote $pid (PosixChild) and
             // warns (returning null) on any other Contract\Child.
             $this->childPid = $child->pid();
 

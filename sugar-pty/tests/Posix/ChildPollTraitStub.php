@@ -10,7 +10,7 @@ use SugarCraft\Pty\Posix\ChildPollTrait;
  * Bare stub exercising {@see ChildPollTrait} without the PTY syscall surface.
  *
  * The trait reads `$this->process` and `$this->pid`, both wired up by this
- * stub's constructor — the same shape {@see \SugarCraft\Pty\Child} uses.
+ * stub's constructor — the same shape {@see \SugarCraft\Pty\Posix\PosixChild} uses.
  *
  * Lives in its own file so PSR-4 autoload can resolve it when a single test
  * file referencing it is run in isolation (e.g. ChildPollWaitpidTest).

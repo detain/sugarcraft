@@ -65,7 +65,7 @@ final class Spawn
         array $cmd,
         ?array $env = null,
         bool $controllingTerminal = false,
-    ): Child {
+    ): PosixChild {
         if ($cmd === []) {
             throw new \InvalidArgumentException('Spawn::proc requires a non-empty command');
         }

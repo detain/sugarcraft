@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Pty\Tests;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Pty\Child;
+use SugarCraft\Pty\Posix\PosixChild;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\Spawn;
@@ -30,7 +30,7 @@ final class SpawnTest extends TestCase
         $pty = $pair->master();
         try {
             $child = $pair->slave()->spawn(['/bin/true']);
-            $this->assertInstanceOf(Child::class, $child);
+            $this->assertInstanceOf(PosixChild::class, $child);
             $this->assertGreaterThan(0, $child->pid, 'pid should be a real process id');
             $this->assertSame(0, $child->wait());
             $this->assertTrue($child->exited());
@@ -142,7 +142,7 @@ final class SpawnTest extends TestCase
     public function testChildRejectsNonResource(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        new Child(123, 'not-a-resource');
+        new PosixChild(123, 'not-a-resource');
     }
 
     public function testSpawnHelperIsNotInstantiable(): void

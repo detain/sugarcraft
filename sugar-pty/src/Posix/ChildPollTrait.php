@@ -12,7 +12,7 @@ use React\Promise\PromiseInterface;
 use SugarCraft\Pty\Lang;
 
 /**
- * Package-private trait shared by {@see \SugarCraft\Pty\Child} and any other
+ * Package-private trait shared by {@see \SugarCraft\Pty\Posix\PosixChild} and any other
  * sugar-pty handle that owns a `proc_open()` resource and needs to expose the
  * canonical waitpid-style lifecycle (`exited()`, `wait()`, `exitCode()`,
  * `pid()`).
@@ -27,8 +27,8 @@ use SugarCraft\Pty\Lang;
  *
  * @internal
  *
- * @see \SugarCraft\Pty\Child
  * @see \SugarCraft\Pty\Posix\PosixChild
+ * @see \SugarCraft\Pty\Posix\PosixProcess
  */
 trait ChildPollTrait
 {
