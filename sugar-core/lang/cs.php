@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'neplatná kombinace kláves "{chord}": použijte [ctrl+][alt+][shift+] před názvem klávesy (enter, tab, pageup, f5) nebo jedním tisknutelným znakem; shift+ platí jen pro pojmenované klávesy',
+    'keys.bad_chord_type' => 'kombinace kláves musí být řetězce, obdrženo {type}',
+    'keys.file_not_regular' => 'soubor klávesových zkratek {path} není běžný soubor',
+    'keys.file_too_large' => 'soubor klávesových zkratek {path} je větší než {max} bajtů',
+    'keys.file_unreadable' => 'soubor klávesových zkratek {path} nelze přečíst',
+    'keys.file_bad_json' => 'soubor klávesových zkratek {path} není platný JSON: {reason}',
+    'keys.file_not_object' => 'soubor klávesových zkratek {path} musí být objekt JSON z názvu akce na kombinace kláves',
+    'keys.file_empty_action' => 'soubor klávesových zkratek {path} obsahuje prázdný název akce',
+    'keys.file_bad_tokens' => 'soubor klávesových zkratek {path}: klávesy pro "{action}" musí být kombinace nebo seznam kombinací',
+    'keys.file_bad_chord' => 'soubor klávesových zkratek {path}: akce "{action}": {reason}',
 ];

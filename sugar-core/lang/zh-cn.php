@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => '无效的组合键“{chord}”：请在键名（enter、tab、pageup、f5）或单个可打印字符前使用 [ctrl+][alt+][shift+]；shift+ 仅适用于命名键',
+    'keys.bad_chord_type' => '组合键必须是字符串，收到 {type}',
+    'keys.file_not_regular' => '按键绑定文件 {path} 不是普通文件',
+    'keys.file_too_large' => '按键绑定文件 {path} 超过 {max} 字节',
+    'keys.file_unreadable' => '无法读取按键绑定文件 {path}',
+    'keys.file_bad_json' => '按键绑定文件 {path} 不是有效的 JSON：{reason}',
+    'keys.file_not_object' => '按键绑定文件 {path} 必须是从操作名映射到组合键的 JSON 对象',
+    'keys.file_empty_action' => '按键绑定文件 {path} 含有空的操作名',
+    'keys.file_bad_tokens' => '按键绑定文件 {path}：“{action}”的按键必须是一个组合键或组合键列表',
+    'keys.file_bad_chord' => '按键绑定文件 {path}：操作“{action}”：{reason}',
 ];

@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'combinação de teclas inválida "{chord}": use [ctrl+][alt+][shift+] antes de um nome de tecla (enter, tab, pageup, f5) ou de um único caractere imprimível; shift+ vale apenas para teclas nomeadas',
+    'keys.bad_chord_type' => 'as combinações de teclas devem ser strings, recebido {type}',
+    'keys.file_not_regular' => 'o arquivo de atalhos {path} não é um arquivo comum',
+    'keys.file_too_large' => 'o arquivo de atalhos {path} tem mais de {max} bytes',
+    'keys.file_unreadable' => 'não foi possível ler o arquivo de atalhos {path}',
+    'keys.file_bad_json' => 'o arquivo de atalhos {path} não é um JSON válido: {reason}',
+    'keys.file_not_object' => 'o arquivo de atalhos {path} deve ser um objeto JSON de nome de ação para combinações de teclas',
+    'keys.file_empty_action' => 'o arquivo de atalhos {path} tem um nome de ação vazio',
+    'keys.file_bad_tokens' => 'arquivo de atalhos {path}: as teclas de "{action}" devem ser uma combinação ou uma lista de combinações',
+    'keys.file_bad_chord' => 'arquivo de atalhos {path}: ação "{action}": {reason}',
 ];

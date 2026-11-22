@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'combinazione di tasti non valida "{chord}": usa [ctrl+][alt+][shift+] prima di un nome di tasto (enter, tab, pageup, f5) o di un singolo carattere stampabile; shift+ vale solo per i tasti con nome',
+    'keys.bad_chord_type' => 'le combinazioni di tasti devono essere stringhe, ricevuto {type}',
+    'keys.file_not_regular' => 'il file delle scorciatoie {path} non è un file regolare',
+    'keys.file_too_large' => 'il file delle scorciatoie {path} supera {max} byte',
+    'keys.file_unreadable' => 'impossibile leggere il file delle scorciatoie {path}',
+    'keys.file_bad_json' => 'il file delle scorciatoie {path} non è JSON valido: {reason}',
+    'keys.file_not_object' => 'il file delle scorciatoie {path} deve essere un oggetto JSON da nome azione a combinazioni di tasti',
+    'keys.file_empty_action' => 'il file delle scorciatoie {path} contiene un nome di azione vuoto',
+    'keys.file_bad_tokens' => 'file delle scorciatoie {path}: i tasti di "{action}" devono essere una combinazione o un elenco di combinazioni',
+    'keys.file_bad_chord' => 'file delle scorciatoie {path}: azione "{action}": {reason}',
 ];

@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => '無効なキーの組み合わせ "{chord}": キー名 (enter, tab, pageup, f5) または印字可能な 1 文字の前に [ctrl+][alt+][shift+] を付けてください。shift+ は名前付きキーにのみ使えます',
+    'keys.bad_chord_type' => 'キーの組み合わせは文字列である必要があります ({type} を受け取りました)',
+    'keys.file_not_regular' => 'キー割り当てファイル {path} は通常のファイルではありません',
+    'keys.file_too_large' => 'キー割り当てファイル {path} が {max} バイトを超えています',
+    'keys.file_unreadable' => 'キー割り当てファイル {path} を読み込めません',
+    'keys.file_bad_json' => 'キー割り当てファイル {path} は有効な JSON ではありません: {reason}',
+    'keys.file_not_object' => 'キー割り当てファイル {path} はアクション名からキーの組み合わせへの JSON オブジェクトである必要があります',
+    'keys.file_empty_action' => 'キー割り当てファイル {path} に空のアクション名があります',
+    'keys.file_bad_tokens' => 'キー割り当てファイル {path}: "{action}" のキーは組み合わせ 1 つか組み合わせのリストである必要があります',
+    'keys.file_bad_chord' => 'キー割り当てファイル {path}: アクション "{action}": {reason}',
 ];

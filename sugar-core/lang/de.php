@@ -119,4 +119,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'ungültige Tastenkombination "{chord}": verwende [ctrl+][alt+][shift+] vor einem Tastennamen (enter, tab, pageup, f5) oder einem einzelnen druckbaren Zeichen; shift+ gilt nur für benannte Tasten',
+    'keys.bad_chord_type' => 'Tastenkombinationen müssen Zeichenketten sein, erhalten: {type}',
+    'keys.file_not_regular' => 'Tastenbelegungsdatei {path} ist keine reguläre Datei',
+    'keys.file_too_large' => 'Tastenbelegungsdatei {path} ist größer als {max} Bytes',
+    'keys.file_unreadable' => 'Tastenbelegungsdatei {path} kann nicht gelesen werden',
+    'keys.file_bad_json' => 'Tastenbelegungsdatei {path} ist kein gültiges JSON: {reason}',
+    'keys.file_not_object' => 'Tastenbelegungsdatei {path} muss ein JSON-Objekt aus Aktionsname und Tastenkombinationen sein',
+    'keys.file_empty_action' => 'Tastenbelegungsdatei {path} enthält einen leeren Aktionsnamen',
+    'keys.file_bad_tokens' => 'Tastenbelegungsdatei {path}: die Tasten für "{action}" müssen eine Kombination oder eine Liste von Kombinationen sein',
+    'keys.file_bad_chord' => 'Tastenbelegungsdatei {path}: Aktion "{action}": {reason}',
 ];

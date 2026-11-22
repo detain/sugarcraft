@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'تركيبة مفاتيح غير صالحة "{chord}": استخدم [ctrl+][alt+][shift+] قبل اسم مفتاح (enter، tab، pageup، f5) أو حرف واحد قابل للطباعة؛ لا ينطبق shift+ إلا على المفاتيح المسماة',
+    'keys.bad_chord_type' => 'يجب أن تكون تركيبات المفاتيح سلاسل نصية، تم استلام {type}',
+    'keys.file_not_regular' => 'ملف ربط المفاتيح {path} ليس ملفًا عاديًا',
+    'keys.file_too_large' => 'ملف ربط المفاتيح {path} أكبر من {max} بايت',
+    'keys.file_unreadable' => 'تعذرت قراءة ملف ربط المفاتيح {path}',
+    'keys.file_bad_json' => 'ملف ربط المفاتيح {path} ليس JSON صالحًا: {reason}',
+    'keys.file_not_object' => 'يجب أن يكون ملف ربط المفاتيح {path} كائن JSON يربط اسم الإجراء بتركيبات المفاتيح',
+    'keys.file_empty_action' => 'يحتوي ملف ربط المفاتيح {path} على اسم إجراء فارغ',
+    'keys.file_bad_tokens' => 'ملف ربط المفاتيح {path}: يجب أن تكون مفاتيح "{action}" تركيبة أو قائمة تركيبات',
+    'keys.file_bad_chord' => 'ملف ربط المفاتيح {path}: الإجراء "{action}": {reason}',
 ];

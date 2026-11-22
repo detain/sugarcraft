@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'ongeldige toetscombinatie "{chord}": gebruik [ctrl+][alt+][shift+] vóór een toetsnaam (enter, tab, pageup, f5) of één afdrukbaar teken; shift+ geldt alleen voor benoemde toetsen',
+    'keys.bad_chord_type' => 'toetscombinaties moeten tekenreeksen zijn, kreeg {type}',
+    'keys.file_not_regular' => 'sneltoetsbestand {path} is geen gewoon bestand',
+    'keys.file_too_large' => 'sneltoetsbestand {path} is groter dan {max} bytes',
+    'keys.file_unreadable' => 'sneltoetsbestand {path} kan niet worden gelezen',
+    'keys.file_bad_json' => 'sneltoetsbestand {path} is geen geldige JSON: {reason}',
+    'keys.file_not_object' => 'sneltoetsbestand {path} moet een JSON-object zijn van actienaam naar toetscombinaties',
+    'keys.file_empty_action' => 'sneltoetsbestand {path} bevat een lege actienaam',
+    'keys.file_bad_tokens' => 'sneltoetsbestand {path}: de toetsen voor "{action}" moeten een combinatie of een lijst met combinaties zijn',
+    'keys.file_bad_chord' => 'sneltoetsbestand {path}: actie "{action}": {reason}',
 ];

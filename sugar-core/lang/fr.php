@@ -123,4 +123,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'combinaison de touches invalide « {chord} » : utilisez [ctrl+][alt+][shift+] devant un nom de touche (enter, tab, pageup, f5) ou un seul caractère imprimable ; shift+ ne s’applique qu’aux touches nommées',
+    'keys.bad_chord_type' => 'les combinaisons de touches doivent être des chaînes, reçu {type}',
+    'keys.file_not_regular' => 'le fichier de raccourcis {path} n’est pas un fichier ordinaire',
+    'keys.file_too_large' => 'le fichier de raccourcis {path} dépasse {max} octets',
+    'keys.file_unreadable' => 'impossible de lire le fichier de raccourcis {path}',
+    'keys.file_bad_json' => 'le fichier de raccourcis {path} n’est pas un JSON valide : {reason}',
+    'keys.file_not_object' => 'le fichier de raccourcis {path} doit être un objet JSON associant un nom d’action à des combinaisons',
+    'keys.file_empty_action' => 'le fichier de raccourcis {path} contient un nom d’action vide',
+    'keys.file_bad_tokens' => 'fichier de raccourcis {path} : les touches de « {action} » doivent être une combinaison ou une liste de combinaisons',
+    'keys.file_bad_chord' => 'fichier de raccourcis {path} : action « {action} » : {reason}',
 ];

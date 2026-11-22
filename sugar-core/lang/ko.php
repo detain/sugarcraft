@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => '잘못된 키 조합 "{chord}": 키 이름(enter, tab, pageup, f5) 또는 인쇄 가능한 한 글자 앞에 [ctrl+][alt+][shift+]를 사용하세요. shift+는 이름 있는 키에만 쓸 수 있습니다',
+    'keys.bad_chord_type' => '키 조합은 문자열이어야 합니다. 받은 값: {type}',
+    'keys.file_not_regular' => '키 바인딩 파일 {path}은(는) 일반 파일이 아닙니다',
+    'keys.file_too_large' => '키 바인딩 파일 {path}이(가) {max}바이트보다 큽니다',
+    'keys.file_unreadable' => '키 바인딩 파일 {path}을(를) 읽을 수 없습니다',
+    'keys.file_bad_json' => '키 바인딩 파일 {path}이(가) 올바른 JSON이 아닙니다: {reason}',
+    'keys.file_not_object' => '키 바인딩 파일 {path}은(는) 동작 이름과 키 조합을 잇는 JSON 객체여야 합니다',
+    'keys.file_empty_action' => '키 바인딩 파일 {path}에 빈 동작 이름이 있습니다',
+    'keys.file_bad_tokens' => '키 바인딩 파일 {path}: "{action}"의 키는 조합 하나 또는 조합 목록이어야 합니다',
+    'keys.file_bad_chord' => '키 바인딩 파일 {path}: 동작 "{action}": {reason}',
 ];

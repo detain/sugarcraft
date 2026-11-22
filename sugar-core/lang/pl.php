@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'nieprawidłowa kombinacja klawiszy "{chord}": użyj [ctrl+][alt+][shift+] przed nazwą klawisza (enter, tab, pageup, f5) lub pojedynczym znakiem drukowalnym; shift+ dotyczy tylko klawiszy nazwanych',
+    'keys.bad_chord_type' => 'kombinacje klawiszy muszą być ciągami znaków, otrzymano {type}',
+    'keys.file_not_regular' => 'plik skrótów {path} nie jest zwykłym plikiem',
+    'keys.file_too_large' => 'plik skrótów {path} jest większy niż {max} bajtów',
+    'keys.file_unreadable' => 'nie można odczytać pliku skrótów {path}',
+    'keys.file_bad_json' => 'plik skrótów {path} nie jest poprawnym JSON: {reason}',
+    'keys.file_not_object' => 'plik skrótów {path} musi być obiektem JSON z nazwami akcji i kombinacjami klawiszy',
+    'keys.file_empty_action' => 'plik skrótów {path} zawiera pustą nazwę akcji',
+    'keys.file_bad_tokens' => 'plik skrótów {path}: klawisze dla "{action}" muszą być kombinacją lub listą kombinacji',
+    'keys.file_bad_chord' => 'plik skrótów {path}: akcja "{action}": {reason}',
 ];

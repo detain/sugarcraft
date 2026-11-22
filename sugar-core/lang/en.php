@@ -133,4 +133,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'invalid key chord "{chord}": use [ctrl+][alt+][shift+] before a key name (enter, tab, pageup, f5) or a single printable character; shift+ applies to named keys only',
+    'keys.bad_chord_type' => 'key chords must be strings, got {type}',
+    'keys.file_not_regular' => 'key binding file {path} is not a regular file',
+    'keys.file_too_large' => 'key binding file {path} is larger than {max} bytes',
+    'keys.file_unreadable' => 'key binding file {path} cannot be read',
+    'keys.file_bad_json' => 'key binding file {path} is not valid JSON: {reason}',
+    'keys.file_not_object' => 'key binding file {path} must be a JSON object of action name to key chords',
+    'keys.file_empty_action' => 'key binding file {path} has an empty action name',
+    'keys.file_bad_tokens' => 'key binding file {path}: the keys for "{action}" must be a chord string or a list of chord strings',
+    'keys.file_bad_chord' => 'key binding file {path}: action "{action}": {reason}',
 ];

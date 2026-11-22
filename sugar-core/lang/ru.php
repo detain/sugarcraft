@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'недопустимое сочетание клавиш "{chord}": используйте [ctrl+][alt+][shift+] перед именем клавиши (enter, tab, pageup, f5) или одним печатаемым символом; shift+ применяется только к именованным клавишам',
+    'keys.bad_chord_type' => 'сочетания клавиш должны быть строками, получено {type}',
+    'keys.file_not_regular' => 'файл привязок клавиш {path} не является обычным файлом',
+    'keys.file_too_large' => 'файл привязок клавиш {path} больше {max} байт',
+    'keys.file_unreadable' => 'не удаётся прочитать файл привязок клавиш {path}',
+    'keys.file_bad_json' => 'файл привязок клавиш {path} не является корректным JSON: {reason}',
+    'keys.file_not_object' => 'файл привязок клавиш {path} должен быть JSON-объектом «имя действия — сочетания клавиш»',
+    'keys.file_empty_action' => 'в файле привязок клавиш {path} пустое имя действия',
+    'keys.file_bad_tokens' => 'файл привязок клавиш {path}: клавиши для "{action}" должны быть сочетанием или списком сочетаний',
+    'keys.file_bad_chord' => 'файл привязок клавиш {path}: действие "{action}": {reason}',
 ];

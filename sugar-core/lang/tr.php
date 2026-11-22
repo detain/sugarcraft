@@ -114,4 +114,16 @@ return [
     'legacy_env.empty_old_prefix' => 'LegacyEnv::import(): an old prefix must not be the empty string — it would match every env var.',
     'lock_file.acquire_timeout' => 'Timed out after {seconds}s waiting for the {kind} lock on {path} — another process holds it.',
     'image_overlay.id_out_of_range' => 'image id {id} out of range 0..{max}',
+
+    // Keys/KeyBindings.php
+    'keys.bad_chord' => 'geçersiz tuş kombinasyonu "{chord}": bir tuş adından (enter, tab, pageup, f5) veya tek bir yazdırılabilir karakterden önce [ctrl+][alt+][shift+] kullanın; shift+ yalnızca adlandırılmış tuşlar için geçerlidir',
+    'keys.bad_chord_type' => 'tuş kombinasyonları dize olmalıdır, alınan: {type}',
+    'keys.file_not_regular' => '{path} tuş atama dosyası normal bir dosya değil',
+    'keys.file_too_large' => '{path} tuş atama dosyası {max} bayttan büyük',
+    'keys.file_unreadable' => '{path} tuş atama dosyası okunamıyor',
+    'keys.file_bad_json' => '{path} tuş atama dosyası geçerli JSON değil: {reason}',
+    'keys.file_not_object' => '{path} tuş atama dosyası, eylem adından tuş kombinasyonlarına bir JSON nesnesi olmalıdır',
+    'keys.file_empty_action' => '{path} tuş atama dosyasında boş bir eylem adı var',
+    'keys.file_bad_tokens' => '{path} tuş atama dosyası: "{action}" için tuşlar bir kombinasyon veya kombinasyon listesi olmalıdır',
+    'keys.file_bad_chord' => '{path} tuş atama dosyası: "{action}" eylemi: {reason}',
 ];
