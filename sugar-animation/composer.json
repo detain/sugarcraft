@@ -28,8 +28,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/sugar-core": "dev-master",
-        "sugarcraft/sugar-colorprofile": "dev-master",
-        "sugarcraft/sugar-pty": "dev-master"
+        "sugarcraft/sugar-colorprofile": "dev-master"
     },
     "suggest": {
         "ext-gd": "Required to decode GIFs (Decoder). The .ansi art playback side (AnsiArt/ArtLibrary/ArtLoop) and Player do not need it."

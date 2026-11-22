@@ -36,7 +36,6 @@
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
         "sugarcraft/sugar-markdown": "dev-master",
-        "sugarcraft/sugar-style": "dev-master",
         "symfony/console": "^6.4 || ^7.0"
     },
     "require-dev": {
