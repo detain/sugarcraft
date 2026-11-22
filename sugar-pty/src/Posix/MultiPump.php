@@ -207,8 +207,7 @@ final class MultiPump
      * sessions).
      *
      * Callback reach of the SYNC path: idle ticks deliver
-     * {@see PumpOptions::$onIdle} then {@see PumpOptions::$keepalive},
-     * matching the single-session pumps. onResize / onChildExit are not
+     * {@see PumpOptions::$onIdle}, matching the single-session pumps. onResize / onChildExit are not
      * delivered by tick() — the size-diff observer lives in the pump loop;
      * a multiplexed caller wanting them drives runAsync() (one ReactPump
      * per session, hooks intact) or observes children around tick() itself.
@@ -300,16 +299,12 @@ final class MultiPump
         }
         if ($ready === 0) {
             foreach ($live as $session) {
-                // The idle arm delivers the same hook pair, in the same
-                // order, as the single-session pumps: onIdle first, the
-                // legacy keepalive hook second. (It used to be keepalive
-                // only — options carrying onIdle silently no-op'd here
-                // while every other pump fired them.)
+                // The idle arm delivers the same idle hook as the
+                // single-session pumps. (It used to fire only the
+                // since-removed keepalive hook — options carrying onIdle
+                // silently no-op'd here while every other pump fired them.)
                 if ($session->opts->onIdle !== null) {
                     ($session->opts->onIdle)();
-                }
-                if ($session->opts->keepalive !== null) {
-                    ($session->opts->keepalive)();
                 }
             }
             return 0;

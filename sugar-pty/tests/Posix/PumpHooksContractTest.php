@@ -14,11 +14,11 @@ use SugarCraft\Pty\PumpOptions;
 
 /**
  * The pump hook contract, one law across three implementations:
- * an idle tick fires onIdle, then the legacy keepalive alias —
- * PosixPump (select → 0), ReactPump (poll tick), MultiPump (sync
- * tick()'s idle arm). MultiPump used to fire keepalive only, silently
- * no-op'ing options that carried onIdle while every other pump fired
- * them; this pin is the law now enforced on all three paths.
+ * an idle tick fires onIdle, once per tick — PosixPump (select → 0),
+ * ReactPump (poll tick), MultiPump (sync tick()'s idle arm). MultiPump
+ * used to fire only the since-removed keepalive hook, silently no-op'ing
+ * options that carried onIdle while every other pump fired them; this
+ * pin is the law now enforced on all three paths.
  *
  * Every drive uses a quiet master (a socket pair nobody writes to, read()
  * would-blocking forever) so the only loop events are selects expiring —
@@ -35,7 +35,7 @@ final class PumpHooksContractTest extends TestCase
         return new QuietMasterPty($stream);
     }
 
-    public function testPosixPumpIdleTickFiresOnIdleThenKeepalive(): void
+    public function testPosixPumpIdleTickFiresOnIdle(): void
     {
         $seq = [];
         $opts = (new PumpOptions())
@@ -43,9 +43,6 @@ final class PumpHooksContractTest extends TestCase
             ->withPumpDeadlineUs(150_000)
             ->withOnIdle(static function () use (&$seq): void {
                 $seq[] = 'idle';
-            })
-            ->withKeepalive(static function () use (&$seq): void {
-                $seq[] = 'ka';
             });
 
         [$a, $b] = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
@@ -63,10 +60,10 @@ final class PumpHooksContractTest extends TestCase
             \fclose($stdout);
         }
 
-        $this->assertPairOrder($seq, 'PosixPump');
+        $this->assertIdleFires($seq, 'PosixPump');
     }
 
-    public function testReactPumpPollTickFiresOnIdleThenKeepalive(): void
+    public function testReactPumpPollTickFiresOnIdle(): void
     {
         $seq = [];
         $opts = (new PumpOptions())
@@ -74,9 +71,6 @@ final class PumpHooksContractTest extends TestCase
             ->withPumpDeadlineUs(120_000)
             ->withOnIdle(static function () use (&$seq): void {
                 $seq[] = 'idle';
-            })
-            ->withKeepalive(static function () use (&$seq): void {
-                $seq[] = 'ka';
             });
 
         [$a, $b] = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
@@ -94,7 +88,7 @@ final class PumpHooksContractTest extends TestCase
         \fclose($b);
 
         $this->assertTrue($settled, 'the deadline-bounded ReactPump never resolved — the loop ran on a dead pump');
-        $this->assertPairOrder($seq, 'ReactPump');
+        $this->assertIdleFires($seq, 'ReactPump');
     }
 
     public function testMultiPumpTickTreatsSelectFalseAsLoudErrorNotIdleTick(): void
@@ -103,9 +97,6 @@ final class PumpHooksContractTest extends TestCase
         $opts = (new PumpOptions())
             ->withOnIdle(static function () use (&$seq): void {
                 $seq[] = 'idle';
-            })
-            ->withKeepalive(static function () use (&$seq): void {
-                $seq[] = 'ka';
             });
 
         [$a, $b] = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
@@ -140,15 +131,12 @@ final class PumpHooksContractTest extends TestCase
         $this->assertSame([], $seq, 'the failed select fired idle hooks — the silent-laundering regression');
     }
 
-    public function testMultiPumpSyncTickIdleArmFiresOnIdleThenKeepalive(): void
+    public function testMultiPumpSyncTickIdleArmFiresOnIdle(): void
     {
         $seq = [];
         $opts = (new PumpOptions())
             ->withOnIdle(static function () use (&$seq): void {
                 $seq[] = 'idle';
-            })
-            ->withKeepalive(static function () use (&$seq): void {
-                $seq[] = 'ka';
             });
 
         [$a, $b] = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
@@ -165,25 +153,23 @@ final class PumpHooksContractTest extends TestCase
             \fclose($sink);
         }
 
-        $this->assertPairOrder($seq, 'MultiPump tick()');
+        $this->assertIdleFires($seq, 'MultiPump tick()');
     }
 
     /**
-     * Both hooks fired and the first pair is idle-then-ka; per-tick
-     * cadence interleaves them exactly.
+     * onIdle fired on every idle tick, and it is the only hook the idle
+     * arm delivers.
      *
      * @param list<string> $seq
      */
-    private function assertPairOrder(array $seq, string $pumpLabel): void
+    private function assertIdleFires(array $seq, string $pumpLabel): void
     {
         $idle = \count(\array_filter($seq, static fn (string $s): bool => $s === 'idle'));
-        $ka = \count(\array_filter($seq, static fn (string $s): bool => $s === 'ka'));
         $this->assertGreaterThanOrEqual(2, $idle, "{$pumpLabel}: onIdle fired {$idle} times over the idle run");
-        $this->assertGreaterThanOrEqual(2, $ka, "{$pumpLabel}: keepalive fired {$ka} times over the idle run");
         $this->assertSame(
-            ['idle', 'ka', 'idle', 'ka'],
-            \array_slice($seq, 0, 4),
-            "{$pumpLabel}: the idle arm must deliver onIdle BEFORE keepalive, interleaved per tick; got "
+            \array_fill(0, \count($seq), 'idle'),
+            $seq,
+            "{$pumpLabel}: the idle arm must deliver onIdle and nothing else; got "
             . \implode(',', \array_slice($seq, 0, 8)),
         );
     }

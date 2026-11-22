@@ -11,7 +11,7 @@ use SugarCraft\Pty\PumpOptions;
 
 /**
  * Byte pump that forwards stdin ↔ master PTY with back-pressure,
- * EOF grace, and optional SIGWINCH / keepalive / child-exit callbacks.
+ * EOF grace, and optional idle / resize / child-exit callbacks.
  *
  * For Go parity this mirrors the pump leg of bubbletea's pty-driven
  * event loop; there is no upstream type named Pump.
@@ -241,9 +241,6 @@ final class PosixPump implements PumpContract
             if ($ready === 0) {
                 if ($opts->onIdle !== null) {
                     ($opts->onIdle)();
-                }
-                if ($opts->keepalive !== null) {
-                    ($opts->keepalive)();
                 }
                 // Detect size change — SignalForwarder calls master->resize()
                 // when SIGWINCH fires; the kernel stores the new size so the

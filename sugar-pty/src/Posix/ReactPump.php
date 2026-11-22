@@ -114,8 +114,8 @@ final class ReactPump
      * clock the poll has since refreshed (measured here, 0.5s periodic
      * after a 3s idle: ticks at 0.000 / 0.503 / 1.006 / 1.509s, against
      * 0.502 / 1.005 / 1.507 / 2.010s with no idle). Harmless for a pump —
-     * but not a no-op: an early tick fires `PumpOptions::$onIdle` and
-     * `$keepalive` one period ahead of schedule (see {@see onPollTick()}).
+     * but not a no-op: an early tick fires `PumpOptions::$onIdle` one
+     * period ahead of schedule (see {@see onPollTick()}).
      * So this site is the one that misleads readers rather than the one
      * that breaks pumps.
      *
@@ -297,7 +297,7 @@ final class ReactPump
         }
 
         // Idle/housekeeping tick at the sync pump's select-timeout cadence:
-        // child-exit poll, onIdle/keepalive, resize detection.
+        // child-exit poll, onIdle, resize detection.
         $this->pollTimer = $this->loop->addPeriodicTimer(
             \max(0.001, $opts->selectTimeoutUs / 1_000_000),
             fn () => $this->guarded(fn () => $this->onPollTick()),
@@ -573,7 +573,7 @@ final class ReactPump
     /**
      * Periodic housekeeping tick — the async analogue of the sync pump's
      * `stream_select` timeout branch: child-exit poll first, then
-     * onIdle / keepalive / resize detection when no I/O happened since
+     * onIdle / resize detection when no I/O happened since
      * the previous tick.
      */
     private function onPollTick(): void
@@ -624,9 +624,6 @@ final class ReactPump
 
         if ($this->opts->onIdle !== null) {
             ($this->opts->onIdle)();
-        }
-        if ($this->opts->keepalive !== null) {
-            ($this->opts->keepalive)();
         }
         if ($this->opts->onResize !== null && $this->lastKnownCols !== 0) {
             try {

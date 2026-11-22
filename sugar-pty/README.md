@@ -655,7 +655,6 @@ leaving the child and PTY for the caller to reap:
 
 | Callback | Fires when | Use for |
 |---|---|---|
-| `keepalive` | idle tick (stream_select → 0), immediately after `onIdle` | Deprecated legacy heartbeat — a separate hook delivered second, NOT an alias of `onIdle`; new code uses `onIdle` |
 | `onIdle` | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
 | `onResize` | the pump *observes* `MasterPty::size()` differing from the last-known size on an idle tick — polled between reads, never signalled | React to a resize the consumer's `SignalForwarder` already applied; the pump itself never writes TIOCSWINSZ |
 | `onChildExit` | child process exits | Resource cleanup, notification |
@@ -680,8 +679,8 @@ is consumed by the consumer's own `SignalForwarder` wiring, and the
 pump merely notices the resulting size change between reads. Two
 consequences: a session that opened at 0×0 (a refused ioctl at open)
 never fires it until a real size is established, and `MultiPump`'s sync
-`tick()` does not deliver it at all (its idle arm fires `onIdle` +
-`keepalive` like the other pumps; `runAsync()` per-session ReactPumps
+`tick()` does not deliver it at all (its idle arm fires `onIdle` like
+the other pumps; `runAsync()` per-session ReactPumps
 observe size changes and do fire it).
 Do not conflate them: if you were passing `onResize(0, 0)` as a fake
 idle tick, migrate to `onIdle`.
@@ -689,9 +688,12 @@ idle tick, migrate to `onIdle`.
 Naming ledger (PTY-18): this hook was called `onSigwinch` — a name that
 promised a signal it never receives (the consumer's `SignalForwarder`
 consumes the signal; the pump only observes the result).
-`withOnSigwinch()` and the constructor's `$onSigwinch` parameter remain
-as deprecated forwarders; where both constructor spellings are given,
-`onResize` wins.
+The deprecated `withOnSigwinch()` setter and the constructor's
+`$onSigwinch` parameter have been removed; use `withOnResize()` /
+`onResize:`. The deprecated `keepalive` hook (`withKeepalive()`, the
+constructor's `$keepalive` parameter) is gone too: it fired beside
+`onIdle` on the same idle ticks, so register the heartbeat with
+`withOnIdle()`.
 
 ```php
 use SugarCraft\Pty\Posix\PosixPump;

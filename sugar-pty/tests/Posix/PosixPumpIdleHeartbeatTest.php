@@ -9,11 +9,16 @@ use SugarCraft\Pty\Posix\PosixPump;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PumpOptions;
 
-final class PosixPumpKeepaliveTest extends TestCase
+/**
+ * The idle heartbeat: onIdle fires on every idle select tick. These cases
+ * once drove the deprecated keepalive hook, which fired beside onIdle on
+ * the same ticks; it was removed in P1-8e and onIdle carries the beat.
+ */
+final class PosixPumpIdleHeartbeatTest extends TestCase
 {
     use \SugarCraft\Pty\Tests\Support\RequiresPtyCapability;
 
-    public function testKeepaliveCalledMultipleTimesDuringIdlePumpLoop(): void
+    public function testOnIdleCalledMultipleTimesDuringIdlePumpLoop(): void
     {
         $this->requirePtySyscalls();
 
@@ -27,12 +32,12 @@ final class PosixPumpKeepaliveTest extends TestCase
             $stdin = \fopen('/dev/null', 'r');
             $stdout = \fopen('php://temp', 'r+');
 
-            $keepaliveCount = 0;
+            $idleCount = 0;
 
             $opts = (new PumpOptions())
                 ->withSelectTimeoutUs(100_000)
-                ->withKeepalive(function () use (&$keepaliveCount): void {
-                    $keepaliveCount++;
+                ->withOnIdle(function () use (&$idleCount): void {
+                    $idleCount++;
                 });
 
             $pump = new PosixPump();
@@ -52,20 +57,20 @@ final class PosixPumpKeepaliveTest extends TestCase
             $this->assertSame(-1, $exitCode);
             $this->assertGreaterThanOrEqual(
                 3,
-                $keepaliveCount,
-                "keepalive should fire at least 3 times over ~350ms with 100ms timeout (got {$keepaliveCount})",
+                $idleCount,
+                "onIdle should fire at least 3 times over ~350ms with 100ms timeout (got {$idleCount})",
             );
             $this->assertGreaterThan(
                 0.3,
                 $elapsed,
-                "pump should run at least 300ms to accumulate 3+ keepalive calls (elapsed: {$elapsed}s)",
+                "pump should run at least 300ms to accumulate 3+ onIdle calls (elapsed: {$elapsed}s)",
             );
         } finally {
             $pair->master()->close();
         }
     }
 
-    public function testKeepaliveNotCalledWhenNull(): void
+    public function testPumpRunsWithNoIdleHook(): void
     {
         $this->requirePtySyscalls();
 
@@ -94,55 +99,7 @@ final class PosixPumpKeepaliveTest extends TestCase
         }
     }
 
-    public function testKeepaliveAndOnIdleBothFireOnIdleTimeout(): void
-    {
-        $this->requirePtySyscalls();
-
-        $system = new PosixPtySystem();
-        $pair = $system->open(80, 24);
-
-        try {
-            $master = $pair->master();
-            $child = $pair->slave()->spawn(['/bin/bash', '-c', 'sleep 5']);
-
-            $stdin = \fopen('/dev/null', 'r');
-            $stdout = \fopen('php://temp', 'r+');
-
-            $keepaliveCount = 0;
-            $idleCount = 0;
-
-            $opts = (new PumpOptions())
-                ->withSelectTimeoutUs(50_000)
-                ->withKeepalive(function () use (&$keepaliveCount): void {
-                    $keepaliveCount++;
-                })
-                ->withOnIdle(function () use (&$idleCount): void {
-                    $idleCount++;
-                });
-
-            $pump = new PosixPump();
-            $exitCode = $pump->run($master, $stdin, $stdout, $child, $opts);
-
-            \fclose($stdin);
-            \fclose($stdout);
-
-            // -1 because the `sleep 5` child is still alive when the
-            // pump returns (stdin EOF + grace + flush); pump no
-            // longer blocks on wait().
-            $this->assertSame(-1, $exitCode);
-            $this->assertGreaterThanOrEqual(1, $keepaliveCount, 'keepalive should fire at least once');
-            $this->assertGreaterThanOrEqual(1, $idleCount, 'onIdle should fire at least once');
-            $this->assertSame(
-                $keepaliveCount,
-                $idleCount,
-                'onIdle and keepalive should fire the same number of times on idle timeouts',
-            );
-        } finally {
-            $pair->master()->close();
-        }
-    }
-
-    public function testKeepaliveIsCalledBeforeChildExitCheck(): void
+    public function testOnIdleIsCalledBeforeChildExitCheck(): void
     {
         $this->requirePtySyscalls();
 
@@ -156,12 +113,12 @@ final class PosixPumpKeepaliveTest extends TestCase
             $stdin = \fopen('/dev/null', 'r');
             $stdout = \fopen('php://temp', 'r+');
 
-            $keepaliveBeforeExit = false;
+            $idleBeforeExit = false;
 
             $opts = (new PumpOptions())
                 ->withSelectTimeoutUs(10_000)
-                ->withKeepalive(function () use (&$keepaliveBeforeExit): void {
-                    $keepaliveBeforeExit = true;
+                ->withOnIdle(function () use (&$idleBeforeExit): void {
+                    $idleBeforeExit = true;
                 });
 
             $pump = new PosixPump();
@@ -171,7 +128,7 @@ final class PosixPumpKeepaliveTest extends TestCase
             \fclose($stdout);
 
             $this->assertSame(0, $exitCode);
-            $this->assertTrue($keepaliveBeforeExit, 'keepalive should have been called before child exit was detected');
+            $this->assertTrue($idleBeforeExit, 'onIdle should have been called before child exit was detected');
         } finally {
             $pair->master()->close();
         }

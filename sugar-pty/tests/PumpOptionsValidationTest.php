@@ -97,7 +97,7 @@ final class PumpOptionsValidationTest extends TestCase
         self::assertSame($plain->flushDeadlineSec, $preset->flushDeadlineSec);
         self::assertSame($plain->stdinEofGraceSec, $preset->stdinEofGraceSec);
         self::assertSame($plain->veof, $preset->veof);
-        self::assertNull($preset->keepalive);
+        self::assertNull($preset->onIdle);
         self::assertNull($preset->pumpDeadlineUs);
     }
 
@@ -105,14 +105,14 @@ final class PumpOptionsValidationTest extends TestCase
     {
         // M22 refactor guard for the mutate() pattern: swapping one knob
         // must not silently drop the closures or the deadline.
-        $keepalive = static function (): void {};
+        $onResize = static function (int $cols, int $rows): void {};
         $onIdle = static function (int $us): void {};
         $options = (new PumpOptions(pumpDeadlineUs: 5_000_000))
-            ->withKeepalive($keepalive)
+            ->withOnResize($onResize)
             ->withOnIdle($onIdle)
             ->withVEOF("\x03");
 
-        self::assertSame($keepalive, $options->keepalive);
+        self::assertSame($onResize, $options->onResize);
         self::assertSame($onIdle, $options->onIdle);
         self::assertSame("\x03", $options->veof);
         self::assertSame(5_000_000, $options->pumpDeadlineUs);

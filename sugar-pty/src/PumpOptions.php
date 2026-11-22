@@ -103,19 +103,6 @@ final class PumpOptions
     public readonly ?int $pumpDeadlineUs;
 
     /**
-     * Legacy heartbeat: a SEPARATE hook, not an alias of
-     * {@see onIdle} — it has its own field and both are delivered on
-     * every idle tick, this one second (order: onIdle, keepalive), on
-     * all three pumps. Kept two-field on purpose: merging would
-     * silently double-fire or drop a callback for callers mid-way
-     * through migration. New code registers only `onIdle`.
-     *
-     * @deprecated Prefer {@see onIdle}.
-     * @var (\Closure(): void)|null
-     */
-    public readonly \Closure|null $keepalive;
-
-    /**
      * Called on each idle tick (stream_select returned 0). Use for
      * keepalive, polling, or any periodic housekeeping. Distinct from
      * {@see onResize}: the resize signal itself is consumed by the
@@ -138,8 +125,8 @@ final class PumpOptions
      * Null when no callback is registered.
      *
      * (PTY-18: was `onSigwinch` — the old name promised a signal it
-     * never receives; {@see withOnSigwinch()} forwards here, kept
-     * deprecated for one release cycle.)
+     * never receives. The deprecated `onSigwinch` alias was removed in
+     * P1-8e; register this hook with {@see withOnResize()}.)
      *
      * @var (\Closure(int, int): void)|null
      */
@@ -176,13 +163,11 @@ final class PumpOptions
      * @param int<1, max>                    $selectTimeoutUs
      * @param float<0, max>                  $flushDeadlineSec
      * @param float<0, max>                  $stdinEofGraceSec
-     * @param (\Closure(): void)|null       $keepalive
      * @param (\Closure(): void)|null       $onIdle
      * @param (\Closure(int, int): void)|null $onResize
      * @param (\Closure(int): void)|null     $onChildExit
      * @param \SugarCraft\Core\Recorder|null $recorder
      * @param int<1, max>|null               $pumpDeadlineUs
-     * @param (\Closure(int, int): void)|null $onSigwinch @deprecated PTY-18 alias for $onResize; effective only when $onResize is null
      */
     public function __construct(
         int $chunkBytes = self::DEFAULT_CHUNK_BYTES,
@@ -190,13 +175,11 @@ final class PumpOptions
         float $flushDeadlineSec = self::DEFAULT_FLUSH_DEADLINE_SEC,
         float $stdinEofGraceSec = self::DEFAULT_STDIN_EOF_GRACE_SEC,
         string $veof = self::DEFAULT_VEOF,
-        ?\Closure $keepalive = null,
         ?\Closure $onIdle = null,
         ?\Closure $onResize = null,
         ?\Closure $onChildExit = null,
         ?\SugarCraft\Core\Recorder $recorder = null,
         ?int $pumpDeadlineUs = null,
-        ?\Closure $onSigwinch = null,
     ) {
         if ($pumpDeadlineUs !== null && $pumpDeadlineUs <= 0) {
             throw new \InvalidArgumentException(
@@ -220,9 +203,8 @@ final class PumpOptions
         $this->flushDeadlineSec = $flushDeadlineSec;
         $this->stdinEofGraceSec = $stdinEofGraceSec;
         $this->veof = $veof;
-        $this->keepalive = $keepalive;
         $this->onIdle = $onIdle;
-        $this->onResize = $onResize ?? $onSigwinch;
+        $this->onResize = $onResize;
         $this->onChildExit = $onChildExit;
         $this->recorder = $recorder;
         $this->pumpDeadlineUs = $pumpDeadlineUs;
@@ -272,16 +254,6 @@ final class PumpOptions
         return $this->mutate(['veof' => $v]);
     }
 
-    /**
-     * Set the legacy heartbeat hook. It stays a separate callback
-     * delivered after `onIdle` on every idle tick — see the property
-     * docblock; new code should prefer withOnIdle().
-     */
-    public function withKeepalive(?\Closure $v): self
-    {
-        return $this->mutate(['keepalive' => $v]);
-    }
-
     public function withOnIdle(?\Closure $v): self
     {
         return $this->mutate(['onIdle' => $v]);
@@ -296,16 +268,6 @@ final class PumpOptions
     public function withOnResize(?\Closure $v): self
     {
         return $this->mutate(['onResize' => $v]);
-    }
-
-    /**
-     * @deprecated PTY-18 — the name promised a signal hook; the hook is
-     *             a polled observer. {@see withOnResize()} is the same
-     *             field; this forwards to it.
-     */
-    public function withOnSigwinch(?\Closure $v): self
-    {
-        return $this->withOnResize($v);
     }
 
     public function withOnChildExit(?\Closure $v): self
