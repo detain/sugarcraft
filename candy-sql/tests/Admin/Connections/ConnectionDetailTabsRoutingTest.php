@@ -490,6 +490,34 @@ final class ConnectionDetailTabsRoutingTest extends TestCase
         $this->assertSame($page->view(), $page->withHeightBudget($closed)->view(), 'a closed panel renders the same with or without a budget');
     }
 
+    /**
+     * On a short processlist the table has fewer rows to give up than the
+     * panel's four-line floor: the panel takes less (or nothing) instead,
+     * and the table keeps the selected row.
+     */
+    public function testAnOpenPanelOnAShortProcesslistStaysInsideTheBudgetAndKeepsTheSelection(): void
+    {
+        foreach ([1, 2, 3] as $threads) {
+            $page = ConnectionsPage::new(new ServerContext($this->busyDb($threads)));
+            $closed = \count(\explode("\n", $page->view()));
+
+            [$open] = $page->withHeightBudget($closed)->update(new KeyMsg(KeyType::Enter));
+            $this->assertNotNull($open->detailLines(), "{$threads} threads: the panel is open");
+            $lines = \explode("\n", self::plain($open->view()));
+            $this->assertLessThanOrEqual($closed, \count($lines), "{$threads} threads: the page stays inside its budget");
+            $this->assertStringContainsString(Lang::t('conn.help_tabs'), (string) \end($lines), "{$threads} threads: the key hints stay the last line");
+            $this->assertStringContainsString('thread-1-sql', \implode("\n", $lines), "{$threads} threads: the selected row stays painted");
+        }
+
+        // One thread at a budget with no slack: no panel line fits, and the
+        // table is left whole rather than shrunk for a panel it does not show.
+        $page = ConnectionsPage::new(new ServerContext($this->busyDb(1)));
+        $closed = \count(\explode("\n", $page->view()));
+        [$open] = $page->withHeightBudget($closed)->update(new KeyMsg(KeyType::Enter));
+        $this->assertStringNotContainsString('user: app', self::plain($open->view()));
+        $this->assertSame($closed, \count(\explode("\n", $open->view())));
+    }
+
     public function testOpeningThePanelOnAShortTerminalKeepsTheTableAndHintsOnScreen(): void
     {
         $db = $this->busyDb(12);

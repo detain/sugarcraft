@@ -847,7 +847,9 @@ final class ConnectionsPage extends PageBase implements RowNavigable
      * fit before Enter still fits after it. When that slack is smaller than
      * the panel, the panel still gets up to {@see DETAIL_MIN_LINES} (cut with
      * an ellipsis line) and the table's row window gives up exactly that
-     * many rows, so the key-hint line and the frame stay on screen.
+     * many rows, so the key-hint line and the frame stay on screen. The
+     * table never drops below its chrome plus the selected row, so on a
+     * short processlist the panel gets fewer lines, or none.
      *
      * @param int $fixed rows the page takes besides the panel and the table
      * @return array{list<string>, Table}
@@ -862,16 +864,29 @@ final class ConnectionsPage extends PageBase implements RowNavigable
 
         $room = \max(0, $this->heightBudget - $fixed);
         $tableHeight = \substr_count($table->View(), "\n") + 1;
-        $take = \min(\count($panel), \max($room - $tableHeight, self::DETAIL_MIN_LINES), $room);
+        $slack = $room - $tableHeight;
+        if ($slack >= \count($panel)) {
+            return [$panel, $table];
+        }
+
+        // The table can give up its rows but not its header, separator and
+        // footer, and it keeps the selected row (the thread the panel
+        // describes): the panel's floor never eats into that.
+        $rows = $this->filteredProcesslist();
+        $painted = \min(\count($rows), self::ROW_WINDOW);
+        $keep = \min(1, $painted);
+        $tableFloor = \substr_count($this->buildTable($rows, $keep)->View(), "\n") + 1;
+        $take = \max(0, \min(\count($panel), \max($slack, self::DETAIL_MIN_LINES), $room - $tableFloor));
+        if ($take === 0) {
+            return [[], $table];
+        }
         if ($take < \count($panel)) {
-            $panel = $take > 0 ? [...\array_slice($panel, 0, $take - 1), '…'] : [];
+            $panel = [...\array_slice($panel, 0, $take - 1), '…'];
         }
 
         $over = $tableHeight + \count($panel) - $room;
         if ($over > 0) {
-            $rows = $this->filteredProcesslist();
-            $painted = \min(\count($rows), self::ROW_WINDOW);
-            $table = $this->buildTable($rows, \max(0, $painted - $over));
+            $table = $this->buildTable($rows, \max($keep, $painted - $over));
         }
         return [$panel, $table];
     }
