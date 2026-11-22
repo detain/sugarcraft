@@ -93,6 +93,33 @@ final class SplitterTest extends TestCase
         $this->assertSame($split, $key);
     }
 
+    public function testAPressOffEveryDividerDropsAGrabLeftByALostRelease(): void
+    {
+        $split = Splitter::horizontal(Node::leaf('a'), Node::leaf('b'))->withBounds(0, 0, 80, 4);
+
+        [$split] = $split->update(self::mouse(39, 1, MouseAction::Press));
+        $this->assertSame(0, $split->dragging);
+
+        [$split] = $split->update(self::mouse(50, 1, MouseAction::Press));
+        $this->assertFalse($split->isDragging(), 'the release was lost, so a fresh press off a divider lets go');
+
+        [$after] = $split->update(self::mouse(60, 1, MouseAction::Motion));
+        $this->assertSame($split, $after);
+        $this->assertSame([40, 40], $after->sizes);
+    }
+
+    public function testHoverMotionWithoutAButtonDoesNotMoveAGrabbedDivider(): void
+    {
+        $split = Splitter::horizontal(Node::leaf('a'), Node::leaf('b'))->withBounds(0, 0, 40, 4);
+        [$split] = $split->update(self::mouse(19, 1, MouseAction::Press));
+
+        [$hover] = $split->update(self::mouse(30, 1, MouseAction::Motion, MouseButton::None));
+
+        $this->assertSame($split, $hover);
+        $this->assertSame([20, 20], $hover->sizes);
+        $this->assertTrue($hover->isDragging());
+    }
+
     public function testDragClampsBothNeighboursToTheMinimumAndTouchesOnlyThem(): void
     {
         $split = Splitter::horizontal(Node::leaf('a'), Node::leaf('b'), Node::leaf('c'))

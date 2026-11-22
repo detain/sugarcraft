@@ -215,11 +215,13 @@ final class Splitter
     /**
      * Drive divider drag from mouse messages.
      *
-     * A left press on a divider grabs it; motion while grabbed moves it; a
-     * release (anywhere) moves it one last time and lets go. A press off any
-     * divider, and every other message, leaves the splitter unchanged so the
-     * host can route the event onward. No command is ever issued: the new
-     * sizes are on the returned splitter.
+     * A left press on a divider grabs it; left-button motion while grabbed
+     * moves it; a release (anywhere) moves it one last time and lets go. A
+     * left press off every divider drops any grab left by a lost release, and
+     * button-less hover motion never moves a divider. A press off any divider
+     * with nothing grabbed, and every other message, leaves the splitter
+     * unchanged so the host can route the event onward. No command is ever
+     * issued: the new sizes are on the returned splitter.
      *
      * @return array{0: self, 1: ?\Closure}
      */
@@ -233,7 +235,11 @@ final class Splitter
         if ($msg->action === MouseAction::Press && $msg->button === MouseButton::Left) {
             $divider = $this->dividerAt($msg->x, $msg->y);
 
-            return [$divider === null ? $this : $this->mutate(dragging: $divider, draggingSet: true), null];
+            if ($divider === null && $this->dragging === null) {
+                return [$this, null];
+            }
+
+            return [$this->mutate(dragging: $divider, draggingSet: true), null];
         }
 
         if ($this->dragging === null) {
@@ -241,6 +247,10 @@ final class Splitter
         }
 
         if ($msg->action === MouseAction::Motion) {
+            if ($msg->button !== MouseButton::Left) {
+                return [$this, null];
+            }
+
             return [$this->withDividerDrag($along), null];
         }
 
