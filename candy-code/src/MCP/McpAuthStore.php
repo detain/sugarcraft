@@ -35,17 +35,6 @@ final class McpAuthStore
     }
 
     /**
-     * @deprecated use {@see new()} — kept as a thin alias for the two
-     *             out-of-directory call sites (Cli/Subcommands.php,
-     *             MCP/McpClient.php is migrated); removal rides the next
-     *             minor without a BC promise.
-     */
-    public static function create(): self
-    {
-        return self::new();
-    }
-
-    /**
      * List all registered servers and their auth status.
      *
      * @return array<string, ServerAuthStatus>

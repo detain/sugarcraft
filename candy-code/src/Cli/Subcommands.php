@@ -6284,7 +6284,7 @@ final class Subcommands
         // code; the store is the same file `mcp auth add` writes, so a
         // login's entry attaches exactly like an add's does (E695 path).
         $flow = new \SugarCraft\Code\MCP\OAuthLoopbackFlow(
-            \SugarCraft\Code\MCP\McpAuthStore::create()->oauth(),
+            \SugarCraft\Code\MCP\McpAuthStore::new()->oauth(),
         );
 
         return $flow->login(

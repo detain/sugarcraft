@@ -294,7 +294,7 @@ final class McpAuthStoreTest extends TestCase
     }
 
     // =========================================================================
-    // McpAuthStore::new() / ::create() Tests
+    // McpAuthStore::new() Tests
     // =========================================================================
 
     public function testNewInstantiatesWithDefaultOAuthClient(): void
@@ -304,13 +304,11 @@ final class McpAuthStoreTest extends TestCase
         $this->assertInstanceOf(OAuthClientRegistration::class, $store->oauth());
     }
 
-    public function testDeprecatedCreateIsAThinAliasOfNew(): void
+    public function testCreateAliasIsGone(): void
     {
-        // BC pin (rv-php-4): the refused-vocabulary factory must keep
-        // producing the same shape until the next minor removes it.
-        $store = McpAuthStore::create();
-        $this->assertInstanceOf(McpAuthStore::class, $store);
-        $this->assertInstanceOf(OAuthClientRegistration::class, $store->oauth());
+        // AUD §5 / D-table: the refused-vocabulary alias is removed once
+        // every caller moved to new(); a reintroduced create() goes red.
+        $this->assertFalse(method_exists(McpAuthStore::class, 'create'));
     }
 
     // =========================================================================

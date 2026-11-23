@@ -18,7 +18,6 @@ final class FactoryNamingDriftTest extends TestCase
 {
     /** Seats still carrying a banned name, pending their own rename steps. */
     private const STILL_BANNED = [
-        'MCP/McpAuthStore.php::create',
         'LSP/LspExchangeLock.php::create',
     ];
 

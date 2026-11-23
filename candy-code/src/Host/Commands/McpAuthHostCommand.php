@@ -29,7 +29,7 @@ final class McpAuthHostCommand implements HostCommand
         }
 
         ob_start();
-        (new McpAuthCommand(McpAuthStore::create()))->execute($context, $argv);
+        (new McpAuthCommand(McpAuthStore::new()))->execute($context, $argv);
         $output = (string) ob_get_clean();
 
         return CommandResult::reply($text, $output);
