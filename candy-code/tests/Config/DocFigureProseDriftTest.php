@@ -6754,7 +6754,14 @@ final class DocFigureProseDriftTest extends TestCase
             'runTurn() no longer reads the user config exactly once through self::userConfig() — the "re-read every turn" paragraph describes one read',
         );
         $var = $read[1][0];
-        $uses = substr_count($runTurn, $var) - 1;
+        // AUD §7 rank 51: the same read is also installed as the turn's HTTP
+        // settings snapshot. That hand-off resolves no key inside
+        // EngineBackend (HttpClientDefaults resolves its keys at the request
+        // site, the "rest at the site" half of the sentence), so it is the
+        // one non-resolver use this derivation may skip.
+        $snapshotHandOffs = preg_match_all('/HttpSettingsSnapshot::forTurn\(' . preg_quote($var, '/') . '\)/', $runTurn);
+        self::assertLessThanOrEqual(1, $snapshotHandOffs, 'runTurn() installs its HTTP settings snapshot more than once');
+        $uses = substr_count($runTurn, $var) - 1 - $snapshotHandOffs;
         preg_match_all('/self::(\w+)\(' . preg_quote($var, '/') . '\)/', $runTurn, $resolverCalls);
         self::assertNotSame([], $resolverCalls[1], 'runTurn() feeds its per-turn config to no resolver — the sentence would claim keys nothing re-applies');
         self::assertSame(

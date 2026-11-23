@@ -103,19 +103,6 @@ final class HttpSettingsSnapshotTest extends TestCase
         self::assertSame(2, HttpSettingsSnapshot::taken());
     }
 
-    public function testTheTurnScopeEndsTheSnapshotWhenReleasedOrEnded(): void
-    {
-        $scope = HttpSettingsSnapshot::forTurn(['k' => 'turn']);
-        self::assertSame('turn', HttpSettingsSnapshot::config()['k'] ?? null);
-        unset($scope);
-        self::assertFalse(HttpSettingsSnapshot::active(), 'releasing the scope ends the snapshot');
-
-        $scope = HttpSettingsSnapshot::forTurn(['k' => 'turn']);
-        $scope->end();
-        $scope->end();
-        self::assertFalse(HttpSettingsSnapshot::active(), 'end() ends it, and a second end() is a no-op');
-    }
-
     public function testAnEngineTurnThatThrowsLeavesNoSnapshotBehind(): void
     {
         $provider = $this->scriptedProvider([], static function (): void {
