@@ -9,6 +9,9 @@
  *   php tests/Config/Support/refresh-suite-figure.php /tmp/pt-refresh/junit.xml
  *   # then update the README.md headline from the printed figures
  *
+ * An optional second argument writes the figure to that path instead of the
+ * committed artifact, so the regenerator itself can be exercised on a fixture.
+ *
  * ParaTest merges its workers' logs into one <dir>/junit.xml with the same
  * single top-level <testsuite> a serial `--log-junit` run writes, so either
  * log passes the gate below; the ParaTest run is the one CI's test cell uses.
@@ -34,6 +37,16 @@
  * cross-checks the artifact's tests figure against the live `--list-tests`
  * enumeration on every run of anything, so a lying artifact reddens the suite
  * that consumed it.
+ *
+ * CI'S SHAPE, NOT THE HOST'S. The figure pins what CI counts. A test that
+ * self-skips on the measuring host but runs on CI would otherwise land in the
+ * artifact as a skip and without its assertions, and the README headline (which
+ * quotes CI's counts) would drift from it. {@see CI_SHAPE_HOST_SKIPS} lists
+ * each such host-gated test with the assertions it makes when it runs; every
+ * one of them the log reports as skipped is folded back (skipped - 1,
+ * assertions + n) and named in a `host_adjustment` key. The adjustment is read
+ * from the log, not probed on the host, so the same log always writes the same
+ * figure. Before this, the fold was a hand-restore after every regeneration.
  */
 
 declare(strict_types=1);
@@ -46,8 +59,21 @@ declare(strict_types=1);
  */
 const REFRESH_FLOOR = 10_000;
 
-if ($argc !== 2) {
-    fwrite(STDERR, "usage: php tests/Config/Support/refresh-suite-figure.php <junit.xml>\n");
+/**
+ * Host-gated tests CI runs, keyed `<class>::<method>`, valued with the
+ * assertions each makes when it runs. `SuiteRootRunRefusalTest`'s two TMPDIR=/
+ * child arms skip wherever `SuiteSkipRoster::rootTmpdirChildStarts()` is false
+ * (swoole 6.2.0 aborts php started with TMPDIR=/) and run on CI. The counts are
+ * pinned against the method bodies by
+ * ReadmeSuiteFigureDriftTest::testRefreshScriptPinsCiShapeForHostGatedSkips.
+ */
+const CI_SHAPE_HOST_SKIPS = [
+    'SugarCraft\\Code\\Tests\\SuiteRootRunRefusalTest::testAChildBootstrapWithTmpdirRootRefusesTheLaunch' => 4,
+    'SugarCraft\\Code\\Tests\\SuiteRootRunRefusalTest::testAChildBootstrapWithTheHatchStillRefusesTheTempRoot' => 3,
+];
+
+if ($argc !== 2 && $argc !== 3) {
+    fwrite(STDERR, "usage: php tests/Config/Support/refresh-suite-figure.php <junit.xml> [<output.json>]\n");
     exit(2);
 }
 
@@ -102,6 +128,19 @@ $figures = [
     'skipped' => (int) $t['skipped'],
 ];
 
+$hostFigures = $figures;
+$folded = [];
+
+foreach ($root->xpath('//testcase[skipped]') as $case) {
+    $key = (string) $case['class'] . '::' . (string) $case['name'];
+
+    if (isset(CI_SHAPE_HOST_SKIPS[$key])) {
+        $folded[] = CI_SHAPE_HOST_SKIPS[$key];
+        $figures['skipped']--;
+        $figures['assertions'] += CI_SHAPE_HOST_SKIPS[$key];
+    }
+}
+
 $payload = $figures + [
     'measured_at' => (new DateTimeImmutable('now'))->format('Y-m-d'),
     'php' => PHP_VERSION,
@@ -109,11 +148,36 @@ $payload = $figures + [
     'regenerate' => 'php tests/Config/Support/refresh-suite-figure.php <junit.xml> (cwd=candy-code) — then update the README headline from the same run',
 ];
 
-$path = __DIR__ . '/suite-figure.json';
+if ($folded !== []) {
+    $swoole = extension_loaded('swoole') ? ' with swoole ' . phpversion('swoole') . ' loaded' : '';
+    $payload['host_adjustment'] = sprintf(
+        "measured on a host%s, where SuiteSkipRoster::rootTmpdirChildStarts() is false and SuiteRootRunRefusalTest's %s TMPDIR=/ child arm%s skip (%s skipped, %s assertions); pinned in CI's shape, where they run: skipped %d - %d, assertions + %d (they assert %s)",
+        $swoole,
+        count($folded) === 2 ? 'two' : (string) count($folded),
+        count($folded) === 1 ? '' : 's',
+        number_format($hostFigures['skipped']),
+        number_format($hostFigures['assertions']),
+        $hostFigures['skipped'],
+        count($folded),
+        array_sum($folded),
+        implode(' + ', $folded),
+    );
+}
+
+$path = $argv[2] ?? __DIR__ . '/suite-figure.json';
 file_put_contents(
     $path,
     json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n",
 );
+
+if ($folded !== []) {
+    printf(
+        "folded %d host-gated skip(s) into CI's shape: the log itself reports %d assertions, %d skipped\n",
+        count($folded),
+        $hostFigures['assertions'],
+        $hostFigures['skipped'],
+    );
+}
 
 printf(
     "wrote %s\n%d tests / %d assertions, %d failures, %d skipped — update the README headline from this run\n",

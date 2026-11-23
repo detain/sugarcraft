@@ -205,6 +205,120 @@ final class ReadmeSuiteFigureDriftTest extends TestCase
     }
 
     /**
+     * The artifact and the README pin CI's counts. On a host where
+     * SuiteRootRunRefusalTest's two TMPDIR=/ child arms skip, the regenerator
+     * used to write the host's counts and drop `host_adjustment`, so following
+     * the documented remedy reddened the README pair until someone restored
+     * the fold by hand. The fold now comes from the log, and its per-arm
+     * assertion counts are pinned against the method bodies here.
+     */
+    public function testRefreshScriptPinsCiShapeForHostGatedSkips(): void
+    {
+        $arms = [
+            'testAChildBootstrapWithTmpdirRootRefusesTheLaunch' => 4,
+            'testAChildBootstrapWithTheHatchStillRefusesTheTempRoot' => 3,
+        ];
+
+        foreach ($arms as $method => $count) {
+            $reflection = new \ReflectionMethod(\SugarCraft\Code\Tests\SuiteRootRunRefusalTest::class, $method);
+            $lines = \array_slice(
+                (array) file((string) $reflection->getFileName()),
+                $reflection->getStartLine() - 1,
+                $reflection->getEndLine() - $reflection->getStartLine() + 1,
+            );
+
+            self::assertSame(
+                $count,
+                preg_match_all('/self::assert\w+\(/', implode('', $lines)),
+                "SuiteRootRunRefusalTest::{$method} changed its assertion count — update CI_SHAPE_HOST_SKIPS in refresh-suite-figure.php to match",
+            );
+        }
+
+        $hostShaped = $this->runRefresher(self::junitFixture(true));
+        self::assertSame(
+            [10_000, 20_007, 0, 1],
+            [$hostShaped['tests'], $hostShaped['assertions'], $hostShaped['failures'], $hostShaped['skipped']],
+            'a log where the two host-gated arms skipped must be written in CI shape: skipped 3 - 2, assertions 20,000 + 7',
+        );
+        self::assertIsString($hostShaped['host_adjustment'] ?? null, 'a folded figure must say so in host_adjustment');
+        self::assertStringContainsString('3 skipped, 20,000 assertions', $hostShaped['host_adjustment']);
+
+        $ciShaped = $this->runRefresher(self::junitFixture(false));
+        self::assertSame(
+            [10_000, 20_000, 0, 1],
+            [$ciShaped['tests'], $ciShaped['assertions'], $ciShaped['failures'], $ciShaped['skipped']],
+            'a log where the arms ran is already CI shape and must be written verbatim',
+        );
+        self::assertArrayNotHasKey('host_adjustment', $ciShaped);
+    }
+
+    /**
+     * A green, floor-clearing log of 10,000 testcases with one ordinary skip.
+     * With $armsSkipped the two TMPDIR=/ arms are among the testcases, skipped
+     * with zero assertions; without it they ran and carry their 4 + 3.
+     */
+    private static function junitFixture(bool $armsSkipped): string
+    {
+        $class = 'SugarCraft\Code\Tests\SuiteRootRunRefusalTest';
+        $cases = [
+            '<testcase name="testAChildBootstrapWithTmpdirRootRefusesTheLaunch" class="' . $class . '" assertions="'
+                . ($armsSkipped ? '0"><skipped/></testcase>' : '4"/>'),
+            '<testcase name="testAChildBootstrapWithTheHatchStillRefusesTheTempRoot" class="' . $class . '" assertions="'
+                . ($armsSkipped ? '0"><skipped/></testcase>' : '3"/>'),
+            '<testcase name="other" class="Some\Skipping\Test" assertions="0"><skipped/></testcase>',
+        ];
+
+        for ($i = \count($cases); $i < 10_000; $i++) {
+            $cases[] = '<testcase name="t' . $i . '" class="Some\Filler\Test" assertions="2"/>';
+        }
+
+        $assertions = 20_000;
+        $skipped = $armsSkipped ? 3 : 1;
+
+        return '<?xml version="1.0" encoding="UTF-8"?>' . "\n<testsuites>\n"
+            . '<testsuite name="" tests="10000" assertions="' . $assertions . '" errors="0" failures="0" skipped="' . $skipped . '" time="1">' . "\n"
+            . implode("\n", $cases) . "\n</testsuite>\n</testsuites>\n";
+    }
+
+    /** @return array<string, mixed> */
+    private function runRefresher(string $fixture): array
+    {
+        $script = __DIR__ . '/Support/refresh-suite-figure.php';
+        $artifactBefore = (string) sha1_file(self::ARTIFACT);
+
+        // tempnam() creates the base; the '.xml' and '.json' paths are two more
+        // files, and all three are unlinked below.
+        $base = tempnam(sys_get_temp_dir(), 'suite-figure-');
+        $log = $base . '.xml';
+        $out = $base . '.json';
+        file_put_contents($log, $fixture);
+
+        $output = [];
+        $status = 0;
+        exec(\sprintf(
+            '%s %s %s %s 2>&1',
+            \escapeshellarg(\PHP_BINARY),
+            \escapeshellarg($script),
+            \escapeshellarg($log),
+            \escapeshellarg($out),
+        ), $output, $status);
+
+        $written = is_file($out) ? (string) file_get_contents($out) : '';
+        @unlink($log);
+        @unlink($out);
+        unlink($base);
+
+        self::assertSame(0, $status, 'the refresher refused a green whole-run fixture: ' . implode("\n", $output));
+        self::assertSame(
+            $artifactBefore,
+            (string) sha1_file(self::ARTIFACT),
+            'an explicit output path must leave the committed artifact untouched',
+        );
+
+        return json_decode($written, true, 512, JSON_THROW_ON_ERROR);
+    }
+
+    /**
      * The headline is one exact sentence; a rewording must update this pattern
      * deliberately rather than un-pin the figure by accident.
      *
