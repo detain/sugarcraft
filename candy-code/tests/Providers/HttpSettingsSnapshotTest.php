@@ -167,7 +167,8 @@ final class HttpSettingsSnapshotTest extends TestCase
             public function __construct(
                 private array $responses,
                 private readonly \Closure $onCall,
-            ) {}
+            ) {
+            }
 
             public function name(): string
             {
@@ -230,7 +231,7 @@ final class HttpSettingsSnapshotTest extends TestCase
 
     private function clockTool(): Tool
     {
-        return new class implements Tool {
+        return new class () implements Tool {
             public function name(): string
             {
                 return 'clock';

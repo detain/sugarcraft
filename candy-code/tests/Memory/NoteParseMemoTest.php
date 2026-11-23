@@ -154,7 +154,7 @@ final class NoteParseMemoTest extends TestCase
     {
         $entry = MemoryEntry::new(type: 'note', content: 'x', scope: 'project', id: 'x');
         for ($i = 0; $i <= NoteParseMemo::MAX_ENTRIES; $i++) {
-            NoteParseMemo::decode('/memo/' . $i . '.md', 1, 'x', static fn(): MemoryEntry => $entry);
+            NoteParseMemo::decode('/memo/' . $i . '.md', 1, 'x', static fn (): MemoryEntry => $entry);
         }
 
         self::assertLessThanOrEqual(NoteParseMemo::MAX_ENTRIES, NoteParseMemo::size());
