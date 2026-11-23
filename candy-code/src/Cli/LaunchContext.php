@@ -503,6 +503,11 @@ final class LaunchContext
      * view's Flag layer names the model this launch runs
      * ({@see selectedModelName()} reads the same `--model`).
      *
+     * The headless doors (the `config` subcommand, serve's settings methods)
+     * do NOT use this list: before CC-4-2 they explained no launch flag, and
+     * handing them `--model` would change their `models` row's value, source
+     * and lock, which the step's acceptance forbids. That is an owner call.
+     *
      * @return array<string, string>
      */
     public static function settingsFlags(): array
@@ -511,22 +516,11 @@ final class LaunchContext
         if (self::$permissionModeOverride !== null) {
             $flags['--permission-mode'] = self::$permissionModeOverride;
         }
+        if (self::$modelOverride !== null) {
+            $flags['--model'] = self::$modelOverride;
+        }
 
-        return $flags + self::modelSettingsFlags();
-    }
-
-    /**
-     * `--model` alone, for the doors that explained no launch flag before
-     * CC-4-2: the `config` subcommand and serve's settings methods. They gain
-     * only the model half; whether they should also report `--permission-mode`
-     * as a Flag is an owner call outside CC-4-2, so their permissionMode rows
-     * keep their earlier value, source and lock.
-     *
-     * @return array<string, string>
-     */
-    public static function modelSettingsFlags(): array
-    {
-        return self::$modelOverride === null ? [] : ['--model' => self::$modelOverride];
+        return $flags;
     }
 
     /**

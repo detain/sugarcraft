@@ -233,31 +233,47 @@ final class PersistedModelResolutionTest extends TestCase
     }
 
     /**
-     * CC-4-2 hands the `config` subcommand and serve's settings methods
-     * `--model` only: before it they explained no launch flag, and reporting
-     * `--permission-mode` as a locked Flag there is a separate owner call. The
-     * TUI view keeps the `--permission-mode` it explained before.
+     * The headless doors keep the `models` row they printed before CC-4-2: the
+     * `config` subcommand and serve's settings methods explain no launch flag,
+     * so `--model` does not turn the persisted entry into a locked Flag there
+     * (the step's acceptance keeps every existing observable value; changing
+     * these doors is an owner call). The TUI view still gains `--model`.
      */
-    public function testTheHeadlessDoorsGainTheModelFlagButNotThePermissionModeFlag(): void
+    public function testTheConfigSubcommandKeepsThePersistedModelsRowUnderTheModelFlag(): void
     {
+        $this->writeConfig(['models' => ['openai' => 'gpt-persisted']]);
         Bootstrap::useModel('from-the-flag');
         Bootstrap::usePermissionMode('plan');
 
-        self::assertSame(['--model' => 'from-the-flag'], LaunchContext::modelSettingsFlags());
+        $cwd = (string) getcwd();
+        chdir($this->tempDir);
+        try {
+            ob_start();
+            $rc = \SugarCraft\Code\Cli\Subcommands::dispatch(
+                \SugarCraft\Code\Cli\ArgvParser::parse(['candy-code', 'config', 'show', '--sources', '--json']),
+            );
+            $stdout = (string) ob_get_clean();
+        } finally {
+            chdir($cwd);
+        }
+
+        self::assertSame(\SugarCraft\Code\Cli\NonInteractive::EXIT_OK, $rc, $stdout);
+        $decoded = json_decode(trim($stdout), true);
+        self::assertIsArray($decoded, $stdout);
+        $rows = array_column($decoded['result']['settings'] ?? [], null, 'key');
+        self::assertArrayHasKey('models', $rows, $stdout);
+        self::assertSame(['openai' => 'gpt-persisted'], $rows['models']['value']);
+        self::assertSame(SettingSource::UserConfig->value, $rows['models']['source']);
+        self::assertFalse($rows['models']['locked']);
+        self::assertNotSame(SettingSource::Flag->value, $rows['permissionMode']['source'] ?? null);
+
+        // The TUI view keeps both flags.
         self::assertSame(['--permission-mode' => 'plan', '--model' => 'from-the-flag'], LaunchContext::settingsFlags());
 
-        $permissionMode = SettingsSchema::byKey('permissionMode');
-        self::assertNotNull($permissionMode);
-        $headless = SettingsSources::fromLaunch(null, null, $this->tempDir . '/home/.candy-code', Bootstrap::userConfigPath(), [], LaunchContext::modelSettingsFlags())
-            ->resolver->resolve($permissionMode);
-        self::assertNotSame(SettingSource::Flag, $headless->source);
-        self::assertNotSame('plan', $headless->value);
-
-        // The two doors by class, not by path: each hands fromLaunch() the
-        // model-only list.
+        // Serve's settings methods are the other headless door: neither door
+        // hands fromLaunch() the TUI's flag list.
         foreach ([\SugarCraft\Code\Cli\Subcommands::class, \SugarCraft\Code\Protocol\Methods\SettingsMethods::class] as $door) {
             $code = (string) file_get_contents((string) (new \ReflectionClass($door))->getFileName());
-            self::assertStringContainsString('LaunchContext::modelSettingsFlags()', $code, $door);
             self::assertStringNotContainsString('LaunchContext::settingsFlags()', $code, $door);
         }
     }

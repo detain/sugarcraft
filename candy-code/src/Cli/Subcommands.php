@@ -249,7 +249,9 @@ final class Subcommands
                 Bootstrap::userSettingsDirOrNull(),
                 Bootstrap::userConfigPath(),
                 \array_filter(\getenv(), 'is_string'),
-                LaunchContext::modelSettingsFlags(),
+                // No launch flags, as before CC-4-2: whether this headless door
+                // reports `--model` (or `--permission-mode`) as a locked Flag
+                // changes its `models` row and is an owner call outside CC-4-2.
             );
             $resolved = $sources->resolver->resolveAll();
         } catch (\Throwable $e) {

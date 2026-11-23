@@ -454,10 +454,10 @@ final class SettingsMethods
             // so a save is seen at once (and `--config` moves both).
             $writer instanceof SettingsWriter ? $writer->targetPath(SettingsTier::You) : self::userConfigPath(),
             $env,
-            // The launch's `--model` (`serve --model …`), so the Flag layer
-            // names the model this process runs; `--permission-mode` stays
-            // out, as before CC-4-2.
-            \SugarCraft\Code\Cli\LaunchContext::modelSettingsFlags(),
+            // No launch flags, as before CC-4-2: whether serve reports
+            // `--model` (or `--permission-mode`) as a locked Flag changes its
+            // `models` row and is an owner call outside CC-4-2.
+            [],
             $options instanceof OptionsProvider ? $options : null,
         );
     }
