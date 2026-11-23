@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Cli;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
@@ -177,6 +178,57 @@ final class DoctorChecksTest extends TestCase
         self::assertSame('WARN', $heavy['status']);
         self::assertStringContainsString('2.0 GiB', $heavy['detail']);
         self::assertStringContainsString('CANDY_CODE_SESSION_RETENTION_DAYS', $heavy['detail'], 'the warning names the knob to turn');
+    }
+
+    /**
+     * CC5-2b: the doctor's private `humanBytes` stays its own formatter, and
+     * this pins the text it prints today. It is NOT sugar-core
+     * `Format::iecBytes`, and routing it there would change what the doctor
+     * prints for sizes a session store can reach:
+     *
+     *   - thousands separator: humanBytes prints `1,000.0 KiB` where iecBytes
+     *     prints `1000.0 KiB`;
+     *   - rounding edge: humanBytes steps units on the raw value, so 1048525
+     *     bytes prints `1,024.0 KiB`, where iecBytes steps on the rounded value
+     *     and prints `1.0 MiB`;
+     *   - top band: humanBytes stops at TiB (`1,500.0 TiB`, `1,024.0 TiB`),
+     *     where iecBytes goes on to PiB (`1.5 PiB`, `1.0 PiB`).
+     *
+     * A change here is a change to the doctor's printed output, not a refactor.
+     *
+     * @return array<string, array{int, string}>
+     */
+    public static function sessionStoreSizes(): array
+    {
+        return [
+            'zero' => [0, '0 B'],
+            'half a KiB' => [512, '512 B'],
+            'one byte under a KiB, no separator in the byte band' => [1023, '1023 B'],
+            'four KiB' => [4096, '4.0 KiB'],
+            'thousand KiB keeps the comma' => [1024000, '1,000.0 KiB'],
+            'rounding edge stays in KiB' => [1048525, '1,024.0 KiB'],
+            'one MiB' => [1048576, '1.0 MiB'],
+            'one and a half MiB' => [1572864, '1.5 MiB'],
+            'one GiB' => [1073741824, '1.0 GiB'],
+            '1500 TiB stays in TiB' => [1500 * 1024 ** 4, '1,500.0 TiB'],
+            'one PiB still prints as TiB' => [1024 ** 5, '1,024.0 TiB'],
+        ];
+    }
+
+    #[DataProvider('sessionStoreSizes')]
+    public function testTheSessionStoreRowPinsTheDoctorByteText(int $bytes, string $printed): void
+    {
+        $row = DoctorChecks::sessionStoreRow(2, $bytes);
+
+        if ($bytes > DoctorChecks::SESSION_STORE_WARN_BYTES) {
+            self::assertSame('WARN', $row['status']);
+            self::assertSame('2 sessions stored (' . $printed . ') — prune with CANDY_CODE_SESSION_RETENTION_DAYS', $row['detail']);
+
+            return;
+        }
+
+        self::assertSame('OK', $row['status']);
+        self::assertSame('2 sessions stored (' . $printed . ')', $row['detail']);
     }
 
     // ---- fixtures -------------------------------------------------------------
