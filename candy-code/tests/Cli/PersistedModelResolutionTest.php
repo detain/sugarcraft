@@ -198,6 +198,39 @@ final class PersistedModelResolutionTest extends TestCase
     }
 
     /**
+     * The settings view the launch actually builds (the closure handed to
+     * App::withSettingsSources() delegates to LaunchContext::settingsSources())
+     * sees `--model` as a Flag, so it says "set by --model" for the model the
+     * launch runs rather than the persisted entry or the default.
+     */
+    public function testTheLaunchBuiltSettingsViewReportsTheModelFlag(): void
+    {
+        $this->writeConfig(['models' => ['openai' => 'gpt-persisted']]);
+        Bootstrap::useModel('from-the-flag');
+
+        $definition = SettingsSchema::byKey('models');
+        self::assertNotNull($definition);
+        $view = LaunchContext::settingsSources(null)->resolver->resolve($definition);
+
+        self::assertSame(SettingSource::Flag, $view->source);
+        self::assertSame('from-the-flag', $view->value);
+        self::assertSame($view->value, LaunchContext::selectedModelName('openai'));
+        self::assertSame('from-the-flag', LaunchContext::settingsFlags()['--model'] ?? null);
+    }
+
+    public function testWithoutTheFlagTheLaunchBuiltSettingsViewCarriesNoModelFlag(): void
+    {
+        $this->writeConfig(['models' => ['openai' => 'gpt-persisted']]);
+
+        $definition = SettingsSchema::byKey('models');
+        self::assertNotNull($definition);
+        $view = LaunchContext::settingsSources(null)->resolver->resolve($definition);
+
+        self::assertNotSame(SettingSource::Flag, $view->source);
+        self::assertArrayNotHasKey('--model', LaunchContext::settingsFlags());
+    }
+
+    /**
      * @param array<string, string> $env
      * @param array<string, mixed> $flags
      */

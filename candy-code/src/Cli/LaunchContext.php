@@ -496,6 +496,50 @@ final class LaunchContext
         return self::$permissionModeOverride;
     }
 
+    /**
+     * The launch flags the settings view explains, by spelling: `--model` and
+     * `--permission-mode` when this launch set them. Every door that builds a
+     * {@see \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch()} hands
+     * it this list, so the view's Flag layer names the model this launch runs
+     * ({@see selectedModelName()} reads the same `--model`).
+     *
+     * @return array<string, string>
+     */
+    public static function settingsFlags(): array
+    {
+        $flags = [];
+        if (self::$permissionModeOverride !== null) {
+            $flags['--permission-mode'] = self::$permissionModeOverride;
+        }
+        if (self::$modelOverride !== null) {
+            $flags['--model'] = self::$modelOverride;
+        }
+
+        return $flags;
+    }
+
+    /**
+     * The settings view's layers for this launch (N-P1): its project-trust
+     * answer, its environment and its flags ({@see settingsFlags()}), with the
+     * editor's provider choices — the same list the Ctrl+P "Switch model"
+     * palette offers.
+     */
+    public static function settingsSources(?string $root): \SugarCraft\Code\Tui\Settings\SettingsSources
+    {
+        return \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch(
+            $root,
+            $root === null ? null : Bootstrap::projectSettingsTrusted($root),
+            Bootstrap::userSettingsDirOrNull(),
+            Bootstrap::userConfigPath(),
+            array_filter(getenv(), 'is_string'),
+            self::settingsFlags(),
+            \SugarCraft\Code\Config\Settings\OptionsProvider::new()->withList(
+                \SugarCraft\Code\Config\Settings\OptionsSource::Providers,
+                array_keys(Bootstrap::availableProviders()),
+            ),
+        );
+    }
+
     /** The RAW `--max-cost` string; judgment defers to the resolver. */
     public static function maxCostOverride(): ?string
     {
@@ -2893,20 +2937,7 @@ final class LaunchContext
             // than SettingsSources::bestEffort()'s guess, which cannot know
             // the trust answer and so hides a trusted project's values. A
             // closure because the view resolves when it is opened, not here.
-            ->withSettingsSources(static fn (): \SugarCraft\Code\Tui\Settings\SettingsSources => \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch(
-                $root,
-                $root === null ? null : Bootstrap::projectSettingsTrusted($root),
-                Bootstrap::userSettingsDirOrNull(),
-                Bootstrap::userConfigPath(),
-                array_filter(getenv(), 'is_string'),
-                LaunchContext::permissionModeOverride() === null ? [] : ['--permission-mode' => LaunchContext::permissionModeOverride()],
-                // The editor's provider choices: the same list the Ctrl+P
-                // "Switch model" palette offers.
-                \SugarCraft\Code\Config\Settings\OptionsProvider::new()->withList(
-                    \SugarCraft\Code\Config\Settings\OptionsSource::Providers,
-                    array_keys(Bootstrap::availableProviders()),
-                ),
-            ))
+            ->withSettingsSources(static fn (): \SugarCraft\Code\Tui\Settings\SettingsSources => LaunchContext::settingsSources($root))
             // N-P2: the settings editor's own write door, NOT `onConfigChange`
             // (whose census stays `provider` + `theme`). Its "You" tier goes
             // through writeUserConfig() — the one writer config.json has — and

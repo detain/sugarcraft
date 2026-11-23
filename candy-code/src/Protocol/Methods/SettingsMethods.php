@@ -454,7 +454,9 @@ final class SettingsMethods
             // so a save is seen at once (and `--config` moves both).
             $writer instanceof SettingsWriter ? $writer->targetPath(SettingsTier::You) : self::userConfigPath(),
             $env,
-            [],
+            // The launch's own flags (`serve --model …`), so the Flag layer
+            // names the model this process runs.
+            \SugarCraft\Code\Cli\LaunchContext::settingsFlags(),
             $options instanceof OptionsProvider ? $options : null,
         );
     }

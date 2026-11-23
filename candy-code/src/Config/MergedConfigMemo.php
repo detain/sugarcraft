@@ -35,6 +35,17 @@ namespace SugarCraft\Code\Config;
  * so the read after a write or a detected edit is a full re-derivation and
  * never depends on the key alone.
  *
+ * A DELIBERATE DEVIATION FROM THE STEP'S changedKeys() ROUTE (AUD §7 rank 5).
+ * The step proposed letting {@see SettingsFileWatch::changedKeys()} be the
+ * only invalidation, so a hit would do no I/O. That is refused: changedKeys()
+ * runs only at a chat turn's settle and on `/settings reload`, so a read
+ * mid-turn would serve a pre-edit value until the settle, and the headless
+ * doors (`-p`, `serve`, the subcommands) never call it at all and would serve
+ * the launch-time value for the life of the process. What this memo saves is
+ * the decode and the merge; each read still pays the small `file_get_contents`
+ * of up to five settings files, the same reads it made before the memo, which
+ * is what keeps "an edit outside the app is seen at the next read" true.
+ *
  * The session tier ({@see \SugarCraft\Code\Config\Settings\SessionSettings})
  * is process state, not a file, and stays OUT of the memo: the caller lays
  * it on each read, so a session save needs no invalidation at all.
