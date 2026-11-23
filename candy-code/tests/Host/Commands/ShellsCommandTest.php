@@ -454,8 +454,11 @@ final class ShellsCommandTest extends TestCase
         self::assertSame([], $this->sendTails($registry), 'the held slot is free and the first send has not started');
 
         // The relay attaching in the window is what used to let the second
-        // send type at once, ahead of the first.
-        for ($i = 0; $i < 200 && !ShellSend::relayAttached($registry->status($id) ?? []); $i++) {
+        // send type at once, ahead of the first. The bound is wall-clock: the
+        // pid file relayAttached checks is written by a spawned child, so a
+        // loaded runner needs real time, not a count of 10 ms loop ticks.
+        $deadline = microtime(true) + 5.0;
+        while (!ShellSend::relayAttached($registry->status($id) ?? []) && microtime(true) < $deadline) {
             $this->drainLoop();
         }
         self::assertTrue(ShellSend::relayAttached($registry->status($id) ?? []), 'the relay attaches within the budget');
