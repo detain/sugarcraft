@@ -632,7 +632,7 @@ jobs:
       # slowest single file, and the LPT K=4 MAX BUCKET (the busiest worker
       # when files go longest-first to whichever worker is free) is what
       # --timeout must clear.
-      # TSV-PIN tests=34012 files=2164 serial_sum=2737.7 floor=50.4 floor_file=candy-code/tests/Agents/ProcessExecutorTest.php lpt_k4_max=684.4 timeout_test=2400
+      # TSV-PIN tests=34012 files=2170 serial_sum=2738.4 floor=50.4 floor_file=candy-code/tests/Agents/ProcessExecutorTest.php lpt_k4_max=684.6 timeout_test=2400
       # Every value on that line is re-derived from the committed durations
       # table and suite-figure.json by tools/tests/ParallelShardTuningTest.php
       # — prose and probe drift only as far as the next red suite. 2400s is
@@ -1136,7 +1136,7 @@ jobs:
       # Codecov upload downstream is untouched and cannot tell merged from
       # serial. test-merge-clover.php runs FIRST: a merger regression must fail
       # in seconds, not after a full-suite wall. --timeout 2400 per shard: the
-      # K=4 max bucket is 684.4s (2026-11-21 re-pin; machine values on the test
+      # K=4 max bucket is 684.6s (2026-11-22 re-pin; machine values on the test
       # job's TSV-PIN line) and pcov overhead is up to ~2x on a slow runner —
       # shards were killed at 900s on 2026-10-05 — so 2400 still clears 2x the
       # max bucket while bounding a hung shard.
