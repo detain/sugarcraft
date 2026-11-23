@@ -133,6 +133,39 @@ final class ShellWordsMemoTest extends TestCase
         self::assertSame(2, $this->lexesOf($long));
     }
 
+    /**
+     * A 64 KiB line of short words parses to about 2 MiB of arrays; before
+     * the byte budget, 32 of them stayed pinned at about 62 MiB.
+     */
+    public function testWordDenseLinesCannotPinMoreThanTheByteBudget(): void
+    {
+        $before = memory_get_usage();
+        for ($i = 0; $i < ShellWordsMemo::CAPACITY; ++$i) {
+            $line = substr("echo {$i}" . str_repeat(' a', ShellWordsMemo::MAX_LINE_BYTES), 0, ShellWordsMemo::MAX_LINE_BYTES - 16);
+            ShellWords::parse($line);
+        }
+        $this->lexed = [];
+
+        self::assertLessThanOrEqual(ShellWordsMemo::MAX_RETAINED_BYTES, ShellWordsMemo::retainedBytes());
+        self::assertLessThan(ShellWordsMemo::MAX_RETAINED_BYTES + 1024 * 1024, memory_get_usage() - $before);
+    }
+
+    public function testTheByteBudgetEvictsTheLeastRecentlyUsedLine(): void
+    {
+        $lines = [];
+        for ($i = 0; $i < ShellWordsMemo::CAPACITY; ++$i) {
+            $lines[] = substr("echo {$i}" . str_repeat(' a', 8000), 0, 12000);
+            ShellWords::parse($lines[$i]);
+        }
+
+        self::assertLessThan(ShellWordsMemo::CAPACITY, ShellWordsMemo::size(), 'the byte budget, not the count, evicted');
+        self::assertLessThanOrEqual(ShellWordsMemo::MAX_RETAINED_BYTES, ShellWordsMemo::retainedBytes());
+        ShellWords::parse($lines[\count($lines) - 1]);
+        ShellWords::parse($lines[0]);
+        self::assertSame(1, $this->lexesOf($lines[\count($lines) - 1]), 'the newest line is still kept');
+        self::assertSame(2, $this->lexesOf($lines[0]), 'the oldest line was evicted and lexed again');
+    }
+
     public function testResetForgetsEveryParse(): void
     {
         ShellWords::parse('ls');
@@ -140,6 +173,7 @@ final class ShellWordsMemoTest extends TestCase
 
         ShellWordsMemo::reset();
         self::assertSame(0, ShellWordsMemo::size());
+        self::assertSame(0, ShellWordsMemo::retainedBytes());
         ShellWords::parse('ls');
         self::assertSame(2, $this->lexesOf('ls'));
     }

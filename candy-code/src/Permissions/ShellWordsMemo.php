@@ -17,11 +17,18 @@ namespace SugarCraft\Code\Permissions;
  * function of the line and its result is immutable, so the first lex can
  * answer every later check of the same text.
  *
- * Keyed by the exact line, so two spellings never share a parse. Bounded:
- * at most {@see CAPACITY} lines, least recently used evicted first, and a
- * line over {@see MAX_LINE_BYTES} (the gate's own length door,
- * {@see PermissionGate::MAX_REASONED_COMMAND_BYTES}) is lexed every time and
- * never kept, so the cache cannot hold more than a few MiB of text.
+ * Keyed by the exact line, so two spellings never share a parse. Bounded
+ * twice, least recently used evicted first: at most {@see CAPACITY} lines,
+ * and at most {@see MAX_RETAINED_BYTES} of PARSED result. The second bound is
+ * the one that matters for memory: a parse costs far more than its text
+ * when the line is word- or command-dense (a 64 KiB line of `a a a ...`
+ * parses to about 2 MiB of arrays, so 32 of them pinned about 62 MiB), while
+ * a heredoc body or one long quoted argument costs about its text. The cost
+ * of each parse is measured, not guessed, as the heap growth across the lex
+ * (never less than the line's own length). A parse that alone costs more
+ * than {@see MAX_ENTRY_BYTES}, or a line over {@see MAX_LINE_BYTES} (the
+ * gate's own length door, {@see PermissionGate::MAX_REASONED_COMMAND_BYTES}),
+ * is lexed every time and never kept, so it cannot flush the hot lines.
  *
  * Process-wide rather than per gate on purpose: the parse depends on nothing
  * but the text, so sharing it across gates and hooks cannot change an
@@ -38,8 +45,20 @@ final class ShellWordsMemo
     /** Longest line kept; a longer one is lexed on every call. */
     public const MAX_LINE_BYTES = 65536;
 
+    /** Most parsed bytes kept at once, across every entry. */
+    public const MAX_RETAINED_BYTES = 4 * 1024 * 1024;
+
+    /** Costliest single parse kept; a costlier one is lexed on every call. */
+    public const MAX_ENTRY_BYTES = 512 * 1024;
+
     /** @var array<array-key, ShellWords> */
     private static array $entries = [];
+
+    /** @var array<array-key, int> Measured cost of each entry, same keys. */
+    private static array $costs = [];
+
+    /** Sum of {@see $costs}. */
+    private static int $retained = 0;
 
     /** @var (\Closure(string): void)|null */
     private static ?\Closure $observer = null;
@@ -63,14 +82,20 @@ final class ShellWordsMemo
         if (self::$observer !== null) {
             (self::$observer)($line);
         }
+        $before = memory_get_usage();
         $parsed = $lex();
-        if (\strlen($line) > self::MAX_LINE_BYTES) {
+        $cost = max(memory_get_usage() - $before, \strlen($line));
+        if (\strlen($line) > self::MAX_LINE_BYTES || $cost > self::MAX_ENTRY_BYTES) {
             return $parsed;
         }
 
         self::$entries[$line] = $parsed;
-        if (\count(self::$entries) > self::CAPACITY) {
-            unset(self::$entries[array_key_first(self::$entries)]);
+        self::$costs[$line] = $cost;
+        self::$retained += $cost;
+        while (\count(self::$entries) > self::CAPACITY || self::$retained > self::MAX_RETAINED_BYTES) {
+            $oldest = array_key_first(self::$entries);
+            self::$retained -= self::$costs[$oldest];
+            unset(self::$entries[$oldest], self::$costs[$oldest]);
         }
 
         return $parsed;
@@ -91,11 +116,19 @@ final class ShellWordsMemo
     public static function reset(): void
     {
         self::$entries = [];
+        self::$costs = [];
+        self::$retained = 0;
     }
 
     /** How many lines are cached now. */
     public static function size(): int
     {
         return \count(self::$entries);
+    }
+
+    /** Measured parsed bytes the cached lines hold now. */
+    public static function retainedBytes(): int
+    {
+        return self::$retained;
     }
 }
