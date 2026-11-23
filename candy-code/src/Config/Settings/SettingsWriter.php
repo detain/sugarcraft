@@ -396,6 +396,9 @@ final class SettingsWriter
             AtomicJsonFile::new($path)->write($next);
         } catch (\Throwable $e) {
             throw new \RuntimeException("{$path} could not be written (" . $e->getMessage() . ')', 0, $e);
+        } finally {
+            // As in mutateTier(): the next merged read re-derives.
+            \SugarCraft\Code\Config\MergedConfigMemo::invalidate();
         }
 
         return $path;
@@ -497,6 +500,9 @@ final class SettingsWriter
                 AtomicJsonFile::new($path)->write(self::patched($this->current($tier), $decided[0], $decided[1]));
             } catch (\Throwable $e) {
                 throw new \RuntimeException("{$path} could not be written (" . $e->getMessage() . ')', 0, $e);
+            } finally {
+                // A settings file moved (or may have): the next merged read re-derives.
+                \SugarCraft\Code\Config\MergedConfigMemo::invalidate();
             }
 
             return $path;

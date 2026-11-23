@@ -1096,10 +1096,20 @@ final class LayeredSettings
      */
     public static function userLayer(string $userConfigDir): array
     {
-        return self::only(
-            self::readFile(rtrim($userConfigDir, '/') . '/' . self::USER_FILE),
-            self::LAYERED_KEYS,
-        );
+        return self::layeredFromBytes(self::fileBytes(rtrim($userConfigDir, '/') . '/' . self::USER_FILE));
+    }
+
+    /**
+     * {@see userLayer()} and {@see systemLayer()} over bytes the caller
+     * already read with {@see fileBytes()}: both filter to the same
+     * {@see LAYERED_KEYS} alphabet. A memo keyed by those bytes then merges
+     * exactly what it compared, never a second read that raced an edit.
+     *
+     * @return array<string, mixed>
+     */
+    public static function layeredFromBytes(?string $raw): array
+    {
+        return self::only(self::decodeBytes($raw), self::LAYERED_KEYS);
     }
 
     /**
@@ -1132,7 +1142,7 @@ final class LayeredSettings
      */
     public static function systemLayer(string $systemConfigPath): array
     {
-        return self::only(self::readFile($systemConfigPath), self::LAYERED_KEYS);
+        return self::layeredFromBytes(self::fileBytes($systemConfigPath));
     }
 
     /**
@@ -1174,9 +1184,26 @@ final class LayeredSettings
      */
     public static function projectLayer(string $projectRoot, bool $trusted): array
     {
+        return self::projectLayerFromBytes(array_map(
+            self::fileBytes(...),
+            self::projectLayerPaths($projectRoot, $trusted),
+        ));
+    }
+
+    /**
+     * {@see projectLayer()} over the bytes of {@see projectLayerPaths()}'s
+     * files, read by the caller with {@see fileBytes()} and given in that
+     * order (lowest precedence first) — the memo's twin of
+     * {@see layeredFromBytes()}.
+     *
+     * @param list<?string> $raws
+     * @return array<string, mixed>
+     */
+    public static function projectLayerFromBytes(array $raws): array
+    {
         $layers = [];
-        foreach (self::projectLayerPaths($projectRoot, $trusted) as $path) {
-            $layers[] = self::only(self::readFile($path), self::PROJECT_TIER_KEYS);
+        foreach ($raws as $raw) {
+            $layers[] = self::only(self::decodeBytes($raw), self::PROJECT_TIER_KEYS);
         }
 
         return array_merge(...[[], ...$layers]);
@@ -1194,9 +1221,14 @@ final class LayeredSettings
      * order is exactly the kind of duplicate that drifts into disagreeing with
      * the original about which file wins.
      *
+     * PUBLIC for the merged-config memo
+     * ({@see \SugarCraft\Code\Config\MergedConfigMemo}), which must walk the
+     * same trust gate and containment pair on every read — a symlink swapped
+     * under `.candy-code` moves the path set, and the memo keys on it.
+     *
      * @return list<string>
      */
-    private static function projectLayerPaths(string $projectRoot, bool $trusted): array
+    public static function projectLayerPaths(string $projectRoot, bool $trusted): array
     {
         if (!$trusted || trim($projectRoot) === '') {
             return [];
@@ -1581,12 +1613,35 @@ final class LayeredSettings
      */
     private static function readFile(string $path): array
     {
+        return self::decodeBytes(self::fileBytes($path));
+    }
+
+    /**
+     * The bytes of a settings file, or null when there is no regular file to
+     * read or it cannot be read — the read half of {@see readFile()}, public
+     * so the merged-config memo can key on exactly what the merge decodes.
+     * `@`-silenced for the reason {@see readFile()} gives.
+     */
+    public static function fileBytes(string $path): ?string
+    {
         if (!is_file($path)) {
-            return [];
+            return null;
         }
 
         $raw = @file_get_contents($path);
-        if ($raw === false) {
+
+        return $raw === false ? null : $raw;
+    }
+
+    /**
+     * The decode half of {@see readFile()}: `[]` for null (no file), invalid
+     * JSON, or JSON that is not an object.
+     *
+     * @return array<string, mixed>
+     */
+    private static function decodeBytes(?string $raw): array
+    {
+        if ($raw === null) {
             return [];
         }
 

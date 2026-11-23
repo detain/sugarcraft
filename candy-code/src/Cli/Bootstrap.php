@@ -4635,18 +4635,21 @@ public static function useMaxCost(?string $maxCost): void
     {
         $root = LaunchContext::projectRootForSettings();
         $userSettingsDir = self::userSettingsDirOrNull();
+        $configPath = self::userConfigPath();
 
-        return array_merge(
-            LayeredSettings::merge(
-                self::rawUserConfig(),
-                $userSettingsDir === null ? [] : LayeredSettings::userLayer($userSettingsDir),
-                $root === null || !$withProjectTier
-                    ? []
-                    : LayeredSettings::projectLayer($root, self::projectSettingsTrusted($root)),
-            ),
-            \SugarCraft\Code\Config\Settings\SessionSettings::all(),
-            self::managedLayer(),
+        // The file tiers come from a per-process memo keyed by every path and
+        // every file's bytes (rank 5); the session tier is laid on per read.
+        [$files, $managed] = \SugarCraft\Code\Config\MergedConfigMemo::fileTiers(
+            $withProjectTier,
+            $configPath,
+            self::rawUserConfigBytes($configPath),
+            self::decodeRawUserConfig(...),
+            $userSettingsDir === null ? null : rtrim($userSettingsDir, '/') . '/' . LayeredSettings::USER_FILE,
+            $root === null || !$withProjectTier ? [] : LayeredSettings::projectLayerPaths($root, self::projectSettingsTrusted($root)),
+            self::systemConfigPath(),
         );
+
+        return array_merge($files, \SugarCraft\Code\Config\Settings\SessionSettings::all(), $managed);
     }
 
     /**
@@ -4712,17 +4715,21 @@ public static function useMaxCost(?string $maxCost): void
      */
     private static function rawUserConfig(): array
     {
-        $path = self::userConfigPath();
-        if (!is_file($path)) {
-            return [];
-        }
+        return self::decodeRawUserConfig(self::rawUserConfigBytes(self::userConfigPath()));
+    }
 
-        $contents = @file_get_contents($path);
-        if ($contents === false) {
-            return [];
-        }
+    /** {@see rawUserConfig()}'s read half: null for no regular file or an unreadable one. */
+    private static function rawUserConfigBytes(string $path): ?string
+    {
+        $contents = is_file($path) ? @file_get_contents($path) : false;
 
-        $data = json_decode($contents, true);
+        return $contents === false ? null : $contents;
+    }
+
+    /** @return array<string, mixed> {@see rawUserConfig()}'s decode half */
+    private static function decodeRawUserConfig(?string $contents): array
+    {
+        $data = $contents === null ? null : json_decode($contents, true);
 
         return is_array($data) ? $data : [];
     }
@@ -5194,6 +5201,8 @@ public static function useMaxCost(?string $maxCost): void
                 // Best-effort: the write already succeeded.
             }
         } finally {
+            // Whatever landed, the next read re-derives (rank 5 memo).
+            \SugarCraft\Code\Config\MergedConfigMemo::invalidate();
             $lock->release();
         }
     }

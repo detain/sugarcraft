@@ -541,7 +541,10 @@ final class ReadPathCensusTest extends TestCase
                 . 'from its caller and in production is handed '
                 . 'Bootstrap::userSettingsDirOrNull() — trustedConfigDirPath(), the home-OWNED '
                 . '~/.candy-code, deliberately NOT dirname(userConfigPath()) and so not '
-                . 'relocatable by --config',
+                . 'relocatable by --config. Since the rank-5 memo the sink itself sits in fileBytes(), '
+                . 'which MergedConfigMemo::fileTiers() also calls, with the same paths only: the '
+                . 'settings.json under userSettingsDirOrNull(), projectLayerPaths() (the same gates) '
+                . 'and Bootstrap::systemConfigPath()',
             // w1e (v1 F-4, spine commit 9c157d64e): the second sink is the
             // corrupt-file diagnosis re-read, same caller-holds-the-boundary
             // shape — keyAuditRows() hands it only the paths projectFiles()

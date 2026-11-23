@@ -127,6 +127,10 @@ final class SettingsFileWatch
             return [];
         }
 
+        // A moved fingerprint is an edit (or a forced look): drop the merged
+        // config memo so the re-derivation below, and every read after it,
+        // decodes the files afresh rather than trusting the memo's own key.
+        MergedConfigMemo::invalidate();
         $merged = self::mergeView();
         $changed = [];
         foreach ($merged as $key => $value) {
