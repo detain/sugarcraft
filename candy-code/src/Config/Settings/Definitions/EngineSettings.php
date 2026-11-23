@@ -90,7 +90,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.streamIdleTimeoutSeconds.label'))
                 ->withHelp(Lang::t('settings.streamIdleTimeoutSeconds.help'))
                 ->withReaderSymbol(CustomProvider::class . '::streamReadIdleTimeoutSeconds')
-                ->withReadBy('`HttpClientDefaults::streamReadIdleTimeoutSeconds()`, per streaming request'),
+                ->withReadBy('`HttpClientDefaults::streamReadIdleTimeoutSeconds()`, once per turn (turn-start `HttpSettingsSnapshot`); live per streaming request outside a turn'),
             SettingDefinition::new('streamHeaderTimeoutSeconds', SettingType::Float, 120.0)
                 ->withCategory(SettingCategory::Advanced)
                 ->withRiskClass(RiskClass::Tuning)
@@ -101,7 +101,7 @@ final class EngineSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.streamHeaderTimeoutSeconds.label'))
                 ->withHelp(Lang::t('settings.streamHeaderTimeoutSeconds.help'))
                 ->withReaderSymbol(CustomProvider::class . '::streamHeaderTimeoutSeconds')
-                ->withReadBy('`HttpClientDefaults::streamHeaderTimeoutSeconds()`, per streaming request; `BedrockProvider::completeStream()`, per-operation on ConverseStream'),
+                ->withReadBy('`HttpClientDefaults::streamHeaderTimeoutSeconds()`, once per turn (turn-start `HttpSettingsSnapshot`), live per streaming request outside a turn; `BedrockProvider::completeStream()`, per-operation on ConverseStream'),
             SettingDefinition::new('providerRetryAttempts', SettingType::Int, TransientFailure::MAX_ATTEMPTS)
                 ->withCategory(SettingCategory::Advanced)
                 ->withRiskClass(RiskClass::Tuning)
