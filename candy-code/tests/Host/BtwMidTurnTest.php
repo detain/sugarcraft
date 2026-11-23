@@ -82,10 +82,14 @@ final class BtwMidTurnTest extends TestCase
         self::assertSame('/btw what did we decide?', $questionRow->content);
         self::assertTrue($questionRow->uiOnly, 'the side question never rides the running turn');
 
-        // The side call went to the title model, framed as every side call is.
-        self::assertSame(BtwHostCommand::PROMPT, $title->sent[0]->content);
+        // The side call starts on the next loop tick (CC5-1: the host runs an
+        // Async effect through AsyncOps::deferred), never inside runCommand.
+        self::assertSame([], $title->sent, 'the side call has not gone out inside the dispatch');
 
         self::drain($host, static fn (SessionHost $h): bool => self::hasRow($h, 'We decided to ship the door.'));
+
+        // The side call went to the title model, framed as every side call is.
+        self::assertSame(BtwHostCommand::PROMPT, $title->sent[0]->content);
 
         // The turn finishes AFTER the answer landed; its settle must not
         // swallow the UI-only rows the command appended mid-turn.

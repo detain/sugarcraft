@@ -13,6 +13,7 @@ use SugarCraft\Code\Host\TurnTicket;
 use React\EventLoop\Loop;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\AsyncOps;
 use SugarCraft\Code\Agents\Live\SessionMailbox;
 use SugarCraft\Code\Agents\PrimaryAgent;
 use SugarCraft\Code\App\AssistantMsg;
@@ -439,18 +440,26 @@ trait SessionCommands
         $this->announce(SessionEvent::new(SessionEvent::CONTEXT_CHANGED, ['reason' => 'compaction'], $this->sessionId));
     }
 
+    /**
+     * Start an Async effect's thunk on the next loop tick, as the TUI's
+     * `Cmd::promise` does, so a thunk with synchronous work up front (a git
+     * commit, a spawn) never runs inside the dispatch that applied the
+     * command (P1-6, AUD §7 row 2). A thunk that throws becomes the deferred
+     * promise's rejection and lands the same flagged row a rejection does;
+     * only an effect that carries no thunk at all is refused synchronously.
+     */
     private function runAsync(CommandEffect $effect): void
     {
         $describe = $effect->describe();
         try {
-            $promise = ($effect->run())();
+            $run = $effect->run();
         } catch (\Throwable $e) {
             $this->appendCommandRow(Lang::t('host.command.error', ['error' => $e->getMessage()]), true);
 
             return;
         }
 
-        $promise->then(
+        AsyncOps::deferred(static fn (): mixed => $run())->then(
             function (mixed $value) use ($describe): void {
                 // The TUI's settled arm drops a shell-send answer after a /clear;
                 // the headless driver checks the same generation (P4-12 CC-1).

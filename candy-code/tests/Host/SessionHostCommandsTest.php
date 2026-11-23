@@ -18,12 +18,14 @@ use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
+use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
 use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\ShellsCommand;
 use SugarCraft\Code\Host\SessionHost;
 use SugarCraft\Code\Host\TurnTicket;
 use SugarCraft\Code\Host\WorkspaceContext;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -662,6 +664,124 @@ final class SessionHostCommandsTest extends TestCase
         self::assertSame(1, substr_count($text, '->withUiOnly()->withError($error)'), 'the row builder is the flag single point');
         self::assertStringContainsString('private function appendCommandRow(string $text, bool $error = false): void', $text, 'the flag stays opt-in for the success arms');
         self::assertStringContainsString('$land = function (string|Message $report, bool $error = false)', $text, 'and the occupying path forwards its verdict through the landing closure');
+    }
+
+    // ── CC5-1: an Async effect's thunk starts through AsyncOps::deferred ──
+
+    public function testAnAsyncEffectStartsOnTheNextTickAndLandsItsRowAfterTheEcho(): void
+    {
+        $host = $this->host();
+        $started = 0;
+        $result = CommandResult::echo('/probe')->withEffect(CommandEffect::async(
+            static function () use (&$started): PromiseInterface {
+                $started++;
+
+                return \React\Promise\resolve('settled');
+            },
+            static fn (mixed $value): Message => Message::assistant('answer: ' . $value)->withUiOnly(),
+        ));
+
+        $this->applyResult($host, $result);
+
+        self::assertSame(0, $started, 'the thunk starts on the next loop tick, never inside the dispatch');
+        self::assertSame([['user', '/probe', true]], self::rows($host->history()));
+
+        $this->tick();
+
+        self::assertSame(1, $started, 'the deferred tick starts the thunk exactly once');
+        self::assertSame(
+            [['user', '/probe', true], ['assistant', 'answer: settled', true]],
+            self::rows($host->history()),
+        );
+        self::assertSame([], self::flaggedRows($host), 'a settled run lands an unflagged row');
+    }
+
+    public function testAPendingAsyncEffectLandsItsRowOnlyWhenItSettles(): void
+    {
+        $host = $this->host();
+        $gate = new Deferred();
+        $result = CommandResult::echo('/probe')->withEffect(CommandEffect::async(
+            static fn (): PromiseInterface => $gate->promise(),
+            static fn (mixed $value): Message => Message::assistant('answer: ' . $value)->withUiOnly(),
+        ));
+
+        $this->applyResult($host, $result);
+        $this->tick();
+
+        self::assertSame([['user', '/probe', true]], self::rows($host->history()), 'nothing lands while the run is pending');
+
+        $gate->resolve('late');
+
+        self::assertSame(
+            [['user', '/probe', true], ['assistant', 'answer: late', true]],
+            self::rows($host->history()),
+        );
+    }
+
+    public function testAnAsyncEffectWhoseDescribeReturnsNullLandsNoRow(): void
+    {
+        $host = $this->host();
+        $result = CommandResult::echo('/probe')->withEffect(CommandEffect::async(
+            static fn (): PromiseInterface => \React\Promise\resolve('quiet'),
+            static fn (mixed $value): ?Message => null,
+        ));
+
+        $this->applyResult($host, $result);
+        $this->tick();
+
+        self::assertSame([['user', '/probe', true]], self::rows($host->history()));
+    }
+
+    public function testAThrowingAsyncThunkLandsTheFlaggedCommandErrorRow(): void
+    {
+        $host = $this->host();
+        $result = CommandResult::echo('/probe')->withEffect(CommandEffect::async(
+            static function (): PromiseInterface {
+                throw new \RuntimeException('thunk blew up');
+            },
+        ));
+
+        $this->applyResult($host, $result);
+        $this->tick();
+
+        $flagged = self::flaggedRows($host);
+        self::assertCount(1, $flagged);
+        self::assertSame(Lang::t('host.command.error', ['error' => 'thunk blew up']), $flagged[0]->content);
+        self::assertTrue($flagged[0]->uiOnly);
+    }
+
+    public function testARejectingAsyncThunkLandsTheFlaggedCommandErrorRow(): void
+    {
+        $host = $this->host();
+        $result = CommandResult::echo('/probe')->withEffect(CommandEffect::async(
+            static fn (): PromiseInterface => \React\Promise\reject(new \RuntimeException('run refused')),
+        ));
+
+        $this->applyResult($host, $result);
+        $this->tick();
+
+        $flagged = self::flaggedRows($host);
+        self::assertCount(1, $flagged);
+        self::assertSame(Lang::t('host.command.error', ['error' => 'run refused']), $flagged[0]->content);
+        self::assertTrue($flagged[0]->uiOnly);
+    }
+
+    /** Apply $result to $host the way a dispatched command's result is applied. */
+    private function applyResult(SessionHost $host, CommandResult $result): void
+    {
+        (function (CommandResult $result): void {
+            $this->applyCommandResult($result);
+        })->call($host, $result);
+    }
+
+    /** Run the shared loop for one tick: every futureTick queued so far runs, then it stops. */
+    private function tick(): void
+    {
+        $loop = Loop::get();
+        $loop->futureTick(static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
     }
 
     /** @return list<Message> the error-flagged rows of $host's transcript */
