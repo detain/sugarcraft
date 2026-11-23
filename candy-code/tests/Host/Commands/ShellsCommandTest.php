@@ -456,7 +456,7 @@ final class ShellsCommandTest extends TestCase
         // The relay attaching in the window is what used to let the second
         // send type at once, ahead of the first.
         for ($i = 0; $i < 200 && !ShellSend::relayAttached($registry->status($id) ?? []); $i++) {
-            usleep(25_000);
+            $this->drainLoop();
         }
         self::assertTrue(ShellSend::relayAttached($registry->status($id) ?? []), 'the relay attaches within the budget');
 
