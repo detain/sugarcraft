@@ -7,6 +7,9 @@ namespace SugarCraft\Code\Cli;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Config\LayeredSettings;
+use SugarCraft\Code\Config\Settings\SettingSource;
+use SugarCraft\Code\Config\Settings\SettingsResolver;
+use SugarCraft\Code\Config\Settings\SettingsSchema;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\LSP\LspClient;
 use SugarCraft\Code\MCP\McpClient;
@@ -2302,13 +2305,19 @@ final class LaunchContext
      */
     public static function selectedModelName(string $providerName): ?string
     {
-        if (LaunchContext::modelOverride() !== null) {
-            return LaunchContext::modelOverride();
-        }
-
+        // THE FLAG AND THE VARIABLE GO THROUGH THE TYPED RESOLVER (AUD §2 #54)
+        // the settings view explains `models` with, so the value it shows as
+        // "set by $CANDY_CODE_MODEL" or "set by --model" is the value this
+        // launch runs: one reading of empty-means-absent, one precedence.
+        $definition = SettingsSchema::byKey('models') ?? throw new \LogicException('the settings schema lost `models`');
         $env = getenv('CANDY_CODE_MODEL');
-        if ($env !== false && $env !== '') {
-            return $env;
+        $override = LaunchContext::modelOverride();
+        $resolved = SettingsResolver::new()
+            ->withEnvironment(\is_string($env) ? [(string) $definition->envVar => $env] : [])
+            ->withFlags($override === null ? [] : [(string) $definition->cliFlag => $override])
+            ->resolve($definition);
+        if ($resolved->source === SettingSource::Flag || $resolved->source === SettingSource::Env) {
+            return (string) $resolved->value;
         }
 
         // The layered read, so `models` in `~/.candy-code/settings.json` counts

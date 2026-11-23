@@ -1002,6 +1002,7 @@ candy-code/tests/Agents/BlankReturnEngineExecutorTest.php	0.102	5
 candy-code/tests/Cli/DoctorChecksTest.php	0.101	9
 candy-code/tests/Chat/AutoMemoryConsolidationWiringTest.php	0.100	4
 candy-code/tests/Cli/BootstrapLayeredSettingsTest.php	0.100	66
+candy-code/tests/Config/MergedConfigMemoTest.php	0.100	10
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.098	146
 candy-code/tests/Tui/RendererTest.php	0.098	23
 candy-code/tests/Backend/SessionPromptMemoPrimeTest.php	0.098	3
@@ -1244,7 +1245,7 @@ candy-code/tests/Bundles/BundleDiscoveryTest.php	0.036	19
 candy-code/tests/Agents/PrimaryAgentTest.php	0.036	11
 candy-code/tests/Tools/BuiltIn/EditMultiEditTest.php	0.036	9
 candy-code/tests/Cli/ArgvParserPositionalTest.php	0.035	37
-candy-code/tests/Cli/PersistedModelResolutionTest.php	0.035	8
+candy-code/tests/Cli/PersistedModelResolutionTest.php	0.035	13
 candy-code/tests/Tui/AmbientColorProfileTest.php	0.035	5
 candy-code/tests/Cli/RulesStateWiringTest.php	0.034	5
 candy-code/tests/Hooks/ProtectFilesPolicySurfacesTest.php	0.034	28

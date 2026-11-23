@@ -6,7 +6,11 @@ namespace SugarCraft\Code\Tests\Cli;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Config\LayeredSettings;
+use SugarCraft\Code\Config\Settings\SettingSource;
+use SugarCraft\Code\Config\Settings\SettingsSchema;
+use SugarCraft\Code\Tui\Settings\SettingsSources;
 use SugarCraft\Code\Tests\Support\BackendSelectionEnvSandboxTrait;
 
 /**
@@ -144,6 +148,66 @@ final class PersistedModelResolutionTest extends TestCase
         self::assertNotContains('model', LayeredSettings::LAYERED_KEYS);
         self::assertContains('models', LayeredSettings::LAYERED_KEYS);
         self::assertNotContains('models', LayeredSettings::PROJECT_TIER_KEYS);
+    }
+
+    /**
+     * AUD §2 #54: the launch reads `$CANDY_CODE_MODEL` through the same typed
+     * resolver the settings view explains `models` with, so the value the view
+     * shows as "set by $CANDY_CODE_MODEL" is the value the launch runs —
+     * including a value with surrounding spaces, which neither path trims.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('environmentModels')]
+    public function testTheEnvironmentModelResolvesIdenticallyOnTheLaunchAndTheTuiPaths(string $value): void
+    {
+        $this->writeConfig(['models' => ['openai' => 'gpt-persisted']]);
+        putenv('CANDY_CODE_MODEL=' . $value);
+
+        $tui = $this->tuiResolution(['CANDY_CODE_MODEL' => $value], []);
+
+        self::assertSame(SettingSource::Env, $tui->source);
+        self::assertSame($tui->value, LaunchContext::selectedModelName('openai'));
+        self::assertSame($value, LaunchContext::selectedModelName('openai'));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function environmentModels(): iterable
+    {
+        yield 'a plain id' => ['from-the-environment'];
+        yield 'surrounding spaces kept' => [' spaced-model '];
+        yield 'a zero is a value, not a disable flag' => ['0'];
+    }
+
+    public function testAnEmptyEnvironmentModelIsAbsentOnBothPaths(): void
+    {
+        $this->writeConfig(['models' => ['openai' => 'gpt-persisted']]);
+        putenv('CANDY_CODE_MODEL=');
+
+        self::assertNotSame(SettingSource::Env, $this->tuiResolution(['CANDY_CODE_MODEL' => ''], [])->source);
+        self::assertSame('gpt-persisted', LaunchContext::selectedModelName('openai'), 'empty is absence: the persisted entry answers');
+    }
+
+    public function testTheFlagOutranksTheEnvironmentOnBothPaths(): void
+    {
+        putenv('CANDY_CODE_MODEL=from-the-environment');
+        Bootstrap::useModel('from-the-flag');
+
+        $tui = $this->tuiResolution(['CANDY_CODE_MODEL' => 'from-the-environment'], ['--model' => 'from-the-flag']);
+
+        self::assertSame(SettingSource::Flag, $tui->source);
+        self::assertSame($tui->value, LaunchContext::selectedModelName('openai'));
+    }
+
+    /**
+     * @param array<string, string> $env
+     * @param array<string, mixed> $flags
+     */
+    private function tuiResolution(array $env, array $flags): \SugarCraft\Code\Config\Settings\ResolvedSetting
+    {
+        $definition = SettingsSchema::byKey('models');
+        self::assertNotNull($definition);
+
+        return SettingsSources::fromLaunch(null, null, $this->tempDir . '/home/.candy-code', Bootstrap::userConfigPath(), $env, $flags)
+            ->resolver->resolve($definition);
     }
 
     /** @param array<string, mixed> $config */
