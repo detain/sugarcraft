@@ -497,10 +497,10 @@ final class LaunchContext
     }
 
     /**
-     * The launch flags the settings view explains, by spelling: `--model` and
-     * `--permission-mode` when this launch set them. Every door that builds a
-     * {@see \SugarCraft\Code\Tui\Settings\SettingsSources::fromLaunch()} hands
-     * it this list, so the view's Flag layer names the model this launch runs
+     * The launch flags the TUI settings view explains, by spelling: `--model`
+     * and `--permission-mode` when this launch set them. The TUI view already
+     * explained `--permission-mode` before CC-4-2; `--model` joins it so the
+     * view's Flag layer names the model this launch runs
      * ({@see selectedModelName()} reads the same `--model`).
      *
      * @return array<string, string>
@@ -511,11 +511,22 @@ final class LaunchContext
         if (self::$permissionModeOverride !== null) {
             $flags['--permission-mode'] = self::$permissionModeOverride;
         }
-        if (self::$modelOverride !== null) {
-            $flags['--model'] = self::$modelOverride;
-        }
 
-        return $flags;
+        return $flags + self::modelSettingsFlags();
+    }
+
+    /**
+     * `--model` alone, for the doors that explained no launch flag before
+     * CC-4-2: the `config` subcommand and serve's settings methods. They gain
+     * only the model half; whether they should also report `--permission-mode`
+     * as a Flag is an owner call outside CC-4-2, so their permissionMode rows
+     * keep their earlier value, source and lock.
+     *
+     * @return array<string, string>
+     */
+    public static function modelSettingsFlags(): array
+    {
+        return self::$modelOverride === null ? [] : ['--model' => self::$modelOverride];
     }
 
     /**

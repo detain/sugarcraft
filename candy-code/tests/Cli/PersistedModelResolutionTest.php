@@ -42,12 +42,14 @@ final class PersistedModelResolutionTest extends TestCase
 
         $this->clearBackendSelectionEnv();
         Bootstrap::useModel(null);
+        Bootstrap::usePermissionMode(null);
         Bootstrap::useConfigPath(null);
     }
 
     protected function tearDown(): void
     {
         Bootstrap::useModel(null);
+        Bootstrap::usePermissionMode(null);
         Bootstrap::useConfigPath(null);
 
         if ($this->originalHome !== '') {
@@ -228,6 +230,36 @@ final class PersistedModelResolutionTest extends TestCase
 
         self::assertNotSame(SettingSource::Flag, $view->source);
         self::assertArrayNotHasKey('--model', LaunchContext::settingsFlags());
+    }
+
+    /**
+     * CC-4-2 hands the `config` subcommand and serve's settings methods
+     * `--model` only: before it they explained no launch flag, and reporting
+     * `--permission-mode` as a locked Flag there is a separate owner call. The
+     * TUI view keeps the `--permission-mode` it explained before.
+     */
+    public function testTheHeadlessDoorsGainTheModelFlagButNotThePermissionModeFlag(): void
+    {
+        Bootstrap::useModel('from-the-flag');
+        Bootstrap::usePermissionMode('plan');
+
+        self::assertSame(['--model' => 'from-the-flag'], LaunchContext::modelSettingsFlags());
+        self::assertSame(['--permission-mode' => 'plan', '--model' => 'from-the-flag'], LaunchContext::settingsFlags());
+
+        $permissionMode = SettingsSchema::byKey('permissionMode');
+        self::assertNotNull($permissionMode);
+        $headless = SettingsSources::fromLaunch(null, null, $this->tempDir . '/home/.candy-code', Bootstrap::userConfigPath(), [], LaunchContext::modelSettingsFlags())
+            ->resolver->resolve($permissionMode);
+        self::assertNotSame(SettingSource::Flag, $headless->source);
+        self::assertNotSame('plan', $headless->value);
+
+        // The two doors by class, not by path: each hands fromLaunch() the
+        // model-only list.
+        foreach ([\SugarCraft\Code\Cli\Subcommands::class, \SugarCraft\Code\Protocol\Methods\SettingsMethods::class] as $door) {
+            $code = (string) file_get_contents((string) (new \ReflectionClass($door))->getFileName());
+            self::assertStringContainsString('LaunchContext::modelSettingsFlags()', $code, $door);
+            self::assertStringNotContainsString('LaunchContext::settingsFlags()', $code, $door);
+        }
     }
 
     /**

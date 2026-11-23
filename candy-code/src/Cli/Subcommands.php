@@ -249,7 +249,7 @@ final class Subcommands
                 Bootstrap::userSettingsDirOrNull(),
                 Bootstrap::userConfigPath(),
                 \array_filter(\getenv(), 'is_string'),
-                LaunchContext::settingsFlags(),
+                LaunchContext::modelSettingsFlags(),
             );
             $resolved = $sources->resolver->resolveAll();
         } catch (\Throwable $e) {
