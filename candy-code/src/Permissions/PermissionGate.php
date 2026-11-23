@@ -2254,6 +2254,15 @@ final class PermissionGate
      * when a quote is left unterminated. Otherwise returns the words with their
      * quotes removed.
      *
+     * NOT A COPY OF {@see ShellWords}, checked when the lexers were audited for
+     * duplication (CC4-3, 2026-11-22). Its job is to REFUSE: it grants a write,
+     * so it rejects `\`, `!`, `{`, `}` and every operator outright, where
+     * ShellWords decodes or splits on them for callers that deny. Its words
+     * also differ on purpose: a `#` is a literal path byte here (`mkdir #x`
+     * names `#x`), where ShellWords reads a comment and drops it. Rebuilding
+     * this on ShellWords would either change those answers or need a second
+     * quote scanner anyway to see the refused bytes ShellWords consumes.
+     *
      * @return string[]|null
      */
     private function tokenizeSingleCommand(string $command): ?array

@@ -1276,6 +1276,7 @@ candy-code/tests/Tui/MediaForm/DisplayOverridesTest.php	0.030	12
 candy-code/tests/Chat/ChatConfigChangeDoorsDocumentationDriftTest.php	0.030	7
 candy-code/tests/Chat/GoalCommandTest.php	0.030	16
 candy-code/tests/Support/AiCommentWatcherTest.php	0.030	16
+candy-code/tests/Permissions/ShellWordsMemoTest.php	0.030	8
 candy-code/tests/Chat/CompressCommandsTest.php	0.029	6
 candy-code/tests/Tools/ProcessOutputCaptureTest.php	0.029	11
 candy-code/tests/Context/ModelFamilyPromptTest.php	0.029	32

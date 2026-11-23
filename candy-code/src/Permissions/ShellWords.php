@@ -135,8 +135,20 @@ final readonly class ShellWords
 
     /**
      * Tokenise `$line`. Never throws; malformed input yields `complete: false`.
+     *
+     * Parsed once per line: a repeat of the same text (the next rule checked
+     * for the same tool call, the session memo judging it again) gets the
+     * same immutable result from {@see ShellWordsMemo} instead of a new lex.
      */
     public static function parse(string $line): self
+    {
+        return ShellWordsMemo::remember($line, static fn (): self => self::lex($line));
+    }
+
+    /**
+     * The tokeniser itself; see {@see parse()}.
+     */
+    private static function lex(string $line): self
     {
         $length = strlen($line);
         $commands = [];
