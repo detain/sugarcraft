@@ -16,6 +16,7 @@ use SugarCraft\Code\Host\Commands\CommandResult;
 use SugarCraft\Code\Host\Commands\ShellsCommand;
 use SugarCraft\Code\Host\WorkspaceContext;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Tools\BuiltIn\ShellSend;
 
 /**
  * C-TOOL-3.d command surface: `/shells` lists the session's own background
@@ -431,6 +432,44 @@ final class ShellsCommandTest extends TestCase
         $this->drainLoop();
         $settled = $this->settledBody($result);
         self::assertNotSame('', $settled, 'running the effect performs the queued send and settles its row');
+    }
+
+    public function testASendDispatchedBeforeAnEarlierQueuedSendStartsQueuesBehindIt(): void
+    {
+        $registry = $this->shellsRegistry();
+        $start = $registry->startInteractive('cat', 'unstarted queue', 80, 24);
+        self::assertTrue($start['ok']);
+        $id = (string) $start['shell']['id'];
+        $this->trackShell($registry, $id);
+
+        // Hold the slot so the first send is queued, then free it again before
+        // the first send's thunk runs: a driver that starts the thunk a tick
+        // later (SessionHost) leaves exactly this window.
+        $gate = new Deferred();
+        ShellsCommand::sequenced($registry, $id, static fn (): PromiseInterface => $gate->promise());
+        $first = $this->dispatchShells($registry, '/shells send ' . $id . ' first<Enter>');
+        self::assertNotNull($first->effect(CommandEffectKind::Async), 'the first send is queued behind the held slot');
+        $gate->resolve(true);
+        $this->drainLoop();
+        self::assertSame([], $this->sendTails($registry), 'the held slot is free and the first send has not started');
+
+        // The relay attaching in the window is what used to let the second
+        // send type at once, ahead of the first.
+        for ($i = 0; $i < 200 && !ShellSend::relayAttached($registry->status($id) ?? []); $i++) {
+            usleep(25_000);
+        }
+        self::assertTrue(ShellSend::relayAttached($registry->status($id) ?? []), 'the relay attaches within the budget');
+
+        $second = $this->dispatchShells($registry, '/shells send ' . $id . ' second<Enter>');
+        self::assertNotNull($second->effect(CommandEffectKind::Async), 'a send dispatched before an earlier queued send starts must queue behind it');
+
+        self::assertStringContainsString('Typed into shell ' . $id, $this->settledBody($first));
+        self::assertStringContainsString('Typed into shell ' . $id, $this->settledBody($second));
+
+        // Both queued sends have started, so nothing holds the shell: the next
+        // send to an attached relay types at once again.
+        $third = $this->dispatchShells($registry, '/shells send ' . $id . ' third<Enter>');
+        self::assertNull($third->effect(CommandEffectKind::Async), 'a started send releases its queued count');
     }
 
     public function testTheSettledSendCarriesTheTranscriptEpochItWasTypedUnder(): void

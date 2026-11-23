@@ -13,6 +13,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Code\Backend\EchoBackend;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Background\BackgroundShellRegistry;
+use SugarCraft\Code\App\ShellSendSettledMsg;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandSpec;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
@@ -764,6 +765,54 @@ final class SessionHostCommandsTest extends TestCase
         self::assertCount(1, $flagged);
         self::assertSame(Lang::t('host.command.error', ['error' => 'run refused']), $flagged[0]->content);
         self::assertTrue($flagged[0]->uiOnly);
+    }
+
+    public function testAShellSendAnswerTypedBeforeAClearLandsNothingAfterIt(): void
+    {
+        $host = $this->host();
+        $stale = new Deferred();
+        $fresh = new Deferred();
+        $describe = static fn (mixed $settled): ?Message => $settled instanceof ShellSendSettledMsg ? $settled->message : null;
+
+        $this->applyResult($host, CommandResult::echo('/shells send old')->withEffect(
+            CommandEffect::async(static fn (): PromiseInterface => $stale->promise(), $describe),
+        ));
+        $this->tick();
+        $this->applyResult($host, CommandResult::new()->withEffect(CommandEffect::clearTranscript()));
+        $this->applyResult($host, CommandResult::echo('/shells send new')->withEffect(
+            CommandEffect::async(static fn (): PromiseInterface => $fresh->promise(), $describe),
+        ));
+        $this->tick();
+
+        $stale->resolve(new ShellSendSettledMsg(Message::assistant('old answer')->withUiOnly(), 's', 0));
+        $fresh->resolve(new ShellSendSettledMsg(Message::assistant('new answer')->withUiOnly(), 's', 1));
+
+        self::assertSame(
+            [['user', '/shells send new', true], ['assistant', 'new answer', true]],
+            self::rows($host->history()),
+            'the answer typed under the cleared transcript is dropped; one typed under the current one lands',
+        );
+    }
+
+    public function testAnAsyncEffectWithNoThunkIsRefusedInsideTheDispatch(): void
+    {
+        $host = $this->host();
+        // No public factory builds an Async effect without a run thunk, so the
+        // private constructor is reached from the class's own scope.
+        $bare = \Closure::bind(
+            static fn (): CommandEffect => new CommandEffect(CommandEffectKind::Async, []),
+            null,
+            CommandEffect::class,
+        )();
+
+        $this->applyResult($host, CommandResult::echo('/probe')->withEffect($bare));
+
+        $flagged = self::flaggedRows($host);
+        self::assertCount(1, $flagged, 'the refusal lands inside the dispatch, before any loop tick');
+        self::assertSame(
+            Lang::t('host.command.error', ['error' => 'A ' . CommandEffectKind::Async->value . ' effect runs nothing.']),
+            $flagged[0]->content,
+        );
     }
 
     /** Apply $result to $host the way a dispatched command's result is applied. */

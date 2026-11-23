@@ -225,20 +225,25 @@ final class ShellsCommand implements HostCommand
         // Building the result claims no queue slot and arms no timer: the
         // sequenced() chain, the relay wait and the registry write all start
         // inside the thunk, when the driver runs the effect (CommandEffect).
+        // It only counts the send as queued until its thunk starts: a driver
+        // may start the thunk a loop tick later (SessionHost defers it), and a
+        // send dispatched in that window after the relay attached would
+        // otherwise type at once, ahead of these bytes. A result that is never
+        // run leaves the count up, which only routes later sends through the
+        // queue; it never holds one back.
         if ($behindRelay || self::sendInFlight($registry, $id)) {
+            self::countQueued($registry, $id, 1);
+            $started = false;
+
             return CommandResult::echo($text)->withEffect(CommandEffect::async(
-                static fn (): PromiseInterface => self::sequenced($registry, $id, static fn (): PromiseInterface => self::relayGate($row)->then(
-                    static fn (bool $ready): ShellSendSettledMsg => new ShellSendSettledMsg(self::sendRow(
-                        $ready
-                            ? $registry->send($id, $decoded, 'human', $owner)
-                            : ['ok' => false, 'error' => Lang::t('host.shells.send_not_ready', [
-                                'id' => $id,
-                                'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
-                            ])],
-                        $id,
-                        $decoded,
-                    ), $owner, $transcriptEpoch),
-                )),
+                static function () use ($registry, $id, $row, $decoded, $owner, $transcriptEpoch, &$started): PromiseInterface {
+                    if (!$started) {
+                        $started = true;
+                        self::countQueued($registry, $id, -1);
+                    }
+
+                    return self::queuedSend($registry, $id, $row, $decoded, $owner, $transcriptEpoch);
+                },
                 static fn (mixed $settled): ?Message => $settled instanceof ShellSendSettledMsg ? $settled->message : null,
             ));
         }
@@ -253,6 +258,30 @@ final class ShellsCommand implements HostCommand
             'bytes' => (string) \strlen($decoded),
             'cursor' => (string) (int) $answer['cursor'],
         ]));
+    }
+
+    /**
+     * The queued send's work: wait behind earlier sends to this shell and for
+     * the relay, then type, and settle with the row the send answers with.
+     *
+     * @param array<string, mixed>|null $row the shell's status row at dispatch
+     *
+     * @return PromiseInterface<ShellSendSettledMsg>
+     */
+    private static function queuedSend(BackgroundShellRegistry $registry, string $id, ?array $row, string $decoded, ?string $owner, int $transcriptEpoch): PromiseInterface
+    {
+        return self::sequenced($registry, $id, static fn (): PromiseInterface => self::relayGate($row)->then(
+            static fn (bool $ready): ShellSendSettledMsg => new ShellSendSettledMsg(self::sendRow(
+                $ready
+                    ? $registry->send($id, $decoded, 'human', $owner)
+                    : ['ok' => false, 'error' => Lang::t('host.shells.send_not_ready', [
+                        'id' => $id,
+                        'ms' => (string) ShellSend::RELAY_ATTACH_BUDGET_MS,
+                    ])],
+                $id,
+                $decoded,
+            ), $owner, $transcriptEpoch),
+        ));
     }
 
     /**
@@ -331,9 +360,30 @@ final class ShellsCommand implements HostCommand
         return $settled;
     }
 
+    /**
+     * Queued sends per registry and shell id whose thunk has not started yet,
+     * so they hold no slot in {@see self::$sendTails} so far.
+     *
+     * @var \WeakMap<BackgroundShellRegistry, array<string, int>>|null
+     */
+    private static ?\WeakMap $sendsQueued = null;
+
+    private static function countQueued(BackgroundShellRegistry $registry, string $id, int $delta): void
+    {
+        self::$sendsQueued ??= new \WeakMap();
+        $counts = self::$sendsQueued[$registry] ?? [];
+        $count = ($counts[$id] ?? 0) + $delta;
+        if ($count > 0) {
+            $counts[$id] = $count;
+        } else {
+            unset($counts[$id]);
+        }
+        self::$sendsQueued[$registry] = $counts;
+    }
+
     private static function sendInFlight(BackgroundShellRegistry $registry, string $id): bool
     {
-        return isset(self::$sendTails[$registry][$id]);
+        return isset(self::$sendTails[$registry][$id]) || isset(self::$sendsQueued[$registry][$id]);
     }
 
     /**
