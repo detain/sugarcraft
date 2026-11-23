@@ -1153,6 +1153,7 @@ candy-code/tests/Tui/MediaForm/FormTabsTest.php	0.050	10
 candy-code/tests/Providers/ToolCallParser/DsmlToolCallParserTest.php	0.050	39
 candy-code/tests/Cli/BootstrapProjectTrustGrantTest.php	0.050	10
 candy-code/tests/Host/UltrathinkTurnTest.php	0.050	18
+candy-code/tests/Permissions/ShellDecisionPinTest.php	0.050	44
 candy-code/tests/Attachments/WorkspaceWalkTest.php	0.049	7
 candy-code/tests/Bundles/BundleInstallTest.php	0.049	23
 candy-code/tests/Config/ReadmeRosterDriftTest.php	0.049	10
