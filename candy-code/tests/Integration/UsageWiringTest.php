@@ -29,9 +29,8 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\SglangProvider;
 use SugarCraft\Code\Providers\VertexProvider;
 use SugarCraft\Code\Runtime;
-use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Tests\Support\ClockTool;
 use SugarCraft\Code\Tools\ToolCall;
-use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Usage;
 
 /**
@@ -87,7 +86,7 @@ final class UsageWiringTest extends TestCase
 
         $backend = (new EngineBackend($provider, 'scripted'))
             ->withoutHooks()
-            ->withTools([$this->clockTool()]);
+            ->withTools([ClockTool::new()]);
 
         $reply = $backend->complete([Message::user('what time is it?')]);
 
@@ -120,7 +119,7 @@ final class UsageWiringTest extends TestCase
 
         $reply = (new EngineBackend($provider, 'scripted'))
             ->withoutHooks()
-            ->withTools([$this->clockTool()])
+            ->withTools([ClockTool::new()])
             ->complete([Message::user('what time is it?')]);
 
         $this->assertNotNull($reply->usage);
@@ -417,31 +416,6 @@ final class UsageWiringTest extends TestCase
             $this->assertNotNull($clone->usage, "{$method}() dropped the usage");
             $this->assertSame(21, $clone->usage->totalTokens, "{$method}() changed the usage");
         }
-    }
-
-    private function clockTool(): Tool
-    {
-        return new class implements Tool {
-            public function name(): string
-            {
-                return 'clock';
-            }
-
-            public function description(): string
-            {
-                return 'test tool';
-            }
-
-            public function inputSchema(): array
-            {
-                return [];
-            }
-
-            public function execute(array $args): ToolResult
-            {
-                return new ToolResult(toolCallId: 'call_1', content: 'noon');
-            }
-        };
     }
 
     // -------------------------------------------------------------------------

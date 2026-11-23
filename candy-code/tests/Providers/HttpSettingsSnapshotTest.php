@@ -21,10 +21,9 @@ use SugarCraft\Code\Providers\EmbeddingsResponse;
 use SugarCraft\Code\Providers\HttpSettingsSnapshot;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\SglangProvider;
+use SugarCraft\Code\Tests\Support\ClockTool;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
-use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
-use SugarCraft\Code\Tools\ToolResult;
 
 /**
  * AUD §7 rank 51: the settings `HttpClientDefaults` reads are snapshotted once
@@ -162,7 +161,7 @@ final class HttpSettingsSnapshotTest extends TestCase
 
         $turnA = new \Fiber(fn () => (new EngineBackend($providerA, 'scripted'))
             ->withoutHooks()
-            ->withTools([$this->clockTool()])
+            ->withTools([ClockTool::new()])
             ->complete([Message::user('what time is it?')]));
         $turnB = new \Fiber(static fn () => (new EngineBackend($providerB, 'scripted'))
             ->withoutHooks()
@@ -225,7 +224,7 @@ final class HttpSettingsSnapshotTest extends TestCase
 
         $reply = (new EngineBackend($provider, 'scripted'))
             ->withoutHooks()
-            ->withTools([$this->clockTool()])
+            ->withTools([ClockTool::new()])
             ->complete([Message::user('what time is it?')]);
 
         self::assertSame('it is noon', $reply->content, 'fixture: the loop ran two steps');
@@ -306,31 +305,6 @@ final class HttpSettingsSnapshotTest extends TestCase
             public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
             {
                 return new EmbeddingsResponse(embeddings: []);
-            }
-        };
-    }
-
-    private function clockTool(): Tool
-    {
-        return new class () implements Tool {
-            public function name(): string
-            {
-                return 'clock';
-            }
-
-            public function description(): string
-            {
-                return 'test tool';
-            }
-
-            public function inputSchema(): array
-            {
-                return [];
-            }
-
-            public function execute(array $args): ToolResult
-            {
-                return new ToolResult(toolCallId: 'call_1', content: 'noon');
             }
         };
     }
