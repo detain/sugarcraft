@@ -767,6 +767,7 @@ candy-code/tests/App/DockDividerZoneTest.php	0.308	7
 candy-code/tests/Protocol/ContextTrustTargetsTest.php	0.306	3
 candy-code/tests/Sessions/BackgroundAgentRunnerTest.php	0.305	7
 candy-code/tests/Host/TurnRunnerActiveSubagentsTest.php	0.302	4
+candy-code/tests/Providers/HttpSettingsSnapshotTest.php	0.300	4
 candy-code/tests/Backend/ChildChannelVerdictTest.php	0.296	2
 candy-code/tests/Chat/CompactModelSummaryTest.php	0.291	38
 candy-code/tests/Server/Pairing/QrEncoderTest.php	0.290	25
@@ -842,6 +843,7 @@ candy-code/tests/Renderer/CarriageReturnFrameTest.php	0.203	82
 candy-code/tests/Chat/ApplySettingsTest.php	0.201	14
 candy-code/tests/Cli/AppendSystemPromptTest.php	0.201	18
 candy-code/tests/Chat/MainMailboxWakeTest.php	0.200	4
+candy-code/tests/Memory/NoteParseMemoTest.php	0.200	8
 candy-code/tests/Bundles/BundleUpdateTest.php	0.199	10
 candy-code/tests/Context/MemorySettingsTest.php	0.198	18
 candy-code/tests/Tools/BuiltIn/MemoryToolTest.php	0.198	9

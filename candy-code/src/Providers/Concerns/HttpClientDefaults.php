@@ -176,8 +176,9 @@ trait HttpClientDefaults
 
     /**
      * The settings key that replaces {@see STREAM_READ_IDLE_TIMEOUT_SECONDS}.
-     * Read per streaming REQUEST by {@see streamTransportBounds()}, so a save
-     * applies from the next turn. Values under
+     * Read per streaming REQUEST by {@see streamTransportBounds()}, off the
+     * settings the turn snapshotted at its start, so a save applies from the
+     * next turn. Values under
      * {@see MIN_STREAM_READ_IDLE_TIMEOUT_SECONDS} fall back to the default: a
      * per-read bound that short would abort a model that is merely thinking,
      * which is the failure this whole seam exists to prevent.
@@ -212,7 +213,7 @@ trait HttpClientDefaults
 
     /**
      * The settings key for the header bound. Read per streaming REQUEST by
-     * {@see streamTransportBounds()}, mirroring
+     * {@see streamTransportBounds()}, off the turn's snapshot, mirroring
      * {@see STREAM_READ_IDLE_CONFIG_KEY}: a save applies from the next turn,
      * no client rebuild, no restart.
      */
@@ -768,14 +769,15 @@ trait HttpClientDefaults
      * `EngineBackend::userConfig()`, because a missing or malformed settings
      * file must cost the DEFAULT bounds, never a provider client.
      *
+     * Inside a turn this is the snapshot the turn took at its start
+     * ({@see \SugarCraft\Code\Providers\HttpSettingsSnapshot}, AUD §7 rank
+     * 51), so every request of the turn reads one config; outside a turn it
+     * is read live.
+     *
      * @return array<string, mixed>
      */
     private static function settingsConfig(): array
     {
-        try {
-            return \SugarCraft\Code\Cli\Bootstrap::readUserConfig();
-        } catch (\Throwable) {
-            return [];
-        }
+        return \SugarCraft\Code\Providers\HttpSettingsSnapshot::config();
     }
 }

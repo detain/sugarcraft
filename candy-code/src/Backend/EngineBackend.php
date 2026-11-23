@@ -50,6 +50,7 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\ToolDeclaration;
 use SugarCraft\Code\Providers\HonoursHostPermissionMode;
+use SugarCraft\Code\Providers\HttpSettingsSnapshot;
 use SugarCraft\Code\Providers\MarksPromptCache;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\RebindsModel;
@@ -1940,6 +1941,32 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      */
     private function runTurn(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript, ?callable $onStep = null, ?\Closure $stopRequested = null, ?TurnInbox $inbox = null): Message
     {
+        // Read once and hand to both resolvers, so a turn touches the config
+        // file at most one time however many settings are resolved off it.
+        // AUD §7 rank 51: the same read is the turn's HTTP settings snapshot,
+        // so every provider request of every step reads one config and a
+        // save applies from the next turn, as the keys document. Removed on
+        // the way out, however the turn ends, so no snapshot outlives its
+        // turn and a delegated run's nested turn hands its parent's back.
+        $userConfig = self::userConfig();
+        $httpSettings = HttpSettingsSnapshot::beginTurn($userConfig);
+        try {
+            return $this->runTurnSteps($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep, $stopRequested, $inbox, $userConfig);
+        } finally {
+            HttpSettingsSnapshot::endTurn($httpSettings);
+        }
+    }
+
+    /**
+     * {@see runTurn()}'s step loop, over the config the turn read at its start.
+     *
+     * @param list<TypedMessage> $messages
+     * @param list<TypedMessage> $transcript
+     * @param ?\Closure(): bool  $stopRequested
+     * @param array<string, mixed> $userConfig
+     */
+    private function runTurnSteps(array $messages, ?callable $onToken, ?callable $onEvent, ?callable $onReasoning, ?callable $onHeartbeat, array &$transcript, ?callable $onStep, ?\Closure $stopRequested, ?TurnInbox $inbox, array $userConfig): Message
+    {
         $transcript = $messages;
 
         // EVERY step's usage, not the last one's. This loop makes up to
@@ -1984,10 +2011,6 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
             return $siblingSpend?->spentByOthers()?->unpricedModel !== null;
         };
-
-        // Read once and hand to both resolvers, so a turn touches the config
-        // file at most one time however many settings are resolved off it.
-        $userConfig = self::userConfig();
 
         // @region build
         // One ledger per turn: a new turn is a new plan, so repeats are
