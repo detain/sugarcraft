@@ -103,6 +103,87 @@ final class HttpSettingsSnapshotTest extends TestCase
         self::assertSame(2, HttpSettingsSnapshot::taken());
     }
 
+    public function testATurnSuspendedInOneFiberKeepsItsSnapshotWhileAnotherFibersTurnRuns(): void
+    {
+        /** @var array<string, list<mixed>> $seen */
+        $seen = ['a' => [], 'b' => []];
+        $read = static function (string $who) use (&$seen): void {
+            $seen[$who][] = HttpSettingsSnapshot::config()['k'] ?? null;
+        };
+
+        $a = new \Fiber(static function () use ($read): void {
+            $scope = HttpSettingsSnapshot::forTurn(['k' => 'a']);
+            $read('a');
+            \Fiber::suspend();
+            $read('a');
+            \Fiber::suspend();
+            $read('a');
+            $scope->end();
+        });
+        $b = new \Fiber(static function () use ($read): void {
+            $scope = HttpSettingsSnapshot::forTurn(['k' => 'b']);
+            $read('b');
+            \Fiber::suspend();
+            $scope->end();
+        });
+
+        $a->start();
+        $b->start();
+        // B's turn is installed and newer: A must still read its own.
+        $a->resume();
+        self::assertFalse(HttpSettingsSnapshot::active(), 'no turn runs outside the fibers');
+        $b->resume();
+        // B's turn ended: A's reads do not flip with B's lifetime.
+        $a->resume();
+
+        self::assertSame(['a', 'a', 'a'], $seen['a']);
+        self::assertSame(['b'], $seen['b']);
+        self::assertFalse(HttpSettingsSnapshot::active());
+    }
+
+    public function testInterleavedEngineTurnsInTwoFibersEachReadTheirOwnTurnStartSettings(): void
+    {
+        /** @var array<string, list<mixed>> $seen */
+        $seen = ['a' => [], 'b' => []];
+        $onCall = static function (string $who) use (&$seen): \Closure {
+            return static function () use ($who, &$seen): void {
+                $seen[$who][] = HttpSettingsSnapshot::config()['streamIdleTimeoutSeconds'] ?? null;
+                \Fiber::suspend();
+            };
+        };
+        $providerA = $this->scriptedProvider(
+            [
+                new CompleteResponse(content: 'checking', toolCalls: [new ToolCall('call_1', 'clock', [])]),
+                new CompleteResponse(content: 'it is noon'),
+            ],
+            $onCall('a'),
+        );
+        $providerB = $this->scriptedProvider([new CompleteResponse(content: 'done')], $onCall('b'));
+
+        $turnA = new \Fiber(fn () => (new EngineBackend($providerA, 'scripted'))
+            ->withoutHooks()
+            ->withTools([$this->clockTool()])
+            ->complete([Message::user('what time is it?')]));
+        $turnB = new \Fiber(static fn () => (new EngineBackend($providerB, 'scripted'))
+            ->withoutHooks()
+            ->complete([Message::user('hi')]));
+
+        Bootstrap::writeUserConfig(['streamIdleTimeoutSeconds' => 60]);
+        $turnA->start();
+        // Saved while A is suspended; B starts after the save.
+        Bootstrap::writeUserConfig(['streamIdleTimeoutSeconds' => 900]);
+        $turnB->start();
+        $turnA->resume();
+        $turnB->resume();
+        $turnA->resume();
+
+        self::assertTrue($turnA->isTerminated() && $turnB->isTerminated(), 'fixture: both turns ran to the end');
+        self::assertSame('it is noon', $turnA->getReturn()->content, 'fixture: A ran two steps');
+        self::assertSame([60, 60], $seen['a'], 'A reads its own turn-start value while B\'s newer turn is live');
+        self::assertSame([900], $seen['b']);
+        self::assertFalse(HttpSettingsSnapshot::active());
+    }
+
     public function testAnEngineTurnThatThrowsLeavesNoSnapshotBehind(): void
     {
         $provider = $this->scriptedProvider([], static function (): void {
