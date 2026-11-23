@@ -53,7 +53,7 @@ final class HttpSettingsSnapshotTest extends TestCase
     {
         HttpSettingsSnapshot::resetForTesting();
         $this->restoreHomeSandbox();
-        exec('rm -rf ' . escapeshellarg($this->dir));
+        self::removeTree($this->dir);
         parent::tearDown();
     }
 
@@ -101,6 +101,36 @@ final class HttpSettingsSnapshotTest extends TestCase
 
         self::assertFalse(HttpSettingsSnapshot::active(), 'no snapshot outlives its turn');
         self::assertSame(2, HttpSettingsSnapshot::taken());
+    }
+
+    public function testTheTurnScopeEndsTheSnapshotWhenReleasedOrEnded(): void
+    {
+        $scope = HttpSettingsSnapshot::forTurn(['k' => 'turn']);
+        self::assertSame('turn', HttpSettingsSnapshot::config()['k'] ?? null);
+        unset($scope);
+        self::assertFalse(HttpSettingsSnapshot::active(), 'releasing the scope ends the snapshot');
+
+        $scope = HttpSettingsSnapshot::forTurn(['k' => 'turn']);
+        $scope->end();
+        $scope->end();
+        self::assertFalse(HttpSettingsSnapshot::active(), 'end() ends it, and a second end() is a no-op');
+    }
+
+    public function testAnEngineTurnThatThrowsLeavesNoSnapshotBehind(): void
+    {
+        $provider = $this->scriptedProvider([], static function (): void {
+            throw new \RuntimeException('provider down');
+        });
+
+        try {
+            (new EngineBackend($provider, 'scripted'))->withoutHooks()->complete([Message::user('hi')]);
+        } catch (\Throwable) {
+            // Whether the failure is thrown or folded into the reply, the
+            // snapshot must be gone once the turn is.
+        }
+
+        self::assertSame(1, HttpSettingsSnapshot::taken(), 'fixture: the turn did start');
+        self::assertFalse(HttpSettingsSnapshot::active());
     }
 
     public function testAMultiStepEngineTurnTakesOneSnapshotAndReadsItForEveryStep(): void
@@ -263,5 +293,20 @@ final class HttpSettingsSnapshotTest extends TestCase
         \assert($client instanceof Client);
 
         return $client;
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($items as $item) {
+            $item->isDir() && !$item->isLink() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+        @rmdir($dir);
     }
 }

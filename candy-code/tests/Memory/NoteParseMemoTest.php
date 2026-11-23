@@ -36,7 +36,7 @@ final class NoteParseMemoTest extends TestCase
     protected function tearDown(): void
     {
         NoteParseMemo::resetForTesting();
-        exec('rm -rf ' . escapeshellarg($this->dir));
+        self::removeTree($this->dir);
         parent::tearDown();
     }
 
@@ -159,5 +159,20 @@ final class NoteParseMemoTest extends TestCase
 
         self::assertLessThanOrEqual(NoteParseMemo::MAX_ENTRIES, NoteParseMemo::size());
         self::assertGreaterThan(0, NoteParseMemo::size());
+    }
+
+    private static function removeTree(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($items as $item) {
+            $item->isDir() && !$item->isLink() ? @rmdir($item->getPathname()) : @unlink($item->getPathname());
+        }
+        @rmdir($dir);
     }
 }

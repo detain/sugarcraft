@@ -15,9 +15,10 @@ namespace SugarCraft\Code\Providers;
  * documented `next turn` (docs/SETTINGS.md: "the engine re-reads the merged
  * settings at every turn start"), so the turn's start is the honest moment to
  * read them: {@see \SugarCraft\Code\Backend\EngineBackend}'s turn installs the
- * config it already reads once per turn with {@see beginTurn()}, every HTTP
- * read inside the turn answers from it, and {@see endTurn()} removes it
- * however the turn ends (a delegated run's turn nests inside its parent's).
+ * config it already reads once per turn with {@see forTurn()}, every HTTP
+ * read inside the turn answers from it, and the snapshot ends with the turn's
+ * frame however the turn ends (a delegated run's turn nests inside its
+ * parent's).
  *
  * OUTSIDE A TURN NOTHING CHANGES: with no snapshot installed,
  * {@see config()} reads the merged settings live, guarded the way the trait
@@ -58,6 +59,17 @@ final class HttpSettingsSnapshot
         self::$taken++;
 
         return $token;
+    }
+
+    /**
+     * {@see beginTurn()}, held by the returned scope: the snapshot ends when
+     * the scope is released or {@see HttpSettingsTurn::end()} is called.
+     *
+     * @param array<string, mixed> $config the merged settings, read once at the turn's start
+     */
+    public static function forTurn(array $config): HttpSettingsTurn
+    {
+        return new HttpSettingsTurn(self::beginTurn($config));
     }
 
     /** Remove the snapshot {@see beginTurn()} installed under $token. */
