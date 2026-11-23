@@ -1161,12 +1161,22 @@ final class MemoryStore
                 throw new \UnexpectedValueException('file could not be read');
             }
 
-            // Valid UTF-8 before the parse (audit 15d-08): the YAML reader
-            // refuses invalid bytes, which skipped the whole note, and a body
-            // that got past it reached the system prompt raw and failed the
-            // JSON encode of every request. A hand-edited note in a legacy
-            // encoding loses those characters to `?`, not the note.
-            $entry = $this->decode(Utf8Scrub::clean($content), $file);
+            // AUD §7 rank 40: an unchanged note is decoded once per process,
+            // not once per listing. The memo is keyed by the bytes and the
+            // mtime decode() dates an undated note by, read fresh here.
+            clearstatcache(true, $file);
+            $entry = NoteParseMemo::decode(
+                $file,
+                @filemtime($file),
+                $content,
+                // Valid UTF-8 before the parse (audit 15d-08): the YAML reader
+                // refuses invalid bytes, which skipped the whole note, and a
+                // body that got past it reached the system prompt raw and
+                // failed the JSON encode of every request. A hand-edited note
+                // in a legacy encoding loses those characters to `?`, not the
+                // note.
+                fn(): MemoryEntry => $this->decode(Utf8Scrub::clean($content), $file),
+            );
         } catch (\Throwable $e) {
             $this->skipped[$file] = $e->getMessage();
 
@@ -1362,10 +1372,14 @@ final class MemoryStore
     /**
      * Mark $file stale in the search index after this store changed it, so
      * the next {@see search()} re-reads it without relying on the mtime rule.
-     * Never opens an index no search has opened.
+     * Never opens an index no search has opened. The decoded-note memo drops
+     * its row too ({@see NoteParseMemo}), which its byte key makes redundant
+     * and keeps a read after a write a fresh decode.
      */
     private function forgetIndexed(string $file): void
     {
+        NoteParseMemo::forget($file);
+
         if ($this->searchIndex instanceof MemorySearchIndex) {
             $this->searchIndex->forget($file);
         }
