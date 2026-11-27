@@ -32,13 +32,29 @@ final class HtmlToMarkdownWithoutDomTest extends TestCase
         $this->assertSame('null', $this->runPhp($script));
     }
 
-    /** Run $code in a child PHP with no ini files, stdin closed; returns its trimmed stdout. */
+    /**
+     * Run $code in a child PHP with no ini files, stdin closed; returns its
+     * trimmed stdout and stderr.
+     *
+     * The child starts from an argument list, not a shell string: on Windows
+     * a shell string runs under cmd.exe, which has no /dev/null to redirect
+     * from (the child never starts, exit 1), and escapeshellarg() there turns
+     * every double quote inside the code into a space. The argument list
+     * reaches the child intact on every platform, and its stdin is a pipe
+     * closed before it reads.
+     */
     private function runPhp(string $code): string
     {
-        $command = escapeshellarg(PHP_BINARY) . ' -n -r ' . escapeshellarg($code) . ' < /dev/null 2>&1';
-        exec($command, $output, $status);
-        $this->assertSame(0, $status, 'child PHP failed: ' . implode("\n", $output));
+        $spec = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['redirect', 1]];
+        $process = proc_open([PHP_BINARY, '-n', '-r', $code], $spec, $pipes);
+        $this->assertIsResource($process, 'could not start the child PHP');
 
-        return trim(implode("\n", $output));
+        fclose($pipes[0]);
+        $output = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $status = proc_close($process);
+        $this->assertSame(0, $status, 'child PHP failed: ' . $output);
+
+        return trim($output);
     }
 }
