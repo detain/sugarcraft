@@ -25,15 +25,18 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
  * cursor were left. Other watchers run in between; a TUI driving this can
  * paint partial progress or abandon the generator to cancel.
  *
- * The budget is either a finite row cap or a wall-clock deadline, never
- * both: with a finite $rowsPerSlice the cap alone ends each slice and
- * $sliceMs is ignored (the clock is never read, so a slice of slow rows
- * runs as long as those rows take); only the unbounded cap (PHP_INT_MAX)
- * arms a deadline.
+ * A slice ends on either a finite row cap or a wall-clock deadline, never
+ * both: with a finite $rowsPerSlice the cap alone ends each slice, so the
+ * slice plan never moves with encode speed; only the unbounded cap
+ * (PHP_INT_MAX) closes slices on the clock. $sliceMs still paces the loop
+ * in both cases: each tick pumps through
+ * {@see PacedRenderSession::advanceUntil()} and yields once its $sliceMs is
+ * spent, mid-slice if need be, and the next tick resumes that same slice.
  *
- * The no-blanket-timeout rule, which must survive edits: when armed, the
- * deadline bounds EACH SLICE, never the whole render — so it is a fairness
- * device, not a timeout, and cannot truncate a slow-but-legitimate encode.
+ * The no-blanket-timeout rule, which must survive edits: the deadline
+ * bounds EACH SLICE (or each tick's share of one), never the whole render —
+ * so it is a fairness device, not a timeout, and cannot truncate a
+ * slow-but-legitimate encode.
  * There is no request-wide ceiling anywhere in this class by design.
  *
  * Cancellation is by abandonment (the port's prescription): drop the
@@ -53,12 +56,12 @@ final class PacedAsyncRenderer implements AsyncRenderer
 
     /**
      * @param IncrementalRenderer $renderer     The row-lazy encode source.
-     * @param int                 $sliceMs      Millisecond budget per slice (>= 1);
-     *                                          paces only the unbounded row cap.
+     * @param int                 $sliceMs      Millisecond budget per tick (>= 1): when
+     *                                          renderAsync() yields the loop; it closes
+     *                                          slices only under the unbounded row cap.
      * @param int                 $rowsPerSlice Determinism cap on rows per slice
      *                                          (>= 1): a finite cap alone decides the
-     *                                          slice plan and the clock is never read;
-     *                                          PHP_INT_MAX = clock decides.
+     *                                          slice plan; PHP_INT_MAX = clock decides.
      */
     public function __construct(
         private readonly IncrementalRenderer $renderer,
@@ -88,7 +91,9 @@ final class PacedAsyncRenderer implements AsyncRenderer
 
         $pump = function () use ($session, $deferred, &$pump): void {
             try {
-                $session->advanceSlice();
+                // Yield on the slice boundary or on the clock, whichever is
+                // first: the clock paces the loop, the cap keeps the plan.
+                $session->advanceUntil(Deadline::in($this->sliceMs));
                 if ($session->isDone()) {
                     $deferred->resolve($session->output());
                     return;

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\Promise\PromiseInterface;
 use SugarCraft\Image\Capability;
+use SugarCraft\Image\Deadline;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\PacedAsyncRenderer;
@@ -377,5 +378,66 @@ final class PacedAsyncRendererTest extends TestCase
         $this->assertSame(PHP_INT_MAX, $paced->rowsPerSlice());
         $this->assertSame($rows, $slices, 'each overrun row closes its own slice');
         $this->assertSame(4, $session->sliceCount());
+    }
+
+    /**
+     * advanceUntil() pauses mid-slice on the clock but never moves a slice
+     * boundary: with every row overrunning the pause, each call takes one
+     * row, only the cap-th row closes the slice, and advanceSlice() then
+     * returns the whole slice the pauses split.
+     */
+    public function testAdvanceUntilPausesMidSliceWithoutMovingTheBoundary(): void
+    {
+        $rows = ['a', 'bb', 'ccc', 'dddd', 'eeeee'];
+        $paced = new PacedAsyncRenderer($this->slowRows($rows, 2_000), sliceMs: 1, rowsPerSlice: 3);
+        $session = $paced->session(ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png'), 4, 2);
+
+        $this->assertFalse($session->advanceUntil(Deadline::in(1)), 'row 1 overruns the pause: slice still open');
+        $this->assertSame(0, $session->sliceCount());
+        $this->assertFalse($session->advanceUntil(Deadline::in(1)));
+        $this->assertTrue($session->advanceUntil(Deadline::in(1)), 'the cap-th row closes the slice');
+        $this->assertSame(1, $session->sliceCount());
+        $this->assertSame(3, $session->rowsConsumed());
+
+        $this->assertFalse($session->advanceUntil(Deadline::in(1)));
+        $this->assertSame('ddddeeeee', $session->advanceSlice(), 'the resumed slice returns every row since it opened');
+        $this->assertTrue($session->isDone());
+        $this->assertSame(2, $session->sliceCount());
+        $this->assertTrue($session->advanceUntil(Deadline::in(1)), 'a done session reports closed');
+        $this->assertSame('abbcccddddeeeee', $session->output());
+    }
+
+    /**
+     * A finite cap must not stop renderAsync() pacing the loop: rows slower
+     * than sliceMs yield after every row (six queued markers interleave
+     * across seven rows), not once per three-row slice, so a large capped
+     * render never holds the loop for a whole slice of slow rows.
+     */
+    public function testRenderAsyncYieldsOnTheClockUnderAFiniteCap(): void
+    {
+        $rows = ['a', 'bb', 'ccc', 'dddd', 'eeeee', 'ffffff', 'ggggggg'];
+
+        $log = [];
+        $mark = function () use (&$mark, &$log): void {
+            $log[] = 'tick';
+            if (count($log) < 12) {
+                Loop::futureTick($mark);
+            }
+        };
+        Loop::futureTick($mark);
+
+        $result = null;
+        $paced = new PacedAsyncRenderer($this->slowRows($rows, 2_000), sliceMs: 1, rowsPerSlice: 3);
+        $paced->renderAsync(ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png'), 4, 2)
+            ->then(function (string $bytes) use (&$log, &$result): void {
+                $log[] = 'resolve';
+                $result = $bytes;
+            });
+        Loop::run();
+
+        $this->assertSame(implode('', $rows), $result);
+        // Row 1 runs inline; rows 2-7 each take their own tick.
+        $this->assertSame(array_merge(array_fill(0, 6, 'tick'), ['resolve']), array_slice($log, 0, 7),
+            'the clock yields between rows even inside a capped slice');
     }
 }
