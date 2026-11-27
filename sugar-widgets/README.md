@@ -16,7 +16,7 @@
 
 ![spinners](.vhs/spinners.gif)
 
-sugar-widgets — TUI components for PHP 8.3+: 14 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch, Button, Rule, Disclosure, CollapsibleList, Confirm), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), and two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`) — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
+sugar-widgets — TUI components for PHP 8.3+: 14 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch, Button, Rule, Disclosure, CollapsibleList, Confirm), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`), and the pure `Window::around` scroll-window helper — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
 
 ```sh
 composer require sugarcraft/sugar-widgets
@@ -52,7 +52,7 @@ siblings resolve from Packagist.
 The table below lists the first-party components — Help, Key, Progress
 (includes the AnimatedProgress spring-variant), Timer, Stopwatch,
 Paginator, Tree, Table, Tabs, Disclosure, CollapsibleList, Confirm — plus the two btop-derived render helpers,
-`Input\TextEdit` and `Menu\OptionRow`, followed by the deprecated alias
+`Input\TextEdit` and `Menu\OptionRow`, and the `Window\Window` helper, followed by the deprecated alias
 re-exports from `sugarcraft/sugar-forms` (the alias rows name their origin explicitly).
 The counted inventory lives once, in the intro at the top of this file.
 
@@ -86,6 +86,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `Scrollbar\Scrollbar` | Scrollbar indicator for scrollable viewports _(deprecated alias — re-exported from `SugarCraft\Forms\Scrollbar`)_ | — |
 | `Input\TextEdit` | Inline single-line editor value object with an underline caret (no hardware cursor), grapheme-cluster caret, cell-budget windowing, digits-only mode — btop `Draw::TextEdit` | — |
 | `Menu\OptionRow` | Static renderer for btop's two-line options-menu row (bold centred name + `← value →` / `↵` line, live `TextEdit` while editing) | — |
+| `Window\Window` | Pure scroll-window math for lists, menus and pickers — a SugarCraft original (bubbles has no windowing helper). `Window::around($count, $selected, $size)` returns a readonly `Window\WindowSlice` with `start()`, `end()` (exclusive) and `length()`, so `array_slice($rows, $w->start(), $w->length())` is the visible rows. The window keeps the selection visible and centered as far as the bounds allow (btop's follow placement: an even size leaves one more row below). Every input is clamped, never rejected: a negative count or size is 0, a size past the count is the count, an out-of-range selection moves to the nearest end, and nothing to show is `[0, 0)` | — |
 
 ### Keyboard control
 

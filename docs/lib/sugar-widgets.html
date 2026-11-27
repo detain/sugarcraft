@@ -185,6 +185,7 @@
             <li class="toc-h3"><a href="#sugarcraft-widgets-tabs">SugarCraft\Widgets\Tabs</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-timer">SugarCraft\Widgets\Timer</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-tree">SugarCraft\Widgets\Tree</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-widgets-window">SugarCraft\Widgets\Window</a></li>
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#a-spinner-freezes-on-its-first-frame">A spinner freezes on its first frame</a></li>
             <li class="toc-h3"><a href="#a-tab-click-activates-a-tab-on-another-bar">A tab click activates a tab on another bar</a></li>
@@ -1126,6 +1127,26 @@ vendor/bin/phpunit</code></pre>
 <tr><td><code>collapseAtCursor(): self</code></td><td></td></tr>
 <tr><td><code>toggleAtCursor(): self</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-widgets-window">SugarCraft\Widgets\Window</h3>
+<h4 id="api-sugarcraft-widgets-window-window"><code>Window</code> <small>final class</small></h4>
+<p>Pure windowing math for scrolled lists: which rows to paint so the selected row stays visible. It holds no state; menus, pickers and lists call around() on every render instead of keeping their own scroll offset in step with the cursor.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static around(int $count, int $selected, int $size): WindowSlice</code></td><td>The window of <code>$size</code> rows out of <code>$count</code> that shows <code>$selected</code>, centered on it as far as the list bounds allow: near either end the window is pushed against that end and the selection moves off center. For an even size the selection sits just above the middle (one more row below it than above).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-window-windowslice"><code>WindowSlice</code> <small>final readonly class</small></h4>
+<p>A half-open range <code>[start, end)</code> of row indexes: the rows a scrolled list paints. <code>length()</code> is <code>end - start</code>, so <code>array_slice($rows, $w-&gt;start(), $w-&gt;length())</code> is exactly the visible rows, and an empty slice has <code>start() === end()</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $start, int $end)</code></td><td></td></tr>
+<tr><td><code>start(): int</code></td><td>First visible index, inclusive.</td></tr>
+<tr><td><code>end(): int</code></td><td>One past the last visible index (exclusive).</td></tr>
+<tr><td><code>length(): int</code></td><td>Number of visible rows: <code>end() - start()</code>.</td></tr>
 </tbody>
 </table>
 
