@@ -283,6 +283,69 @@
 </tbody>
 </table>
 <h3>SugarCraft\Widgets\Menu</h3>
+<h4 id="api-sugarcraft-widgets-menu-menu"><code>Menu</code> <small>final class</small></h4>
+<p>A keyboard-driven menu over a tree of MenuItems, with cascades (submenus) and an optional dropdown layout under a menu bar.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(array $tree): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>items(): array</code></td><td></td></tr>
+<tr><td><code>cursor(): MenuCursor</code></td><td></td></tr>
+<tr><td><code>isDropdown(): bool</code></td><td>True when view() draws the root level as a bar with dropdowns.</td></tr>
+<tr><td><code>depth(): int</code></td><td>0 on the root level, 1 inside the first cascade, and so on.</td></tr>
+<tr><td><code>isOpen(): bool</code></td><td>True while a cascade is open.</td></tr>
+<tr><td><code>level(): array</code></td><td></td></tr>
+<tr><td><code>current(): ?MenuItem</code></td><td>The item under the cursor, or null for an empty menu.</td></tr>
+<tr><td><code>withItems(array $tree): self</code></td><td>A new tree, with the cursor back on the first root item and every cascade closed, since the old path may not exist in the new tree.</td></tr>
+<tr><td><code>withDropdown(bool $dropdown = true): self</code></td><td>Draw the root level as a menu bar and the open cascade as a dropdown below it.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-menu-menucursor"><code>MenuCursor</code> <small>final class</small></h4>
+<p>The position of a Menu cursor as an immutable path of indices: the first entry is the index on the root level, each further entry the index inside the cascade opened from the entry before it. The last entry is the active level, the one the up and down keys move in.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td>On the first root item, with no cascade open.</td></tr>
+<tr><td><code>path(): array</code></td><td></td></tr>
+<tr><td><code>depth(): int</code></td><td>0 on the root level, 1 inside the first cascade, and so on.</td></tr>
+<tr><td><code>index(): int</code></td><td>The index on the active level.</td></tr>
+<tr><td><code>withIndex(int $index): self</code></td><td>Moves on the active level; a negative index is raised to 0.</td></tr>
+<tr><td><code>descend(): self</code></td><td>One level deeper, on the first item of the cascade.</td></tr>
+<tr><td><code>ascend(): self</code></td><td>Back to the parent level, keeping its index; the root stays as it is.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-menu-menuitem"><code>MenuItem</code> <small>final class</small></h4>
+<p>One entry of a Menu tree: a label, an optional id that a selection reports back, and an optional list of child items. An item with children is a branch and opens a cascade; an item with no children is a leaf and is selectable.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $label, ?string $id = null, array $children = []): self</code></td><td></td></tr>
+<tr><td><code>label(): string</code></td><td></td></tr>
+<tr><td><code>id(): ?string</code></td><td></td></tr>
+<tr><td><code>children(): array</code></td><td></td></tr>
+<tr><td><code>hasChildren(): bool</code></td><td>True when the item opens a cascade rather than being selectable.</td></tr>
+<tr><td><code>withLabel(string $label): self</code></td><td></td></tr>
+<tr><td><code>withId(?string $id): self</code></td><td></td></tr>
+<tr><td><code>withChildren(array $children): self</code></td><td></td></tr>
+<tr><td><code>static listOf(array $items): array</code></td><td>Reindexes to a list and lets the variadic type check reject anything that is not a MenuItem with a \TypeError naming the bad argument.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-menu-menuselectedmsg"><code>MenuSelectedMsg</code> <small>final class</small></h4>
+<p>Sent through a Cmd when Enter selects a leaf of a Menu. Only that key sends it: moving, opening and closing cascades all return a null Cmd.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly ?string $id, public readonly string $label, public readonly array $path)</code></td><td></td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-widgets-menu-optionrow"><code>OptionRow</code> <small>final class</small></h4>
 <p>Options-menu row geometry as a convention helper, so every consumer&#039;s options screen lands on the same shape. Two modes:</p>
 <table class="api-table">
