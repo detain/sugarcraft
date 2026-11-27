@@ -31,7 +31,9 @@ use SugarCraft\Core\Subscriptions;
  * list itself is focused.
  *
  * Immutable: every `with*()`, {@see toggle()}, {@see focus()} and
- * {@see blur()} returns a new instance through the private `mutate()`.
+ * {@see blur()} returns a new instance through the private `mutate()`,
+ * except that {@see toggle()} on an empty list with no index has nothing to
+ * flip and returns the same instance.
  *
  * Original SugarCraft work: charmbracelet/bubbles has no collapsible list
  * component, so there is no upstream Mirrors citation.
