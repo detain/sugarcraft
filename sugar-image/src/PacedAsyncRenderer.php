@@ -25,10 +25,16 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
  * cursor were left. Other watchers run in between; a TUI driving this can
  * paint partial progress or abandon the generator to cancel.
  *
- * The no-blanket-timeout rule, which must survive edits: the deadline bounds EACH
- * SLICE, never the whole render — so it is a fairness device, not a
- * timeout, and cannot truncate a slow-but-legitimate encode. There is no
- * request-wide ceiling anywhere in this class by design.
+ * The budget is either a finite row cap or a wall-clock deadline, never
+ * both: with a finite $rowsPerSlice the cap alone ends each slice and
+ * $sliceMs is ignored (the clock is never read, so a slice of slow rows
+ * runs as long as those rows take); only the unbounded cap (PHP_INT_MAX)
+ * arms a deadline.
+ *
+ * The no-blanket-timeout rule, which must survive edits: when armed, the
+ * deadline bounds EACH SLICE, never the whole render — so it is a fairness
+ * device, not a timeout, and cannot truncate a slow-but-legitimate encode.
+ * There is no request-wide ceiling anywhere in this class by design.
  *
  * Cancellation is by abandonment (the port's prescription): drop the
  * promise and the session, the generator dies, and the encode dies with it —

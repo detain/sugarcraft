@@ -13,8 +13,9 @@ namespace SugarCraft\Image;
  * where the last stopped. The budget is ONE of two kinds, never both:
  *
  * - a finite whole-rows cap: the slice plan is a pure function of the row
- *   stream and the cap (ceil(rows / cap) slices of exactly cap rows each,
- *   bar the last). The clock is never read, so a slow host — a coverage
+ *   stream and the cap (max(1, ceil(rows / cap)) slices of exactly cap rows
+ *   each, bar the last — an empty stream still takes the one slice that
+ *   discovers it is empty). The clock is never read, so a slow host — a coverage
  *   run, a loaded CI box — lands the identical plan as a fast one;
  * - the unbounded cap (PHP_INT_MAX): a fresh {@see Deadline} per slice paces
  *   the pump on the wall clock.

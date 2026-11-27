@@ -126,6 +126,29 @@ final class PacedAsyncRendererTest extends TestCase
     }
 
     /**
+     * An empty row stream takes one slice, not ceil(0 / cap) = 0: the
+     * documented plan is max(1, ceil(rows / cap)).
+     */
+    public function testEmptyRowStreamTakesExactlyOneSlice(): void
+    {
+        $renderer = new class () implements IncrementalRenderer {
+            public function renderRows(ImageSource $image, int $width, ?int $height = null): \Generator
+            {
+                yield from [];
+            }
+        };
+
+        $paced = new PacedAsyncRenderer($renderer, rowsPerSlice: 4);
+        $session = $paced->session(ImageSource::fromFile(__DIR__ . '/fixtures/checkerboard.png'), 4, 4);
+        $this->assertSame('', $session->advanceSlice());
+        $this->assertTrue($session->isDone());
+        $this->assertSame(1, $session->sliceCount());
+        $this->assertSame(0, $session->rowsConsumed());
+        $this->assertSame('', $session->advanceSlice(), 'a done session appends nothing');
+        $this->assertSame(1, $session->sliceCount(), 'a done session counts no further slices');
+    }
+
+    /**
      * Other loop work runs BETWEEN slices — with rowsPerSlice 1 the
      * promise stays pending while queued ticks drain, so progress is
      * interleaved, not scheduled around one blocking encode.
