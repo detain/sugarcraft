@@ -8,11 +8,20 @@ namespace SugarCraft\Image;
  * One paced, resumable pump over an incremental encode.
  *
  * The session is the unit of fairness: {@see advanceSlice()} consumes rows
- * from the generator until the slice budget runs out — a fresh
- * {@see Deadline} per slice, capped additionally by a whole-rows budget so
- * the pump is deterministic under test. It then returns, keeping every byte
- * and the generator's cursor, and the next call resumes exactly where the
- * last stopped.
+ * from the generator until the slice budget runs out, then returns, keeping
+ * every byte and the generator's cursor, and the next call resumes exactly
+ * where the last stopped. The budget is ONE of two kinds, never both:
+ *
+ * - a finite whole-rows cap: the slice plan is a pure function of the row
+ *   stream and the cap (ceil(rows / cap) slices of exactly cap rows each,
+ *   bar the last). The clock is never read, so a slow host — a coverage
+ *   run, a loaded CI box — lands the identical plan as a fast one;
+ * - the unbounded cap (PHP_INT_MAX): a fresh {@see Deadline} per slice paces
+ *   the pump on the wall clock.
+ *
+ * Mixing the two (a row cap that a deadline could still cut short) made
+ * the "deterministic" plan depend on how fast each row encoded, so the same
+ * input split into different slices from one run to the next.
  *
  * The deadline bounds EACH SLICE, never the whole render — it is a fairness
  * device, not a request timeout, and cannot truncate a slow-but-legitimate
@@ -44,10 +53,14 @@ final class PacedRenderSession
     /**
      * @param \Generator<int,string> $rows         Byte chunks from an
      *                                             {@see Renderer\IncrementalRenderer::renderRows()}.
-     * @param int                    $sliceMs      Whole-millisecond budget per slice.
-     * @param int                    $rowsPerSlice Upper bound on rows consumed per
-     *                                             slice — the determinism cap that lets
-     *                                             tests pin slice counts exactly.
+     * @param int                    $sliceMs      Whole-millisecond budget per slice;
+     *                                             read only when $rowsPerSlice is
+     *                                             unbounded (PHP_INT_MAX).
+     * @param int                    $rowsPerSlice Rows consumed per slice. A finite
+     *                                             value is the determinism cap: it alone
+     *                                             decides the slice plan and the clock is
+     *                                             never consulted. PHP_INT_MAX hands the
+     *                                             slice boundary to the clock.
      */
     public function __construct(
         private readonly \Generator $rows,
@@ -67,7 +80,9 @@ final class PacedRenderSession
         }
 
         $mark = strlen($this->out);
-        $deadline = Deadline::in($this->sliceMs);
+        // A finite row cap is the whole plan; arming a deadline beside it would
+        // let encode speed move slice boundaries between otherwise identical runs.
+        $deadline = $this->rowsPerSlice === PHP_INT_MAX ? Deadline::in($this->sliceMs) : null;
         $budget = $this->rowsPerSlice;
 
         while ($this->rows->valid() && $budget > 0) {
@@ -75,7 +90,7 @@ final class PacedRenderSession
             $this->rows->next();
             --$budget;
             ++$this->rowsConsumed;
-            if ($deadline->isExpired()) {
+            if ($deadline?->isExpired()) {
                 break;
             }
         }

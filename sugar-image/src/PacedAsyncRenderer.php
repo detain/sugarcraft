@@ -47,9 +47,12 @@ final class PacedAsyncRenderer implements AsyncRenderer
 
     /**
      * @param IncrementalRenderer $renderer     The row-lazy encode source.
-     * @param int                 $sliceMs      Millisecond budget per slice (>= 1).
+     * @param int                 $sliceMs      Millisecond budget per slice (>= 1);
+     *                                          paces only the unbounded row cap.
      * @param int                 $rowsPerSlice Determinism cap on rows per slice
-     *                                          (>= 1); PHP_INT_MAX = clock decides.
+     *                                          (>= 1): a finite cap alone decides the
+     *                                          slice plan and the clock is never read;
+     *                                          PHP_INT_MAX = clock decides.
      */
     public function __construct(
         private readonly IncrementalRenderer $renderer,

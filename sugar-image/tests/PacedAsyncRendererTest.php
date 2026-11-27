@@ -290,4 +290,69 @@ final class PacedAsyncRendererTest extends TestCase
         $this->assertSame($plan[0][0], $plan[1][0], 'identical per-slice byte sizes across runs');
         $this->assertSame($plan[0][1], $plan[1][1]);
     }
+
+    /**
+     * A row source slower than the slice budget, so every slice's deadline
+     * has already passed after its first row: the reproduction of a slow
+     * host (CI coverage), made certain by sleeping past the budget instead
+     * of hoping the encode is slow.
+     *
+     * @param list<string> $rows
+     */
+    private function slowRows(array $rows, int $sleepUs): IncrementalRenderer
+    {
+        return new class ($rows, $sleepUs) implements IncrementalRenderer {
+            /** @param list<string> $rows */
+            public function __construct(private readonly array $rows, private readonly int $sleepUs) {}
+
+            public function renderRows(ImageSource $image, int $width, ?int $height = null): \Generator
+            {
+                foreach ($this->rows as $row) {
+                    usleep($this->sleepUs);
+                    yield $row;
+                }
+            }
+        };
+    }
+
+    /**
+     * A finite row cap is the whole slice plan: rows that each overrun the
+     * millisecond budget still land cap-per-slice, so the plan cannot drift
+     * with host speed (the CI-coverage failure of the run-to-run test above).
+     */
+    public function testFiniteRowCapPlanIgnoresAnOverrunClock(): void
+    {
+        $rows = ['a', 'bb', 'ccc', 'dddd', 'eeeee', 'ffffff', 'ggggggg'];
+        $paced = new PacedAsyncRenderer($this->slowRows($rows, 2_000), sliceMs: 1, rowsPerSlice: 3);
+        $session = $paced->session(ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png'), 4, 2);
+
+        $slices = [];
+        while (!$session->isDone()) {
+            $slices[] = $session->advanceSlice();
+        }
+
+        $this->assertSame(['abbccc', 'ddddeeeeeffffff', 'ggggggg'], $slices, 'cap 3 → rows 3/3/1 however slow each row is');
+        $this->assertSame(3, $session->sliceCount());
+        $this->assertSame(7, $session->rowsConsumed());
+    }
+
+    /**
+     * The unbounded cap still paces on the clock: with every row slower
+     * than the 1 ms budget, each slice stops after the row that overran it.
+     */
+    public function testUnboundedRowCapStillPacesOnTheClock(): void
+    {
+        $rows = ['r1', 'r2', 'r3', 'r4'];
+        $paced = new PacedAsyncRenderer($this->slowRows($rows, 2_000), sliceMs: 1);
+        $session = $paced->session(ImageSource::fromFile(__DIR__ . '/fixtures/4x2.png'), 4, 2);
+
+        $slices = [];
+        while (!$session->isDone()) {
+            $slices[] = $session->advanceSlice();
+        }
+
+        $this->assertSame(PHP_INT_MAX, $paced->rowsPerSlice());
+        $this->assertSame($rows, $slices, 'each overrun row closes its own slice');
+        $this->assertSame(4, $session->sliceCount());
+    }
 }
