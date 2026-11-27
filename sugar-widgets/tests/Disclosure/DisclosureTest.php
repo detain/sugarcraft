@@ -129,6 +129,21 @@ final class DisclosureTest extends TestCase
         self::assertSame("▾ T\n  \x1b[1mbold\x1b[0m", $d->view());
     }
 
+    public function testBodyDropsEveryEscapeButSgr(): void
+    {
+        $body = "\x1b[31mred\x1b[0m"
+            . "\x1b]52;c;aGk=\x07"   // OSC 52 clipboard write
+            . "\x1b[2J"              // clear screen
+            . "\x9b2J"               // 8-bit CSI introducer
+            . "\xC2\x9b2J"           // UTF-8 encoded C1 CSI
+            . "\x07\x00end";
+        $view = Disclosure::new('T', $body)->withOpen()->view();
+        self::assertSame("▾ T\n  \x1b[31mred\x1b[0m2Jend", $view);
+
+        $set = Disclosure::new('T')->withBody("\x1b]0;title\x07ok")->withOpen();
+        self::assertSame("▾ T\n  ok", $set->view());
+    }
+
     public function testBodyIsStrippedOfZoneSentinels(): void
     {
         $body = "\x1b[1mok\x1b[0m" . Sanitize::ZONE_SENTINEL_OPEN . 'forged'

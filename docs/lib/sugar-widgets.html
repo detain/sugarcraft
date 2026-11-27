@@ -171,6 +171,7 @@
             <li class="toc-h3"><a href="#testing">Testing</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets">SugarCraft\Widgets</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-button">SugarCraft\Widgets\Button</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-widgets-disclosure">SugarCraft\Widgets\Disclosure</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-help">SugarCraft\Widgets\Help</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-input">SugarCraft\Widgets\Input</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-key">SugarCraft\Widgets\Key</a></li>
@@ -438,6 +439,73 @@ vendor/bin/phpunit</code></pre>
 <tbody>
 <tr><td><code>__construct(public readonly string $label, public readonly string $zoneId)</code></td><td></td></tr>
 <tr><td><code>announcement(): string</code></td><td>Screen-reader / status-line text for the activation (localised).</td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-widgets-disclosure">SugarCraft\Widgets\Disclosure</h3>
+<h4 id="api-sugarcraft-widgets-disclosure-collapsiblelist"><code>CollapsibleList</code> <small>final class</small></h4>
+<p>A vertical stack of Disclosure items under one cursor: each item opens and closes on its own, and the cursor picks which one the keys act on.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(array $items = []): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>items(): array</code></td><td></td></tr>
+<tr><td><code>count(): int</code></td><td></td></tr>
+<tr><td><code>cursor(): int</code></td><td></td></tr>
+<tr><td><code>selected(): ?Disclosure</code></td><td>The item under the cursor, or null for an empty list.</td></tr>
+<tr><td><code>item(int $index): ?Disclosure</code></td><td>The item at <code>$index</code>, or null when out of range.</td></tr>
+<tr><td><code>isOpen(int $index): bool</code></td><td>Whether the item at <code>$index</code> is open; false when out of range.</td></tr>
+<tr><td><code>openIndices(): array</code></td><td></td></tr>
+<tr><td><code>isFocused(): bool</code></td><td></td></tr>
+<tr><td><code>withItems(array $items): self</code></td><td>Replace the items; the cursor is clamped into the new range.</td></tr>
+<tr><td><code>withCursor(int $cursor): self</code></td><td>Move the cursor; out-of-range positions clamp to the first or last item.</td></tr>
+<tr><td><code>withFocused(bool $focused = true): self</code></td><td></td></tr>
+<tr><td><code>focus(): self</code></td><td></td></tr>
+<tr><td><code>blur(): self</code></td><td></td></tr>
+<tr><td><code>withOpen(int $index, bool $open = true): self</code></td><td>Open or close the item at <code>$index</code>.</td></tr>
+<tr><td><code>withAllOpen(bool $open = true): self</code></td><td>Open or close every item.</td></tr>
+<tr><td><code>toggle(?int $index = null): self</code></td><td>Flip the item at <code>$index</code>, or the item under the cursor when null. An empty list has nothing under the cursor and comes back unchanged.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-disclosure-disclosure"><code>Disclosure</code> <small>final class</small></h4>
+<p>A titled section that shows or hides its body: <code>▸ Title</code> while closed, <code>▾ Title</code> followed by the indented body while open.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $title, string $body = &#039;&#039;): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>title(): string</code></td><td></td></tr>
+<tr><td><code>body(): string</code></td><td></td></tr>
+<tr><td><code>isOpen(): bool</code></td><td></td></tr>
+<tr><td><code>isFocused(): bool</code></td><td></td></tr>
+<tr><td><code>withOpen(bool $open = true): self</code></td><td></td></tr>
+<tr><td><code>toggle(): self</code></td><td>Flip the open state.</td></tr>
+<tr><td><code>withTitle(string $title): self</code></td><td></td></tr>
+<tr><td><code>withBody(string $body): self</code></td><td></td></tr>
+<tr><td><code>withFocused(bool $focused = true): self</code></td><td></td></tr>
+<tr><td><code>focus(): self</code></td><td></td></tr>
+<tr><td><code>blur(): self</code></td><td></td></tr>
+<tr><td><code>withTitleStyle(Style $style): self</code></td><td>Title style while blurred.</td></tr>
+<tr><td><code>withFocusedStyle(Style $style): self</code></td><td>Title style while focused (reverse video by default).</td></tr>
+<tr><td><code>withIndicators(string $open, string $closed): self</code></td><td>Replace the open and closed indicators; each is sanitized to one line.</td></tr>
+<tr><td><code>withIndent(int $indent): self</code></td><td>Spaces the open body is indented by; negatives clamp to 0.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-disclosure-disclosuretoggledmsg"><code>DisclosureToggledMsg</code> <small>final class</small></h4>
+<p>Sent through a Cmd when a key opens or closes a Disclosure, either standalone or as an item of a CollapsibleList. Only a real change of state sends it: opening an item that is already open returns a null Cmd, so a host can treat every message as an edge.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $title, public readonly bool $open, public readonly ?int $index = null)</code></td><td></td></tr>
 </tbody>
 </table>
 <h3 id="sugarcraft-widgets-help">SugarCraft\Widgets\Help</h3>

@@ -29,10 +29,11 @@ use SugarCraft\Style\Style;
  * terminal reporting press and release toggles once per press.
  *
  * The title is sanitized to one line and stripped of zone sentinels, since
- * it lands inside marked frames. The body keeps its escapes, so pre-styled
- * text (a rendered Markdown block, a diff) keeps its SGR, but it is stripped
- * of zone sentinels for the same reason as the title; pass untrusted text
- * through `Sanitize::untrusted()` first to drop its escapes. Line endings in
+ * it lands inside marked frames. The body keeps its SGR, so pre-styled text
+ * (a rendered Markdown block, a diff) keeps its colors, but every other
+ * escape, C0 control and C1 introducer is removed as `Sanitize::untrusted()`
+ * removes it, and it is stripped of zone sentinels for the same reason as the
+ * title, so model or tool output is safe to pass as the body. Line endings in
  * the body are normalized to `\n`.
  *
  * Several items under one cursor live in {@see CollapsibleList}.
@@ -254,12 +255,28 @@ final class Disclosure implements Model
     }
 
     /**
-     * The body keeps its SGR, so only the zone sweep runs: a sentinel in
-     * tool or model output would otherwise forge sugar-mouse markers in a
-     * marked frame, since `untrusted()` alone does not remove them.
+     * The body keeps its SGR and nothing else: the text between well-formed
+     * 7-bit SGR runs goes through `untrusted()`, so an OSC 52 clipboard
+     * write, a clear-screen CSI, an 8-bit C1 introducer or a BEL in tool or
+     * model output never reaches the terminal, while pre-styled text keeps
+     * its colors. An SGR run is only `ESC [`, digits, `;`/`:` and `m`, so
+     * keeping it whole can smuggle nothing. The zone sweep runs last, since
+     * a sentinel would otherwise forge sugar-mouse markers in a marked frame
+     * and `untrusted()` alone does not remove it.
      */
     private static function cleanBody(string $body): string
     {
-        return str_replace(["\r\n", "\r"], "\n", Sanitize::stripZoneSentinels($body));
+        $parts = preg_split('/(\x1b\[[0-9;:]*m)/', $body, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($parts === false) {
+            // Fail closed: without the split, drop every escape, SGR included.
+            $clean = Sanitize::untrusted($body);
+        } else {
+            $clean = '';
+            foreach ($parts as $i => $part) {
+                $clean .= $i % 2 === 1 ? $part : Sanitize::untrusted($part);
+            }
+        }
+
+        return str_replace(["\r\n", "\r"], "\n", Sanitize::stripZoneSentinels($clean));
     }
 }
