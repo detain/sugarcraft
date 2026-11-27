@@ -18,8 +18,9 @@ final class StubClosureDriftTest extends TestCase
      * The requirements each stand-in keeps and drops, against the real manifests.
      * Kept: the stand-in declares it, so Composer resolves it from the scratch
      * tree. Dropped: the offline run cannot fetch it (react/*, psr/http-message,
-     * sugar-pty, sugar-ansi-parser), or it is a host extension the test host may
-     * lack (ext-ffi is reached through sugar-pty, ext-intl through sugar-core).
+     * sugar-pty, sugar-ansi-parser, sugar-mcp-client), or it is a host extension
+     * the test host may lack (ext-ffi is reached through sugar-pty, ext-intl through
+     * sugar-core).
      *
      * testStubsDropExactlyTheDocumentedRequirements holds this table to the real
      * manifests, so a new requirement fails there.
@@ -43,6 +44,7 @@ final class StubClosureDriftTest extends TestCase
                 'psr/http-message',
                 'react/event-loop',
                 'react/promise',
+                'sugarcraft/sugar-mcp-client',
             ],
         ],
     ];

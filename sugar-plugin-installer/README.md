@@ -98,7 +98,8 @@ installs this package must be able to satisfy all of it:
 
 | Package | Requirements that matter here | Reached through |
 |---|---|---|
-| `sugarcraft/sugar-plugins` | `sugarcraft/sugar-core`, `ext-tokenizer`, `psr/http-message`, `react/event-loop`, `react/promise` | this package |
+| `sugarcraft/sugar-plugins` | `sugarcraft/sugar-core`, `sugarcraft/sugar-mcp-client`, `ext-tokenizer`, `psr/http-message`, `react/event-loop`, `react/promise` | this package |
+| `sugarcraft/sugar-mcp-client` | `sugar-core` | `sugar-plugins` |
 | `sugarcraft/sugar-core` | `ext-intl`, `ext-mbstring`, `sugarcraft/sugar-pty`, `sugarcraft/sugar-ansi-parser`, `react/*` | `sugar-plugins` |
 | `sugarcraft/sugar-pty` | `ext-ffi`, `sugarcraft/sugar-input`, `sugarcraft/sugar-ansi-parser`, `sugar-core`, `react/*` | `sugar-core` |
 | `sugarcraft/sugar-input` | `ext-mbstring`, `evenement/evenement`, `react/*` | `sugar-pty` |
@@ -199,7 +200,9 @@ the staged tree and that the trust list and ledger bytes do not change, across
 The offline run cannot fetch the closure above, so the test puts two stand-ins in
 the scratch project in place of `sugarcraft/sugar-core` and `sugarcraft/sugar-plugins`.
 `StubClosureDriftTest::STUBBED` lists which requirements each stand-in keeps and
-which it drops. `StubClosureDriftTest::testStubsDropExactlyTheDocumentedRequirements`
+which it drops. The `sugar-plugins` stand-in keeps only `sugarcraft/sugar-core`; it
+drops `sugarcraft/sugar-mcp-client` along with the packages the offline run cannot
+fetch, since the record writer the installer calls does not load it. `StubClosureDriftTest::testStubsDropExactlyTheDocumentedRequirements`
 checks that table against the real manifests, so a new requirement in the closure
 fails the suite until the table says how it is handled. It lives in its own class
 so it still runs where `composer` is not on `PATH`.
