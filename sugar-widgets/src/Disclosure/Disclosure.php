@@ -29,10 +29,11 @@ use SugarCraft\Style\Style;
  * terminal reporting press and release toggles once per press.
  *
  * The title is sanitized to one line and stripped of zone sentinels, since
- * it lands inside marked frames. The body is rendered as given, so
- * pre-styled text (a rendered Markdown block, a diff) keeps its SGR; pass
- * untrusted text through `Sanitize::untrusted()` first. Line endings in the
- * body are normalized to `\n`.
+ * it lands inside marked frames. The body keeps its escapes, so pre-styled
+ * text (a rendered Markdown block, a diff) keeps its SGR, but it is stripped
+ * of zone sentinels for the same reason as the title; pass untrusted text
+ * through `Sanitize::untrusted()` first to drop its escapes. Line endings in
+ * the body are normalized to `\n`.
  *
  * Several items under one cursor live in {@see CollapsibleList}.
  *
@@ -252,8 +253,13 @@ final class Disclosure implements Model
         return str_replace(["\r\n", "\n", "\r", "\t"], ' ', Sanitize::untrustedForMarkedFrames($text));
     }
 
+    /**
+     * The body keeps its SGR, so only the zone sweep runs: a sentinel in
+     * tool or model output would otherwise forge sugar-mouse markers in a
+     * marked frame, since `untrusted()` alone does not remove them.
+     */
     private static function cleanBody(string $body): string
     {
-        return str_replace(["\r\n", "\r"], "\n", $body);
+        return str_replace(["\r\n", "\r"], "\n", Sanitize::stripZoneSentinels($body));
     }
 }

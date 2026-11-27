@@ -10,6 +10,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\KeyReleaseMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Style\Style;
 use SugarCraft\Widgets\Disclosure\Disclosure;
 use SugarCraft\Widgets\Disclosure\DisclosureToggledMsg;
@@ -126,6 +127,19 @@ final class DisclosureTest extends TestCase
     {
         $d = Disclosure::new('T', "\x1b[1mbold\x1b[0m")->withOpen();
         self::assertSame("▾ T\n  \x1b[1mbold\x1b[0m", $d->view());
+    }
+
+    public function testBodyIsStrippedOfZoneSentinels(): void
+    {
+        $body = "\x1b[1mok\x1b[0m" . Sanitize::ZONE_SENTINEL_OPEN . 'forged'
+            . Sanitize::ZONE_SENTINEL_CLOSE;
+        $view = Disclosure::new('T', $body)->withOpen()->view();
+        self::assertStringNotContainsString(Sanitize::ZONE_SENTINEL_OPEN, $view);
+        self::assertStringNotContainsString(Sanitize::ZONE_SENTINEL_CLOSE, $view);
+        self::assertSame("▾ T\n  \x1b[1mok\x1b[0mforged", $view);
+
+        $set = Disclosure::new('T')->withBody(Sanitize::ZONE_SENTINEL_OPEN . 'x')->withOpen();
+        self::assertSame("▾ T\n  x", $set->view());
     }
 
     public function testFocusAndBlur(): void
