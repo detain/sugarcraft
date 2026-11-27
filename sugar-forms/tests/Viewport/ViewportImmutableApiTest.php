@@ -192,8 +192,10 @@ final class ViewportImmutableApiTest extends TestCase
         [$v, ] = $v->update(new KeyMsg(KeyType::Down));
         $this->assertSame(10, $v->scrollAnimFrame);
 
+        // The pending one-line move from j is kept: 1 + 10, as if the
+        // animation had finished before the step.
         $v = $v->scrollBy(10);
-        $this->assertSame(10, $v->yOffset());
+        $this->assertSame(11, $v->yOffset());
         $this->assertSame(0, $v->scrollAnimFrame);
         $this->assertSame(-1, $v->scrollTargetY);
 
@@ -201,6 +203,23 @@ final class ViewportImmutableApiTest extends TestCase
             [$v, $cmd] = $v->update(new ViewportTickMsg());
             $this->assertNull($cmd);
         }
-        $this->assertSame(10, $v->yOffset());
+        $this->assertSame(11, $v->yOffset());
+    }
+
+    public function testScrollByDuringASmoothScrollMatchesTheSettledResult(): void
+    {
+        $base = Viewport::new(80, 5)->withContent($this->lines(30))->withSmoothScroll(true);
+        [$animating, ] = $base->update(new KeyMsg(KeyType::Down));
+        [$animating, ] = $animating->update(new KeyMsg(KeyType::Down));
+
+        $settled = $animating;
+        while ($settled->scrollAnimFrame > 0) {
+            [$settled, ] = $settled->update(new ViewportTickMsg());
+        }
+
+        $this->assertSame(2, $settled->yOffset());
+        $this->assertSame($settled->scrollBy(10)->yOffset(), $animating->scrollBy(10)->yOffset());
+        $this->assertSame($settled->scrollBy(-1)->yOffset(), $animating->scrollBy(-1)->yOffset());
+        $this->assertSame(25, $animating->scrollBy(100)->yOffset());
     }
 }

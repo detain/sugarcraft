@@ -312,9 +312,12 @@ final class Viewport implements Model
             // An in-flight smooth scroll would lerp the window back to its old
             // target on the next tick and undo this step, so settle it first:
             // the horizontal leg lands on its target and the animation ends,
-            // which also makes any tick still queued a no-op.
+            // which also makes any tick still queued a no-op. The step counts
+            // from the pending target, not the mid-lerp offset, so the move
+            // the animation was carrying is kept.
+            $baseY = $this->scrollTargetY >= 0 ? $this->scrollTargetY : $this->yOffset;
             return $this->copy(
-                yOffset: $this->yOffset + $n,
+                yOffset: $baseY + $n,
                 xOffset: $this->scrollTargetX >= 0 ? $this->scrollTargetX : $this->xOffset,
                 scrollTargetY: -1,
                 scrollTargetX: -1,
