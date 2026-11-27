@@ -38,8 +38,9 @@ namespace SugarCraft\Image;
  * next slice resumes after it).
  *
  * Zero timers: nothing here arms anything on an event loop. The pump advances
- * only when someone calls advanceSlice(); {@see PacedAsyncRenderer} drives
- * it from futureTick callbacks (loop queue, not clock), and tests drive it
+ * only when someone calls advanceSlice() or advanceUntil();
+ * {@see PacedAsyncRenderer} drives it through advanceUntil() (the pause
+ * seam) from futureTick callbacks (loop queue, not clock), and tests drive it
  * directly and count slices instead of watching walls.
  *
  * Mirrors no upstream — SugarCraft addition. The resumable session object

@@ -17,8 +17,10 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
  * wrapper around the blocking one-shot encode — scheduling only, a large
  * image still occupies the whole loop for the entire render, with no
  * progress, no interleaving, and no budget. Here the encode is row-lazy from
- * the first slice: each {@see PacedRenderSession::advanceSlice()} consumes
- * rows until the budget is spent, the loop is yielded through
+ * the first slice: each tick's {@see PacedRenderSession::advanceUntil()}
+ * consumes rows until the slice budget or the tick's pause is spent (never
+ * {@see PacedRenderSession::advanceSlice()}, which would hold the loop for a
+ * whole capped slice), the loop is yielded through
  * {@see Loop::futureTick()} (a queue hand-off, not a timer — this class
  * arms nothing on the clock, so no LoopPin timer margin is consumed), and
  * the following tick resumes exactly where the bytes and the generator
