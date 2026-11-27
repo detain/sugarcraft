@@ -274,17 +274,28 @@ final class BufferBuilderTest extends TestCase
             return (hrtime(true) - $start) / $writes;
         };
 
-        $best = ['small' => INF, 'large' => INF, 'walkSmall' => INF, 'walkLarge' => INF];
-        for ($round = 0; $round < 25; $round++) {
-            $best['small'] = min($best['small'], $time($small, $smallCells, null, 256));
-            $best['large'] = min($best['large'], $time($large, $largeCells, null, 256));
-            $best['walkSmall'] = min($best['walkSmall'], $time($small, $smallCells, $smallWalk, 8));
-            $best['walkLarge'] = min($best['walkLarge'], $time($large, $largeCells, $largeWalk, 8));
-        }
-
         $cap = 8.0;
-        $walkRatio = $best['walkLarge'] / $best['walkSmall'];
-        $builderRatio = $best['large'] / $best['small'];
+        // A slowdown that hits one canvas size for a whole ~8 ms window (a
+        // co-tenant burst aligned with every large batch) can push a single
+        // measurement over the cap with no regression. Such a burst does not
+        // repeat in step across independent windows, while a real O(n) write
+        // inflates every one of them, so a measurement is retried and the
+        // guard fails only when every attempt is over the cap.
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            $best = ['small' => INF, 'large' => INF, 'walkSmall' => INF, 'walkLarge' => INF];
+            for ($round = 0; $round < 25; $round++) {
+                $best['small'] = min($best['small'], $time($small, $smallCells, null, 256));
+                $best['large'] = min($best['large'], $time($large, $largeCells, null, 256));
+                $best['walkSmall'] = min($best['walkSmall'], $time($small, $smallCells, $smallWalk, 8));
+                $best['walkLarge'] = min($best['walkLarge'], $time($large, $largeCells, $largeWalk, 8));
+            }
+
+            $walkRatio = $best['walkLarge'] / $best['walkSmall'];
+            $builderRatio = $best['large'] / $best['small'];
+            if ($walkRatio > $cap && $builderRatio < $cap) {
+                break;
+            }
+        }
 
         // The probe must see a grid walk, or the guard below proves nothing.
         self::assertGreaterThan(
@@ -296,13 +307,14 @@ final class BufferBuilderTest extends TestCase
             $cap,
             $builderRatio,
             sprintf(
-                'a builder write must cost the same on any canvas (%.0f ns on %d cells, %.0f ns on %d cells: %.1fx, cap %.1fx)',
+                'a builder write must cost the same on any canvas (%.0f ns on %d cells, %.0f ns on %d cells: %.1fx, cap %.1fx, attempt %d of 3)',
                 $best['small'],
                 $smallCells,
                 $best['large'],
                 $largeCells,
                 $builderRatio,
                 $cap,
+                min($attempt, 3),
             ),
         );
     }
