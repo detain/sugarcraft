@@ -222,4 +222,40 @@ final class ViewportImmutableApiTest extends TestCase
         $this->assertSame($settled->scrollBy(-1)->yOffset(), $animating->scrollBy(-1)->yOffset());
         $this->assertSame(25, $animating->scrollBy(100)->yOffset());
     }
+
+    public function testWithContentDuringASmoothScrollDoesNotTickPastTheNewEnd(): void
+    {
+        $v = Viewport::new(80, 3)->withContent($this->lines(30))->withSmoothScroll(true);
+        [$v, ] = $v->update(new KeyMsg(KeyType::End));
+        $this->assertSame(27, $v->scrollTargetY);
+        $this->assertSame(10, $v->scrollAnimFrame);
+        [$v, ] = $v->update(new ViewportTickMsg());
+        [$v, ] = $v->update(new ViewportTickMsg());
+
+        $v = $v->withContent($this->lines(5));
+        $this->assertSame(2, $v->yOffset());
+        $this->assertSame(0, $v->scrollAnimFrame);
+        $this->assertSame(-1, $v->scrollTargetY);
+        $this->assertSame(-1, $v->scrollTargetX);
+
+        for ($i = 0; $i < 12; $i++) {
+            [$v, $cmd] = $v->update(new ViewportTickMsg());
+            $this->assertNull($cmd);
+        }
+        $this->assertSame(2, $v->yOffset());
+        $this->assertSame("line 3\nline 4\nline 5", $v->view());
+    }
+
+    public function testWithContentDuringASmoothScrollKeepsTheCarriedMoveWhenItFits(): void
+    {
+        $v = Viewport::new(80, 3)->withContent($this->lines(30))->withSmoothScroll(true);
+        [$v, ] = $v->update(new KeyMsg(KeyType::End));
+        [$v, ] = $v->update(new ViewportTickMsg());
+
+        // The new content is longer, so the pending target still fits and
+        // the window lands on it rather than stopping mid-lerp.
+        $v = $v->withContent($this->lines(40));
+        $this->assertSame(27, $v->yOffset());
+        $this->assertSame(0, $v->scrollAnimFrame);
+    }
 }

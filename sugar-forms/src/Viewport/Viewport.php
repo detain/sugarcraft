@@ -284,7 +284,8 @@ final class Viewport implements Model
      * A string is split on "\n"; a list is taken as lines, and any element
      * that itself carries "\n" is split too, so both spellings yield the
      * same line grid for the same text. The current offsets are kept and
-     * clamped to the new content bounds.
+     * clamped to the new content bounds; an in-flight smooth scroll is
+     * settled on its target first, then clamped the same way.
      *
      * @param string|list<string> $content
      */
@@ -292,6 +293,20 @@ final class Viewport implements Model
     {
         $text = \is_array($content) ? implode("\n", $content) : $content;
         $lines = $text === '' ? [''] : explode("\n", $text);
+        if ($this->scrollAnimFrame > 0) {
+            // advanceAnimation() never clamps, so a target computed against
+            // the old content would carry later ticks past the new end and
+            // blank the window. End the animation here, landing on its target
+            // so the move it carried is kept, and let clamp() bound it.
+            return $this->copy(
+                lines: $lines,
+                yOffset: $this->scrollTargetY >= 0 ? $this->scrollTargetY : $this->yOffset,
+                xOffset: $this->scrollTargetX >= 0 ? $this->scrollTargetX : $this->xOffset,
+                scrollTargetY: -1,
+                scrollTargetX: -1,
+                scrollAnimFrame: 0,
+            )->clamp();
+        }
         return $this->copy(lines: $lines)->clamp();
     }
 
