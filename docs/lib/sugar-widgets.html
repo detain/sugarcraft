@@ -462,9 +462,9 @@ vendor/bin/phpunit</code></pre>
 <tr><td><code>isCancelled(): bool</code></td><td></td></tr>
 <tr><td><code>isPending(): bool</code></td><td></td></tr>
 <tr><td><code>isRejected(): bool</code></td><td>True after a wrong word was submitted, until the next edit.</td></tr>
-<tr><td><code>withTypedConfirm(string $word): self</code></td><td>Require <code>$word</code> to be typed and submitted with Enter before the prompt confirms. Clears any typed text. A word that is empty once sanitized throws rather than silently falling back to a single <code>y</code>.</td></tr>
-<tr><td><code>withoutTypedConfirm(): self</code></td><td>Back to single-key mode; clears any typed text.</td></tr>
-<tr><td><code>withPrompt(string $prompt): self</code></td><td></td></tr>
+<tr><td><code>withTypedConfirm(string $word): self</code></td><td>Require <code>$word</code> to be typed and submitted with Enter before the prompt confirms. Clears any typed text and makes an answered prompt pending again, since the new word was never typed. A word that is empty once sanitized throws rather than silently falling back to a single <code>y</code>.</td></tr>
+<tr><td><code>withoutTypedConfirm(): self</code></td><td>Back to single-key mode; clears any typed text and makes an answered prompt pending again.</td></tr>
+<tr><td><code>withPrompt(string $prompt): self</code></td><td>A new prompt is a new question, so an answered prompt becomes pending again with no typed text; a pending prompt keeps what was typed.</td></tr>
 <tr><td><code>reset(): self</code></td><td>Pending again, with no typed text, keeping the prompt and the word.</td></tr>
 </tbody>
 </table>

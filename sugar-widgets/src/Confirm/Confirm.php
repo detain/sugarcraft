@@ -41,7 +41,10 @@ use SugarCraft\Widgets\Lang;
  * as given; a host that wants the word spelled out puts it in the prompt.
  *
  * Immutable: every `with*()`, {@see reset()} and {@see update()} returns a
- * new instance through `mutate()` from sugar-core `Concerns\Mutable`.
+ * new instance through `mutate()` from sugar-core `Concerns\Mutable`. A
+ * `with*()` setter applied to an answered prompt re-arms it: the result is
+ * pending with no typed text, so a stale answer never stands for a question
+ * or word that was not answered.
  *
  * Original SugarCraft work: charmbracelet/bubbles has no confirm component,
  * so there is no upstream Mirrors citation (huh's Confirm field is ported
@@ -158,8 +161,9 @@ final class Confirm implements Model
 
     /**
      * Require `$word` to be typed and submitted with Enter before the prompt
-     * confirms. Clears any typed text. A word that is empty once sanitized
-     * throws rather than silently falling back to a single `y`.
+     * confirms. Clears any typed text and makes an answered prompt pending
+     * again, since the new word was never typed. A word that is empty once
+     * sanitized throws rather than silently falling back to a single `y`.
      *
      * @throws \InvalidArgumentException when the word is empty after sanitizing
      */
@@ -169,18 +173,26 @@ final class Confirm implements Model
         if ($clean === '') {
             throw new \InvalidArgumentException(Lang::t('confirm.word_empty'));
         }
-        return $this->mutate(['word' => $clean, 'typed' => '', 'rejected' => false]);
+        return $this->mutate(['word' => $clean, 'typed' => '', 'answer' => null, 'rejected' => false]);
     }
 
-    /** Back to single-key mode; clears any typed text. */
+    /** Back to single-key mode; clears any typed text and makes an answered prompt pending again. */
     public function withoutTypedConfirm(): self
     {
-        return $this->mutate(['word' => '', 'typed' => '', 'rejected' => false]);
+        return $this->mutate(['word' => '', 'typed' => '', 'answer' => null, 'rejected' => false]);
     }
 
+    /**
+     * A new prompt is a new question, so an answered prompt becomes pending
+     * again with no typed text; a pending prompt keeps what was typed.
+     */
     public function withPrompt(string $prompt): self
     {
-        return $this->mutate(['prompt' => self::cleanLine($prompt)]);
+        $clean = self::cleanLine($prompt);
+        if ($this->answer === null) {
+            return $this->mutate(['prompt' => $clean]);
+        }
+        return $this->mutate(['prompt' => $clean, 'typed' => '', 'answer' => null, 'rejected' => false]);
     }
 
     /** Pending again, with no typed text, keeping the prompt and the word. */

@@ -328,6 +328,58 @@ final class ConfirmTest extends TestCase
         self::assertSame('del', $typed->typed());
     }
 
+    public function testWithTypedConfirmOnAnAnsweredPromptRearmsIt(): void
+    {
+        [$yes] = Confirm::new('Delete project?')->update(self::char('y'));
+        self::assertTrue($yes->isConfirmed());
+
+        $armed = $yes->withTypedConfirm('delete');
+        self::assertTrue($yes->isConfirmed(), 'the original keeps its answer');
+        self::assertTrue($armed->isPending());
+        self::assertFalse($armed->isConfirmed());
+        self::assertSame('', $armed->typed());
+
+        [$c, $cmd] = $armed->update(self::key(KeyType::Enter));
+        self::assertNull($cmd);
+        self::assertFalse($c->isConfirmed(), 'Enter alone never confirms the new word');
+        self::assertTrue($c->isRejected());
+
+        [$c] = self::feed($c, self::typeWord('delete'));
+        [$c, $cmd] = $c->update(self::key(KeyType::Enter));
+        self::assertTrue($c->isConfirmed());
+        self::assertTrue(self::resolvedMsg($cmd)->confirmed);
+    }
+
+    public function testWithoutTypedConfirmAndWithPromptRearmAnAnsweredPrompt(): void
+    {
+        $c = Confirm::new('Sure?')->withTypedConfirm('delete');
+        [$done] = self::feed($c, [...self::typeWord('delete'), self::key(KeyType::Enter)]);
+        self::assertTrue($done->isConfirmed());
+
+        $plain = $done->withoutTypedConfirm();
+        self::assertTrue($plain->isPending());
+        self::assertSame('', $plain->typed());
+
+        $reprompted = $done->withPrompt('Really?');
+        self::assertTrue($reprompted->isPending());
+        self::assertSame('', $reprompted->typed(), 'the old word typed for the last answer is gone');
+        [$after, $cmd] = $reprompted->update(self::key(KeyType::Enter));
+        self::assertNull($cmd);
+        self::assertFalse($after->isConfirmed());
+
+        [$no] = Confirm::new('Sure?')->update(self::key(KeyType::Escape));
+        self::assertTrue($no->withPrompt('Again?')->isPending());
+        self::assertTrue($no->withTypedConfirm('delete')->isPending());
+    }
+
+    public function testWithPromptOnAPendingPromptKeepsTheTypedText(): void
+    {
+        [$c] = self::feed(Confirm::new('Sure?')->withTypedConfirm('delete'), self::typeWord('del'));
+        $d = $c->withPrompt('Really?');
+        self::assertSame('del', $d->typed());
+        self::assertTrue($d->isPending());
+    }
+
     public function testWithoutTypedConfirmIsImmutableAndRestoresSingleKeyMode(): void
     {
         $typed = Confirm::new('Sure?')->withTypedConfirm('delete');
