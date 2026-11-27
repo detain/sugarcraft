@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Forms\Tests\Viewport;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Viewport\Viewport;
+use SugarCraft\Forms\Viewport\ViewportTickMsg;
 
 /**
  * Pins the immutable `withContent()` / `scrollBy()` pair that P2-3 names
@@ -181,5 +184,23 @@ final class ViewportImmutableApiTest extends TestCase
             $v->view(),
             Viewport::new(80, 3)->withContent($this->lines(10))->scrollBy(50)->view(),
         );
+    }
+
+    public function testScrollByDuringASmoothScrollIsNotUndoneByLaterTicks(): void
+    {
+        $v = Viewport::new(80, 5)->withContent($this->lines(30))->withSmoothScroll(true);
+        [$v, ] = $v->update(new KeyMsg(KeyType::Down));
+        $this->assertSame(10, $v->scrollAnimFrame);
+
+        $v = $v->scrollBy(10);
+        $this->assertSame(10, $v->yOffset());
+        $this->assertSame(0, $v->scrollAnimFrame);
+        $this->assertSame(-1, $v->scrollTargetY);
+
+        for ($i = 0; $i < 10; $i++) {
+            [$v, $cmd] = $v->update(new ViewportTickMsg());
+            $this->assertNull($cmd);
+        }
+        $this->assertSame(10, $v->yOffset());
     }
 }

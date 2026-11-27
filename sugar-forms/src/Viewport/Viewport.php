@@ -308,6 +308,19 @@ final class Viewport implements Model
         // to float and fail the int-typed offset.
         $total = $this->totalLineCount();
         $n = Clamp::int($n, -$total, $total);
+        if ($this->scrollAnimFrame > 0) {
+            // An in-flight smooth scroll would lerp the window back to its old
+            // target on the next tick and undo this step, so settle it first:
+            // the horizontal leg lands on its target and the animation ends,
+            // which also makes any tick still queued a no-op.
+            return $this->copy(
+                yOffset: $this->yOffset + $n,
+                xOffset: $this->scrollTargetX >= 0 ? $this->scrollTargetX : $this->xOffset,
+                scrollTargetY: -1,
+                scrollTargetX: -1,
+                scrollAnimFrame: 0,
+            )->clamp();
+        }
         return $this->copy(yOffset: $this->yOffset + $n)->clamp();
     }
 
