@@ -240,6 +240,73 @@ final class BufferBuilderTest extends TestCase
         );
     }
 
+    public function testBuilderWriteTimeDoesNotScaleWithTheCanvas(): void
+    {
+        // The allocation guard above is blind to a write that walks the grid
+        // without copying it (a read-only validation loop, say): O(n) time
+        // per write, 0 bytes. This leg times one builder write on a small and
+        // on a 128x larger canvas. Both legs run the same PHP code, so load,
+        // JIT and pcov slow them alike and cancel out of the ratio (the old
+        // chain-vs-builder ratio did not cancel: the chain copies in C).
+        // Interleaved rounds plus best-of-N keep a loaded runner from
+        // inflating one side only.
+        $cell = Cell::new('#');
+        $smallCells = 8 * 8;
+        $largeCells = 128 * 64;
+        $small = Buffer::builder(8, 8);
+        $large = Buffer::builder(128, 64);
+        $smallWalk = array_fill(0, $smallCells, $cell);
+        $largeWalk = array_fill(0, $largeCells, $cell);
+
+        // ns per write, best of the batch; $walk adds a calibration grid walk.
+        $time = static function (BufferBuilder $builder, int $cells, ?array $walk, int $writes) use ($cell): float {
+            $width = $builder->width();
+            $start = hrtime(true);
+            for ($i = 0; $i < $writes; $i++) {
+                $idx = ($i * 7) % $cells;
+                $builder->setCellAt($idx % $width, intdiv($idx, $width), $cell);
+                if ($walk !== null) {
+                    foreach ($walk as $seen) {
+                    }
+                }
+            }
+
+            return (hrtime(true) - $start) / $writes;
+        };
+
+        $best = ['small' => INF, 'large' => INF, 'walkSmall' => INF, 'walkLarge' => INF];
+        for ($round = 0; $round < 25; $round++) {
+            $best['small'] = min($best['small'], $time($small, $smallCells, null, 256));
+            $best['large'] = min($best['large'], $time($large, $largeCells, null, 256));
+            $best['walkSmall'] = min($best['walkSmall'], $time($small, $smallCells, $smallWalk, 8));
+            $best['walkLarge'] = min($best['walkLarge'], $time($large, $largeCells, $largeWalk, 8));
+        }
+
+        $cap = 8.0;
+        $walkRatio = $best['walkLarge'] / $best['walkSmall'];
+        $builderRatio = $best['large'] / $best['small'];
+
+        // The probe must see a grid walk, or the guard below proves nothing.
+        self::assertGreaterThan(
+            $cap,
+            $walkRatio,
+            sprintf('the timing probe must see a per-write grid walk scale with the canvas (ratio %.1fx, cap %.1fx)', $walkRatio, $cap),
+        );
+        self::assertLessThan(
+            $cap,
+            $builderRatio,
+            sprintf(
+                'a builder write must cost the same on any canvas (%.0f ns on %d cells, %.0f ns on %d cells: %.1fx, cap %.1fx)',
+                $best['small'],
+                $smallCells,
+                $best['large'],
+                $largeCells,
+                $builderRatio,
+                $cap,
+            ),
+        );
+    }
+
     public function testToBuilderSeedsFromTheExistingCellsWithoutMutatingTheSource(): void
     {
         $source = Buffer::new(4, 2)->withCellAt(1, 0, Cell::new('A'))->withCellAt(3, 1, Cell::new('B'));
