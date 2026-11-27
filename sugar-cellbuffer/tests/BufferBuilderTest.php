@@ -153,32 +153,77 @@ final class BufferBuilderTest extends TestCase
         $h = 50;
         $cell = Cell::new('#');
 
-        $t0 = hrtime(true);
-        $chain = Buffer::new($w, $h);
-        foreach (range(0, $w * $h - 1) as $i) {
-            if ($i % 7 === 0) {
-                $chain = $chain->withCellAt($i % $w, intdiv($i, $w), $cell);
-            }
-        }
-        $chainNs = hrtime(true) - $t0;
+        // The quadratic door is a whole-grid copy on every write: n writes
+        // into an n-cell canvas cost O(n) each, O(n²) in all. That copy is an
+        // allocation of at least one zval (16 bytes) per cell, so the guard
+        // measures the bytes each write allocates, not wall-clock time. A
+        // wall-clock ratio collapsed to ~4x on the CI coverage runner (pcov
+        // slows the builder's PHP lines while the chain's copy runs in C),
+        // so the old 4x timing bar failed on load, not on a regression. The
+        // allocation count is deterministic: it does not move with load, JIT
+        // or the coverage driver.
+        $gridCopyBytes = 16 * $w * $h;
+        // A linear write may allocate a few small objects (a Cell, a
+        // reference wrapper), never anything that scales with the canvas, so
+        // the cap is a constant: 80000 bytes per grid copy against 4 KiB
+        // leaves a 19x gap (measured: 0 bytes per builder write, 136728 per
+        // chained write, on PHP 8.3 with and without pcov).
+        $linearWriteCapBytes = 4096;
 
-        $t1 = hrtime(true);
-        $builder = Buffer::builder($w, $h);
-        foreach (range(0, $w * $h - 1) as $i) {
-            if ($i % 7 === 0) {
-                $builder->setCellAt($i % $w, intdiv($i, $w), $cell);
-            }
+        $chain = Buffer::new($w, $h)->withCellAt(0, 0, $cell);
+        $builder = Buffer::builder($w, $h)->setCellAt(0, 0, $cell);
+
+        $chainMinBytes = PHP_INT_MAX;
+        $builderMaxBytes = 0;
+        $writes = 0;
+        // Index 0 was the warm-up write above, so first-run allocations
+        // (the by-reference wrapper on the builder grid) stay out of the
+        // per-write figure.
+        for ($i = 7; $i < $w * $h; $i += 7) {
+            $col = $i % $w;
+            $row = intdiv($i, $w);
+
+            $base = memory_get_usage();
+            memory_reset_peak_usage();
+            $chain = $chain->withCellAt($col, $row, $cell);
+            $chainMinBytes = min($chainMinBytes, memory_get_peak_usage() - $base);
+
+            $base = memory_get_usage();
+            memory_reset_peak_usage();
+            $builder->setCellAt($col, $row, $cell);
+            $builderMaxBytes = max($builderMaxBytes, memory_get_peak_usage() - $base);
+
+            $writes++;
         }
         $built = $builder->toBuffer();
-        $builderNs = hrtime(true) - $t1;
 
-        // The finding measured the fluent chain at 41x the fromGrid door
-        // for bulk writes; the builder must land orders of magnitude under
-        // that (pinned at 4x with JIT headroom, measured ~13x cheaper).
+        // The probe must see the quadratic shape where it lives: every
+        // chained write copies the whole grid. If this leg ever fails, the
+        // probe has gone blind and the builder leg below proves nothing.
         self::assertGreaterThanOrEqual(
-            $builderNs * 4,
-            $chainNs,
-            sprintf('bulk build must not keep the quadratic door (chain %0.2fms vs builder %0.2fms)', $chainNs / 1e6, $builderNs / 1e6),
+            $gridCopyBytes,
+            $chainMinBytes,
+            sprintf('the allocation probe must see the chain copy the %d-cell grid on every write (min %d bytes per write)', $w * $h, $chainMinBytes),
+        );
+        self::assertGreaterThan(
+            $linearWriteCapBytes,
+            $chainMinBytes,
+            'the linear-write cap must reject the quadratic chain, or it guards nothing',
+        );
+
+        // The guard: no builder write allocates anything that scales with
+        // the canvas, so a bulk build of $writes writes stays linear.
+        self::assertLessThanOrEqual(
+            $linearWriteCapBytes,
+            $builderMaxBytes,
+            sprintf(
+                'bulk build must not keep the quadratic door (a builder write allocated %d bytes, cap %d; a grid copy is %d bytes, chain min %d bytes over %d writes)',
+                $builderMaxBytes,
+                $linearWriteCapBytes,
+                $gridCopyBytes,
+                $chainMinBytes,
+                $writes,
+            ),
         );
 
         // Same content through both doors, byte-identical — the structural
@@ -192,6 +237,85 @@ final class BufferBuilderTest extends TestCase
         self::assertSame(
             Buffer::fromGrid($w, $h, $grid)->toAnsi(),
             $built->toAnsi(),
+        );
+    }
+
+    public function testBuilderWriteTimeDoesNotScaleWithTheCanvas(): void
+    {
+        // The allocation guard above is blind to a write that walks the grid
+        // without copying it (a read-only validation loop, say): O(n) time
+        // per write, 0 bytes. This leg times one builder write on a small and
+        // on a 128x larger canvas. Both legs run the same PHP code, so load,
+        // JIT and pcov slow them alike and cancel out of the ratio (the old
+        // chain-vs-builder ratio did not cancel: the chain copies in C).
+        // Interleaved rounds plus best-of-N keep a loaded runner from
+        // inflating one side only.
+        $cell = Cell::new('#');
+        $smallCells = 8 * 8;
+        $largeCells = 128 * 64;
+        $small = Buffer::builder(8, 8);
+        $large = Buffer::builder(128, 64);
+        $smallWalk = array_fill(0, $smallCells, $cell);
+        $largeWalk = array_fill(0, $largeCells, $cell);
+
+        // ns per write, best of the batch; $walk adds a calibration grid walk.
+        $time = static function (BufferBuilder $builder, int $cells, ?array $walk, int $writes) use ($cell): float {
+            $width = $builder->width();
+            $start = hrtime(true);
+            for ($i = 0; $i < $writes; $i++) {
+                $idx = ($i * 7) % $cells;
+                $builder->setCellAt($idx % $width, intdiv($idx, $width), $cell);
+                if ($walk !== null) {
+                    foreach ($walk as $seen) {
+                    }
+                }
+            }
+
+            return (hrtime(true) - $start) / $writes;
+        };
+
+        $cap = 8.0;
+        // A slowdown that hits one canvas size for a whole ~8 ms window (a
+        // co-tenant burst aligned with every large batch) can push a single
+        // measurement over the cap with no regression. Such a burst does not
+        // repeat in step across independent windows, while a real O(n) write
+        // inflates every one of them, so a measurement is retried and the
+        // guard fails only when every attempt is over the cap.
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            $best = ['small' => INF, 'large' => INF, 'walkSmall' => INF, 'walkLarge' => INF];
+            for ($round = 0; $round < 25; $round++) {
+                $best['small'] = min($best['small'], $time($small, $smallCells, null, 256));
+                $best['large'] = min($best['large'], $time($large, $largeCells, null, 256));
+                $best['walkSmall'] = min($best['walkSmall'], $time($small, $smallCells, $smallWalk, 8));
+                $best['walkLarge'] = min($best['walkLarge'], $time($large, $largeCells, $largeWalk, 8));
+            }
+
+            $walkRatio = $best['walkLarge'] / $best['walkSmall'];
+            $builderRatio = $best['large'] / $best['small'];
+            if ($walkRatio > $cap && $builderRatio < $cap) {
+                break;
+            }
+        }
+
+        // The probe must see a grid walk, or the guard below proves nothing.
+        self::assertGreaterThan(
+            $cap,
+            $walkRatio,
+            sprintf('the timing probe must see a per-write grid walk scale with the canvas (ratio %.1fx, cap %.1fx)', $walkRatio, $cap),
+        );
+        self::assertLessThan(
+            $cap,
+            $builderRatio,
+            sprintf(
+                'a builder write must cost the same on any canvas (%.0f ns on %d cells, %.0f ns on %d cells: %.1fx, cap %.1fx, attempt %d of 3)',
+                $best['small'],
+                $smallCells,
+                $best['large'],
+                $largeCells,
+                $builderRatio,
+                $cap,
+                min($attempt, 3),
+            ),
         );
     }
 

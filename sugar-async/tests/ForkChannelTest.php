@@ -153,16 +153,45 @@ final class ForkChannelTest extends TestCase
     }
 
     /**
-     * Regression: a read holding thousands of small frames must split them all
-     * in order. The framing walks one offset and trims the buffer once, so the
-     * frames straddling the 64 KiB read boundary are the ones that would break
-     * if the offset bookkeeping drifted.
+     * Regression: a read holding many small frames must split them all in
+     * order. The framing walks one offset and trims the buffer once, so the
+     * frames at a read boundary are the ones that would break if the offset
+     * bookkeeping drifted.
+     *
+     * The writer runs in a forked child. Every send() is its own kernel write,
+     * and each write costs several hundred bytes of socket-buffer overhead, so
+     * 5000 of them overflow a default-sized (about 208 KiB) send buffer. Sent
+     * from this process, the blocking send() would wait on a reader that cannot
+     * run until the socket timeout, then fail as "peer closed while sending".
+     * Only hosts with a large wmem_default ever passed it that way.
      */
     public function testManySmallFramesInOneReadAllArriveInOrder(): void
     {
-        [$a, $b] = ForkChannel::pair();
-        $loop = new StreamSelectLoop();
+        if (!\function_exists('pcntl_fork')) {
+            self::markTestSkipped('needs ext-pcntl to run the writer in another process');
+        }
         $count = 5000;
+        $expected = [];
+        for ($i = 0; $i < $count; $i++) {
+            $expected[] = sprintf('%010d', $i);
+        }
+        [$a, $b] = ForkChannel::pair();
+        $pid = \pcntl_fork();
+        if ($pid === 0) {
+            $b->close();
+            $ok = true;
+            try {
+                foreach ($expected as $frame) {
+                    $a->send($frame);
+                }
+            } catch (\Throwable) {
+                $ok = false;
+            }
+            $a->close();
+            exit($ok ? 0 : 1);
+        }
+        $a->close();
+        $loop = new StreamSelectLoop();
         $received = [];
         $done = new Deferred();
         $b->onFrame(static function (string $frame) use (&$received, $done, $count): void {
@@ -171,16 +200,17 @@ final class ForkChannelTest extends TestCase
                 $done->resolve(true);
             }
         }, $loop);
-        $expected = [];
-        for ($i = 0; $i < $count; $i++) {
-            $expected[] = sprintf('%010d', $i);
-            $a->send(sprintf('%010d', $i));
+
+        try {
+            Await::until($done->promise(), 5.0, $loop);
+        } finally {
+            // Closing first means a writer still blocked on a stalled read gets
+            // a broken pipe and exits, so the wait below cannot hang.
+            $b->close();
+            \pcntl_waitpid($pid, $status);
         }
 
-        Await::until($done->promise(), 5.0, $loop);
-
         self::assertSame($expected, $received);
-        $a->close();
-        $b->close();
+        self::assertTrue(\pcntl_wifexited($status) && \pcntl_wexitstatus($status) === 0, 'the writer must send every frame');
     }
 }
