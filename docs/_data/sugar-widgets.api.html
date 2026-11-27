@@ -34,6 +34,40 @@
 <tr><td><code>announcement(): string</code></td><td>Screen-reader / status-line text for the activation (localised).</td></tr>
 </tbody>
 </table>
+<h3>SugarCraft\Widgets\Confirm</h3>
+<h4 id="api-sugarcraft-widgets-confirm-confirm"><code>Confirm</code> <small>final class</small></h4>
+<p>A yes/no prompt that can demand a typed confirmation word before a destructive action.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $prompt): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>prompt(): string</code></td><td></td></tr>
+<tr><td><code>typedConfirm(): string</code></td><td>The word that must be typed to confirm, or <code>&#039;&#039;</code> in single-key mode.</td></tr>
+<tr><td><code>typed(): string</code></td><td>The text typed so far in typed-word mode.</td></tr>
+<tr><td><code>isConfirmed(): bool</code></td><td></td></tr>
+<tr><td><code>isCancelled(): bool</code></td><td></td></tr>
+<tr><td><code>isPending(): bool</code></td><td></td></tr>
+<tr><td><code>isRejected(): bool</code></td><td>True after a wrong word was submitted, until the next edit.</td></tr>
+<tr><td><code>withTypedConfirm(string $word): self</code></td><td>Require <code>$word</code> to be typed and submitted with Enter before the prompt confirms. Clears any typed text. A word that is empty once sanitized throws rather than silently falling back to a single <code>y</code>.</td></tr>
+<tr><td><code>withoutTypedConfirm(): self</code></td><td>Back to single-key mode; clears any typed text.</td></tr>
+<tr><td><code>withPrompt(string $prompt): self</code></td><td></td></tr>
+<tr><td><code>reset(): self</code></td><td>Pending again, with no typed text, keeping the prompt and the word.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-confirm-confirmresolvedmsg"><code>ConfirmResolvedMsg</code> <small>final class</small></h4>
+<p>Sent through a Cmd when a key resolves a pending Confirm: <code>true</code> after the confirm key (or the exact typed word, submitted), <code>false</code> after a cancel. Only the resolving key sends it; every key before and after returns a null Cmd, so a host can treat each message as the single edge from pending to answered.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $prompt, public readonly bool $confirmed)</code></td><td></td></tr>
+</tbody>
+</table>
 <h3>SugarCraft\Widgets\Disclosure</h3>
 <h4 id="api-sugarcraft-widgets-disclosure-collapsiblelist"><code>CollapsibleList</code> <small>final class</small></h4>
 <p>A vertical stack of Disclosure items under one cursor: each item opens and closes on its own, and the cursor picks which one the keys act on.</p>

@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => '도움말 오버레이 높이는 1 이상이어야 합니다',
     'key_view.bad_columns' => '키 보기 열은 동작 이름 목록의 목록이어야 합니다',
     'key_view.column_size_nonneg' => '키 보기 열 크기는 0 이상이어야 합니다',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => '입력할 확인 단어는 비어 있을 수 없습니다',
 ];

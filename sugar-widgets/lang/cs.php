@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'výška překryvu nápovědy musí být >= 1',
     'key_view.bad_columns' => 'sloupce zobrazení kláves musí být seznamem seznamů názvů akcí',
     'key_view.column_size_nonneg' => 'velikost sloupce zobrazení kláves musí být >= 0',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'potvrzovací slovo k napsání nesmí být prázdné',
 ];

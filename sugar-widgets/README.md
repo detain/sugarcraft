@@ -16,7 +16,7 @@
 
 ![spinners](.vhs/spinners.gif)
 
-sugar-widgets — TUI components for PHP 8.3+: 13 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch, Button, Rule, Disclosure, CollapsibleList), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), and two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`) — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
+sugar-widgets — TUI components for PHP 8.3+: 14 first-party components (Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer, Stopwatch, Button, Rule, Disclosure, CollapsibleList, Confirm), 8 deprecated alias re-exports from `sugarcraft/sugar-forms` (TextInput, TextArea, Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner), and two btop-derived render helpers (`Input\TextEdit`, `Menu\OptionRow`) — including the interactive `Tree` and per-cell `Table::styleFunc(...)`.
 
 ```sh
 composer require sugarcraft/sugar-widgets
@@ -51,7 +51,7 @@ siblings resolve from Packagist.
 
 The table below lists the first-party components — Help, Key, Progress
 (includes the AnimatedProgress spring-variant), Timer, Stopwatch,
-Paginator, Tree, Table, Tabs, Disclosure, CollapsibleList — plus the two btop-derived render helpers,
+Paginator, Tree, Table, Tabs, Disclosure, CollapsibleList, Confirm — plus the two btop-derived render helpers,
 `Input\TextEdit` and `Menu\OptionRow`, followed by the deprecated alias
 re-exports from `sugarcraft/sugar-forms` (the alias rows name their origin explicitly).
 The counted inventory lives once, in the intro at the top of this file.
@@ -76,6 +76,7 @@ The counted inventory lives once, in the intro at the top of this file.
 | `Rule\Rule` | Horizontal / vertical divider — a SugarCraft original (no bubbles Ruler; antecedent: tview separators). `Rule::new($length)` / `Rule::vertical($length)`, `withTitle()` (horizontal only, clips to the budget), `withRune()` (exactly one cell), `withStyle()`; length `0` = auto (`Rule::AUTO_LENGTH`, 40 cells); unstyled output carries no SGR, so it is `NO_COLOR`-safe | — |
 | `Disclosure\Disclosure` | Titled section that shows or hides its body — a SugarCraft original (bubbles has no disclosure; antecedent: HTML `<details>`). `Disclosure::new($title, $body)`, `withOpen()` / `toggle()` / `withTitle()` / `withBody()` / `withIndicators($open, $closed)` (`▾`/`▸` by default) / `withIndent()` / `withTitleStyle()` / `withFocusedStyle()`; starts closed and blurred. The title is sanitized to one line; the body keeps its SGR, but every other escape, C0 control and C1 introducer is removed (as `Sanitize::untrusted()` does) and zone sentinels are stripped, so model or tool output is safe to pass as the body | `DisclosureToggledMsg` (via Cmd when a key changes the state) |
 | `Disclosure\CollapsibleList` | A vertical stack of `Disclosure` items under one cursor; each item opens and closes on its own. `CollapsibleList::new($items)`, `focus()` / `blur()`; the list owns item focus and paints the item under the cursor focused only while the list is focused | `DisclosureToggledMsg` (carries the item index) |
+| `Confirm\Confirm` | Yes/no prompt with an optional typed confirmation word — a SugarCraft original (bubbles has no confirm; huh's form toggle is sugar-forms `Field\Confirm`). `Confirm::new($prompt)`, `withTypedConfirm($word)` (throws on a word that is empty once sanitized) / `withoutTypedConfirm()` / `withPrompt()` / `reset()`; `isConfirmed()` / `isCancelled()` / `isPending()` / `isRejected()`. With a word set, only the exact word (case-sensitive, untrimmed) submitted with Enter confirms; a wrong word stays pending with the text kept. The prompt, word and typed keys are sanitized to one line | `ConfirmResolvedMsg` (via Cmd from the key that answers) |
 | `Paginator\Paginator` | Dot / arabic page indicator; nav gated on focus — `focus()` / `blur()` like the family; BLURRED by default (call `focus()` for key routing, as with Table/Tabs/Tree) | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values — `list<Item>` is a phpdoc contract, there is no runtime element guard _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values: `Node::branch($label, ...$children)` / `Node::leaf($label)`. Mind the raw constructor — its second parameter is `$value`, not children, so a 2-arg `new Node(...)` parks the child list in the value slot and renders flat; prefer the factories. Chrome glyphs and prefixes are immutable via `withStyle(...)`, checked at ingress; node labels are sanitised at RENDER (control characters stripped, `Sanitize::untrustedForMarkedFrames()` applied). | — |
@@ -98,6 +99,7 @@ The first-party widgets below decode these keys inside their own
 | `Tree` | `↑`/`k`, `↓`/`j`, `Enter` toggles, `→`/`l` expands, `←`/`h` collapses, `g`/`G` jump, `Home`/`End` jump (same targets), `PageUp`/`PageDown` stride the visible height (whole list at height 0) |
 | `Disclosure` | `Enter`/`Space` toggles, `→`/`l` opens, `←`/`h` closes; only decoded while focused, key releases ignored |
 | `CollapsibleList` | `↑`/`k`, `↓`/`j` move the cursor (clamped, no wrap), `Home`/`g`, `End`/`G` jump, and the `Disclosure` keys act on the item under the cursor; only decoded while focused |
+| `Confirm` | `y`/`Y` confirms, `n`/`N` or `Esc` cancels, other keys are ignored (Enter never confirms); with `withTypedConfirm($word)`, printable keys and `Space` type, `Backspace` deletes, `Enter` submits, `Esc` cancels. Decoded while pending, with no focus gate (the host routes keys to it while shown); key releases and Ctrl/Alt chords ignored |
 | `Help` | no hardcoded key — `updateWithBinding($msg, $toggle)` flips the full view when `$msg` matches whatever `Binding` the host wires in (the bubbles convention is `?`); plain `update()` is a pass-through |
 | `Menu\OptionRow` | renders the `←`/`→`/`↵` control glyphs on the selected row but decodes nothing itself — the consumer's keymap drives the actions |
 

@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'wysokość nakładki pomocy musi wynosić >= 1',
     'key_view.bad_columns' => 'kolumny widoku klawiszy muszą być listą list nazw akcji',
     'key_view.column_size_nonneg' => 'rozmiar kolumny widoku klawiszy musi wynosić >= 0',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'słowo potwierdzenia do wpisania nie może być puste',
 ];

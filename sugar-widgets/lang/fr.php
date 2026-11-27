@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'la hauteur de la surcouche d’aide doit être >= 1',
     'key_view.bad_columns' => 'les colonnes de la vue des touches doivent être une liste de listes de noms d’action',
     'key_view.column_size_nonneg' => 'la taille de colonne de la vue des touches doit être >= 0',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'le mot de confirmation à saisir ne doit pas être vide',
 ];

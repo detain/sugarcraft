@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => '帮助浮层的高度必须 >= 1',
     'key_view.bad_columns' => '按键视图的列必须是由操作名列表组成的列表',
     'key_view.column_size_nonneg' => '按键视图的列大小必须 >= 0',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => '需要输入的确认词不能为空',
 ];
