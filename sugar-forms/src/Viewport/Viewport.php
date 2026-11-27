@@ -275,6 +275,42 @@ final class Viewport implements Model
         return $this->copy(lines: $lines)->clamp();
     }
 
+    /**
+     * Immutable content replacement. Mirrors charmbracelet/bubbles
+     * `viewport.Model.SetContent`, spelled as a `with*()` setter so a
+     * caller can chain `Viewport::new()->withContent($lines)->scrollBy($n)`
+     * without reaching for the set* family.
+     *
+     * A string is split on "\n"; a list is taken as lines, and any element
+     * that itself carries "\n" is split too, so both spellings yield the
+     * same line grid for the same text. The current offsets are kept and
+     * clamped to the new content bounds.
+     *
+     * @param string|list<string> $content
+     */
+    public function withContent(string|array $content): self
+    {
+        $text = \is_array($content) ? implode("\n", $content) : $content;
+        $lines = $text === '' ? [''] : explode("\n", $text);
+        return $this->copy(lines: $lines)->clamp();
+    }
+
+    /**
+     * Immutable relative vertical scroll: a positive `$n` moves the window
+     * down, a negative one moves it up, and the result is clamped to
+     * `[0, maxOffset]`. Mirrors charmbracelet/bubbles
+     * `viewport.Model.ScrollDown` / `ScrollUp` folded into one signed step.
+     */
+    public function scrollBy(int $n): self
+    {
+        // Bound the step by the line count first: no window can move further
+        // than that, and an unbounded PHP_INT_MAX step would overflow the sum
+        // to float and fail the int-typed offset.
+        $total = $this->totalLineCount();
+        $n = Clamp::int($n, -$total, $total);
+        return $this->copy(yOffset: $this->yOffset + $n)->clamp();
+    }
+
     public function withSize(int $width, int $height): self
     {
         if ($width < 0 || $height < 0) {
