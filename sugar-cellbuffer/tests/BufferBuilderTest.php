@@ -153,32 +153,77 @@ final class BufferBuilderTest extends TestCase
         $h = 50;
         $cell = Cell::new('#');
 
-        $t0 = hrtime(true);
-        $chain = Buffer::new($w, $h);
-        foreach (range(0, $w * $h - 1) as $i) {
-            if ($i % 7 === 0) {
-                $chain = $chain->withCellAt($i % $w, intdiv($i, $w), $cell);
-            }
-        }
-        $chainNs = hrtime(true) - $t0;
+        // The quadratic door is a whole-grid copy on every write: n writes
+        // into an n-cell canvas cost O(n) each, O(n²) in all. That copy is an
+        // allocation of at least one zval (16 bytes) per cell, so the guard
+        // measures the bytes each write allocates, not wall-clock time. A
+        // wall-clock ratio collapsed to ~4x on the CI coverage runner (pcov
+        // slows the builder's PHP lines while the chain's copy runs in C),
+        // so the old 4x timing bar failed on load, not on a regression. The
+        // allocation count is deterministic: it does not move with load, JIT
+        // or the coverage driver.
+        $gridCopyBytes = 16 * $w * $h;
+        // A linear write may allocate a few small objects (a Cell, a
+        // reference wrapper), never anything that scales with the canvas, so
+        // the cap is a constant: 80000 bytes per grid copy against 4 KiB
+        // leaves a 19x gap (measured: 0 bytes per builder write, 136728 per
+        // chained write, on PHP 8.3 with and without pcov).
+        $linearWriteCapBytes = 4096;
 
-        $t1 = hrtime(true);
-        $builder = Buffer::builder($w, $h);
-        foreach (range(0, $w * $h - 1) as $i) {
-            if ($i % 7 === 0) {
-                $builder->setCellAt($i % $w, intdiv($i, $w), $cell);
-            }
+        $chain = Buffer::new($w, $h)->withCellAt(0, 0, $cell);
+        $builder = Buffer::builder($w, $h)->setCellAt(0, 0, $cell);
+
+        $chainMinBytes = PHP_INT_MAX;
+        $builderMaxBytes = 0;
+        $writes = 0;
+        // Index 0 was the warm-up write above, so first-run allocations
+        // (the by-reference wrapper on the builder grid) stay out of the
+        // per-write figure.
+        for ($i = 7; $i < $w * $h; $i += 7) {
+            $col = $i % $w;
+            $row = intdiv($i, $w);
+
+            $base = memory_get_usage();
+            memory_reset_peak_usage();
+            $chain = $chain->withCellAt($col, $row, $cell);
+            $chainMinBytes = min($chainMinBytes, memory_get_peak_usage() - $base);
+
+            $base = memory_get_usage();
+            memory_reset_peak_usage();
+            $builder->setCellAt($col, $row, $cell);
+            $builderMaxBytes = max($builderMaxBytes, memory_get_peak_usage() - $base);
+
+            $writes++;
         }
         $built = $builder->toBuffer();
-        $builderNs = hrtime(true) - $t1;
 
-        // The finding measured the fluent chain at 41x the fromGrid door
-        // for bulk writes; the builder must land orders of magnitude under
-        // that (pinned at 4x with JIT headroom, measured ~13x cheaper).
+        // The probe must see the quadratic shape where it lives: every
+        // chained write copies the whole grid. If this leg ever fails, the
+        // probe has gone blind and the builder leg below proves nothing.
         self::assertGreaterThanOrEqual(
-            $builderNs * 4,
-            $chainNs,
-            sprintf('bulk build must not keep the quadratic door (chain %0.2fms vs builder %0.2fms)', $chainNs / 1e6, $builderNs / 1e6),
+            $gridCopyBytes,
+            $chainMinBytes,
+            sprintf('the allocation probe must see the chain copy the %d-cell grid on every write (min %d bytes per write)', $w * $h, $chainMinBytes),
+        );
+        self::assertGreaterThan(
+            $linearWriteCapBytes,
+            $chainMinBytes,
+            'the linear-write cap must reject the quadratic chain, or it guards nothing',
+        );
+
+        // The guard: no builder write allocates anything that scales with
+        // the canvas, so a bulk build of $writes writes stays linear.
+        self::assertLessThanOrEqual(
+            $linearWriteCapBytes,
+            $builderMaxBytes,
+            sprintf(
+                'bulk build must not keep the quadratic door (a builder write allocated %d bytes, cap %d; a grid copy is %d bytes, chain min %d bytes over %d writes)',
+                $builderMaxBytes,
+                $linearWriteCapBytes,
+                $gridCopyBytes,
+                $chainMinBytes,
+                $writes,
+            ),
         );
 
         // Same content through both doors, byte-identical — the structural
