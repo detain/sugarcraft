@@ -41,8 +41,9 @@ final class Terminal
      * `AutoWidth::Auto` stays environment-only and device-free; call this
      * where a real measurement is wanted and pass the result as `$width`.
      *
-     * @param resource|null $stream the output stream; null means STDOUT (and
-     *        null comes back when STDOUT is undefined or closed)
+     * @param resource|null $stream the output stream; null means STDOUT (an
+     *        exported COLUMNS still answers first; null comes back only when
+     *        nothing is exported and STDOUT is undefined or closed)
      * @throws \InvalidArgumentException when `$stream` is neither null nor a
      *         stream resource
      */
