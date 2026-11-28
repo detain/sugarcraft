@@ -53,10 +53,15 @@ final class BackgroundShellWindowsArmTest extends TestCase
         // the marker and exits — it does NOT run the wrapper, so no .exit
         // file ever appears, and the state stays honestly 'running' until
         // teardown reaps. The point is what the exec carried, not what ran.
+        // The `>>` creates the marker before the first printf lands and each
+        // printf is its own write, so the file can exist empty or half
+        // written; the sentinel line goes last, and the wait below keys on
+        // it, so the read sees the whole record.
+        $sentinel = "W6A_ARGV_RECORD_END\n";
         file_put_contents(
             $bash,
             "#!/bin/bash\n"
-            . '{ printf "argc=%s\n" "$#"; for a in "$@"; do printf "arg=[%s]\n" "$a"; done; } >> "$W6A_ARGV_MARKER"' . "\n"
+            . '{ printf "argc=%s\n" "$#"; for a in "$@"; do printf "arg=[%s]\n" "$a"; done; printf "W6A_ARGV_RECORD_END\n"; } >> "$W6A_ARGV_MARKER"' . "\n"
             . "exit 0\n"
         );
         chmod($bash, 0o755);
@@ -76,7 +81,10 @@ final class BackgroundShellWindowsArmTest extends TestCase
         // skips the probe outright. Never a derived guess.
         self::assertSame(ProcessContainment::groupsSpawns(), $started['shell']['grouped'], 'the row records the kernel truth at spawn time');
 
-        self::assertTrue($this->pollRegistry($registry, fn (): bool => is_file($marker)), 'the fixture never recorded its argv');
+        self::assertTrue(
+            $this->pollRegistry($registry, static fn (): bool => is_file($marker) && str_ends_with((string) file_get_contents($marker), $sentinel)),
+            'the fixture never finished recording its argv'
+        );
         $recorded = (string) file_get_contents($marker);
         self::assertStringContainsString('argc=2', $recorded, 'the spawn was [bash.exe, -c, script] — three tokens, two arguments');
         self::assertStringContainsString('arg=[-c]', $recorded);
