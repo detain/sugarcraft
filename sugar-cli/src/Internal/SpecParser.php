@@ -278,6 +278,24 @@ final class SpecParser
             }
         }
 
+        // A non-persistent ancestor option outside the leaf's parse still
+        // answers its own command's requires(): a variable its command would
+        // accept satisfies the rule, though the value stays out of the
+        // subcommand's parse. Otherwise the error would name an option the
+        // environment already supplies.
+        $suppliedAbove = static function (string $name) use ($leafOptions, $given, $suppressed, $options, $env, $names): bool {
+            if (isset($leafOptions[$name]) || isset($given[$name]) || isset($suppressed[$name])) {
+                return false;
+            }
+            $envName = $options[$name]->env();
+            $raw = $envName === null ? '' : ($env[$envName] ?? '');
+            if ($envName === null || $raw === '') {
+                return false;
+            }
+            $value = self::convertEnv($options[$name], $raw, $envName, $names);
+            return $value !== null && !$value instanceof UsageError;
+        };
+
         foreach ($path as $spec) {
             foreach ($spec->requirements() as $name => $needs) {
                 // An all-digit name comes back from the array key as an int.
@@ -286,7 +304,7 @@ final class SpecParser
                     continue;
                 }
                 foreach ($needs as $need) {
-                    if (!$present($need)) {
+                    if (!$present($need) && !$suppliedAbove($need)) {
                         return self::error(UsageErrorKind::MissingRequirement, [
                             'option' => '--' . $name,
                             'requires' => '--' . $need,

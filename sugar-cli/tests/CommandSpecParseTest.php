@@ -511,20 +511,33 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame(['effort' => 'high', 'dry' => false], $parsed->values());
     }
 
-    public function testNonPersistentParentEnvDoesNotSatisfyAParentRequirementAtTheSubcommand(): void
+    public function testNonPersistentParentEnvSatisfiesAParentRequirementAtTheSubcommand(): void
     {
         $spec = CommandSpec::new('app')
             ->withOption(Option::value('key'))
             ->withOption(Option::value('cert')->withEnv('APP_CERT'))
+            ->withOption(Option::flag('tls')->withEnv('APP_TLS'))
             ->requires('key', 'cert')
+            ->requires('key', 'tls')
             ->withSubcommand(CommandSpec::new('run'));
+        $env = ['APP_CERT' => 'c', 'APP_TLS' => '1'];
 
-        // Typed at the root's level, --key is still checked at the leaf, but
-        // the root-only APP_CERT no longer counts for --cert there.
-        $this->ok($spec, ['--key', 'k'], ['APP_CERT' => 'c']);
-        $error = $this->usageError($spec, ['--key', 'k', 'run'], ['APP_CERT' => 'c']);
+        // Typed at the root's level, --key is still checked at the leaf, and
+        // the root-only variables satisfy its rules there as they do at the
+        // root, without entering the subcommand's parse.
+        $this->ok($spec, ['--key', 'k'], $env);
+        $parsed = $this->ok($spec, ['--key', 'k', 'run'], $env);
+        $this->assertNotInParse($parsed, 'cert');
+        $this->assertNotInParse($parsed, 'tls');
+        $this->ok($spec, ['--key', 'k', '--cert', 'c', '--tls', 'run']);
+
+        // Unset, or a falsy flag variable, still leaves the rule unmet.
+        $error = $this->usageError($spec, ['--key', 'k', 'run'], ['APP_TLS' => '1']);
         self::assertSame(UsageErrorKind::MissingRequirement, $error->kind());
-        $this->ok($spec, ['--key', 'k', '--cert', 'c', 'run']);
+        self::assertSame('--cert', $error->params()['requires']);
+        $error = $this->usageError($spec, ['--key', 'k', 'run'], ['APP_CERT' => 'c', 'APP_TLS' => 'off']);
+        self::assertSame(UsageErrorKind::MissingRequirement, $error->kind());
+        self::assertSame('--tls', $error->params()['requires']);
     }
 
     public function testPersistentParentOptionCarriesRequiredEnvAndDefaultIntoTheSubcommand(): void
