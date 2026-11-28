@@ -131,7 +131,7 @@
 <tr><td><code>withFilter(LogFilter $filter): self</code></td><td></td></tr>
 <tr><td><code>withFollow(bool $follow): self</code></td><td>Follow the file or freeze on what is held. A change drops the reads in flight, so a paused viewer takes no late read. The follow chain keeps running while paused without reading, so a resumed viewer reads again at the next tick; issue refresh() to read at once (the <code>f</code> key does). Setting the current value changes nothing.</td></tr>
 <tr><td><code>withInterval(float $seconds): self</code></td><td></td></tr>
-<tr><td><code>withTailSize(int $records): self</code></td><td>How many records each read takes from the end of the file. A strict filter shows only the matches among them, so size it for the filter.</td></tr>
+<tr><td><code>withTailSize(int $records): self</code></td><td>How many records each read takes from the end of the file. A strict filter shows only the matches among them, so size it for the filter. Each read replaces what is held, so when more than $records lines arrive between two reads (a burst, or a pause) only the newest $records are ever shown and the rest are skipped without a mark; size it above the lines one interval can bring.</td></tr>
 <tr><td><code>withHeight(int $rows): self</code></td><td></td></tr>
 <tr><td><code>withWidth(?int $columns): self</code></td><td>Pad and clip every row to $columns cells; null renders rows at their own width. A clipped row ends in <code>…</code>.</td></tr>
 <tr><td><code>withShowTimestamps(bool $show): self</code></td><td>Show a structured record&#039;s time as <code>[time]</code>. A text line shows as written either way.</td></tr>

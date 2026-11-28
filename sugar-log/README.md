@@ -523,7 +523,13 @@ seconds (`tick()`) that reads the tail when the viewer follows and only waits
 when it does not. `refresh()` is a one-off read beside the chain and never
 starts a second one. Each read replaces the held records with the file's last
 `withTailSize()` records, so new lines land below the older ones, repeated
-identical lines all show, and a truncated file reads as it is. The filter
+identical lines all show, and a truncated file reads as it is. The viewer is
+a window on the end of the file, not a record of every line: when more than
+`withTailSize()` lines arrive between two reads (a burst within one interval,
+or the lines written while it was paused or before `withReader()`), the next
+read holds only the newest of them, and the older new lines are never shown,
+with nothing marking the gap. Size the tail above the lines one interval can
+bring. The filter
 applies at render time: `withFilter()` re-renders the records already held
 without reading the file.
 

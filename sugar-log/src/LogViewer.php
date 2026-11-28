@@ -38,10 +38,16 @@ use SugarCraft\Style\Style;
  * any, on its bottom row.
  *
  * Each read replaces the held records with the file's last
- * {@see withTailSize()} records rather than appending a diff. On screen it
- * is the same — new lines arrive below the older ones — but a replace needs no
- * guess about where the old tail ended: two identical lines in a row, a
- * truncated file and a rotated one all come out exactly as the file reads.
+ * {@see withTailSize()} records rather than appending a diff, so a replace
+ * needs no guess about where the old tail ended: two identical lines in a
+ * row, a truncated file and a rotated one all come out exactly as the file
+ * reads. The viewer is a window on the end of the file, not a log of every
+ * line: while fewer than tailSize lines arrive between two reads, new lines
+ * land below the older ones as an append would. When more arrive — a burst
+ * within one interval, or the lines written while the viewer was paused or
+ * before a {@see withReader()} — the next read holds only the newest
+ * tailSize, and the older new lines are never shown. Nothing marks that gap;
+ * size the tail above the lines one interval can bring.
  *
  * The filter is applied at render time, so a filter change re-renders the
  * records already held without touching the file.
@@ -293,6 +299,10 @@ final class LogViewer implements Model
     /**
      * How many records each read takes from the end of the file. A strict
      * filter shows only the matches among them, so size it for the filter.
+     * Each read replaces what is held, so when more than $records lines
+     * arrive between two reads (a burst, or a pause) only the newest $records
+     * are ever shown and the rest are skipped without a mark; size it above
+     * the lines one interval can bring.
      *
      * @throws \InvalidArgumentException When $records is less than one.
      */

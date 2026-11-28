@@ -261,6 +261,24 @@ final class LogViewerTest extends TestCase
         self::assertSame(['b', 'c'], self::messages($viewer->records));
     }
 
+    public function testABurstLargerThanTheTailSizeShowsOnlyTheNewestRecords(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'old'));
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json))->withTailSize(3));
+        self::assertInstanceOf(\Closure::class, $tick);
+
+        // Five lines in one interval outrun a tail of three: the read is a
+        // window on the end of the file, so n1 and n2 are never held.
+        foreach (['n1', 'n2', 'n3', 'n4', 'n5'] as $msg) {
+            \file_put_contents($path, self::json('INFO', $msg), \FILE_APPEND);
+        }
+        [$next] = $viewer->update(self::chainRead($viewer, $tick));
+
+        self::assertInstanceOf(LogViewer::class, $next);
+        self::assertSame(['n3', 'n4', 'n5'], self::messages($next->records));
+        self::assertNull($next->error, 'the skipped lines are not reported as an error');
+    }
+
     public function testFKeyPausesFollowAndDropsTheReadAlreadyInFlight(): void
     {
         $path = $this->file('app.log', self::json('INFO', 'one'));
