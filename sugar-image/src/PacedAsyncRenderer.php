@@ -17,18 +17,29 @@ use SugarCraft\Image\Renderer\IncrementalRenderer;
  * wrapper around the blocking one-shot encode — scheduling only, a large
  * image still occupies the whole loop for the entire render, with no
  * progress, no interleaving, and no budget. Here the encode is row-lazy from
- * the first slice: each {@see PacedRenderSession::advanceSlice()} consumes
- * rows until the budget is spent, the loop is yielded through
+ * the first slice: each tick's {@see PacedRenderSession::advanceUntil()}
+ * consumes rows until the slice budget or the tick's pause is spent (never
+ * {@see PacedRenderSession::advanceSlice()}, which would hold the loop for a
+ * whole capped slice), the loop is yielded through
  * {@see Loop::futureTick()} (a queue hand-off, not a timer — this class
  * arms nothing on the clock, so no LoopPin timer margin is consumed), and
  * the following tick resumes exactly where the bytes and the generator
  * cursor were left. Other watchers run in between; a TUI driving this can
  * paint partial progress or abandon the generator to cancel.
  *
- * The no-blanket-timeout rule, which must survive edits: the deadline bounds EACH
- * SLICE, never the whole render — so it is a fairness device, not a
- * timeout, and cannot truncate a slow-but-legitimate encode. There is no
- * request-wide ceiling anywhere in this class by design.
+ * A slice ends on either a finite row cap or a wall-clock deadline, never
+ * both: with a finite $rowsPerSlice the cap alone ends each slice, so the
+ * slice plan never moves with encode speed; only the unbounded cap
+ * (PHP_INT_MAX) closes slices on the clock. $sliceMs still paces the loop
+ * in both cases: each tick pumps through
+ * {@see PacedRenderSession::advanceUntil()} and yields once its $sliceMs is
+ * spent, mid-slice if need be, and the next tick resumes that same slice.
+ *
+ * The no-blanket-timeout rule, which must survive edits: the deadline
+ * bounds EACH SLICE (or each tick's share of one), never the whole render —
+ * so it is a fairness device, not a timeout, and cannot truncate a
+ * slow-but-legitimate encode.
+ * There is no request-wide ceiling anywhere in this class by design.
  *
  * Cancellation is by abandonment (the port's prescription): drop the
  * promise and the session, the generator dies, and the encode dies with it —
@@ -47,9 +58,12 @@ final class PacedAsyncRenderer implements AsyncRenderer
 
     /**
      * @param IncrementalRenderer $renderer     The row-lazy encode source.
-     * @param int                 $sliceMs      Millisecond budget per slice (>= 1).
+     * @param int                 $sliceMs      Millisecond budget per tick (>= 1): when
+     *                                          renderAsync() yields the loop; it closes
+     *                                          slices only under the unbounded row cap.
      * @param int                 $rowsPerSlice Determinism cap on rows per slice
-     *                                          (>= 1); PHP_INT_MAX = clock decides.
+     *                                          (>= 1): a finite cap alone decides the
+     *                                          slice plan; PHP_INT_MAX = clock decides.
      */
     public function __construct(
         private readonly IncrementalRenderer $renderer,
@@ -67,10 +81,12 @@ final class PacedAsyncRenderer implements AsyncRenderer
     /**
      * Render asynchronously in paced slices, resolving with the full bytes.
      *
-     * The first slice runs inline before this method returns (progress
-     * immediately observable, matching the documented pump shape), later slices
-     * re-arm on futureTick, so the promise needs the loop only when the
-     * encode spans more than one slice.
+     * The first tick runs inline before this method returns (progress
+     * immediately observable, matching the documented pump shape), bounded by
+     * sliceMs: it ends at the slice boundary or the clock, whichever comes
+     * first, so under a finite row cap it may encode fewer rows than one
+     * slice. Later ticks re-arm on futureTick, so the promise needs the loop
+     * whenever the encode spans more than one tick.
      */
     public function renderAsync(ImageSource $image, int $width, ?int $height = null): PromiseInterface
     {
@@ -79,7 +95,9 @@ final class PacedAsyncRenderer implements AsyncRenderer
 
         $pump = function () use ($session, $deferred, &$pump): void {
             try {
-                $session->advanceSlice();
+                // Yield on the slice boundary or on the clock, whichever is
+                // first: the clock paces the loop, the cap keeps the plan.
+                $session->advanceUntil(Deadline::in($this->sliceMs));
                 if ($session->isDone()) {
                     $deferred->resolve($session->output());
                     return;

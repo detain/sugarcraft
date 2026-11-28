@@ -328,6 +328,7 @@
 <tbody>
 <tr><td><code>__construct(private readonly \Generator $rows, private readonly int $sliceMs, private readonly int $rowsPerSlice)</code></td><td></td></tr>
 <tr><td><code>advanceSlice(): string</code></td><td>Run one slice: pull rows while budget remains, appending their bytes.</td></tr>
+<tr><td><code>advanceUntil(Deadline $pause): bool</code></td><td>Run rows of the open slice until it closes or $pause expires.</td></tr>
 <tr><td><code>output(): string</code></td><td>All bytes accumulated so far — the full stream once isDone().</td></tr>
 <tr><td><code>isDone(): bool</code></td><td>Whether every row has been consumed (idempotent past the last slice).</td></tr>
 <tr><td><code>sliceCount(): int</code></td><td>Slices run so far — the deterministic progress counter.</td></tr>
