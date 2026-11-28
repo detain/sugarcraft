@@ -214,7 +214,12 @@ final class SpecParser
             }
 
             if ($option->default() !== null) {
-                $values[$name] = $option->default();
+                $default = $option->default();
+                // A repeatable value option resolves to a list from every
+                // source, so a scalar default is wrapped to keep that shape.
+                $values[$name] = $option->takesValue() && $option->repeatable() && !is_array($default)
+                    ? [$default]
+                    : $default;
                 $sources[$name] = ValueSource::Default;
                 continue;
             }

@@ -152,6 +152,17 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame([], $this->ok($spec, [])->value('tag'));
     }
 
+    public function testRepeatableValueDefaultIsAList(): void
+    {
+        $spec = CommandSpec::new('app')->withOption(Option::value('tag')->withRepeatable()->withDefault('x'));
+
+        self::assertSame(['x'], $this->ok($spec, [])->value('tag'));
+        self::assertSame(['a'], $this->ok($spec, ['--tag', 'a'])->value('tag'));
+
+        $listDefault = CommandSpec::new('app')->withOption(Option::value('tag')->withRepeatable()->withDefault(['x', 'y']));
+        self::assertSame(['x', 'y'], $this->ok($listDefault, [])->value('tag'));
+    }
+
     public function testRepeatableFlagCounts(): void
     {
         $spec = CommandSpec::new('app')->withOption(Option::flag('verbose')->withShort('v')->withRepeatable());

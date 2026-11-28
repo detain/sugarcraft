@@ -166,8 +166,9 @@ final class Option
 
     /**
      * Value reported when neither argv nor env supplies the option. Taken
-     * as given: it is not converted or checked against the choices. Not
-     * allowed on a required option ({@see withRequired()}).
+     * as given: it is not converted or checked against the choices. On a
+     * repeatable value option a non-array default is wrapped in a list.
+     * Not allowed on a required option ({@see withRequired()}).
      */
     public function withDefault(mixed $default): self
     {
