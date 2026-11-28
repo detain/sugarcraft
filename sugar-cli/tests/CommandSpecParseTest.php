@@ -601,6 +601,29 @@ final class CommandSpecParseTest extends TestCase
         $this->assertNotInParse($parsed, 'cert');
     }
 
+    public function testNonPersistentParentArgvSatisfiesAParentRequirementAtTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('cert'))
+            ->withOption(Option::value('key')->withPersistent())
+            ->requires('key', 'cert')
+            ->withSubcommand(CommandSpec::new('run'));
+
+        // The persistent --key triggers the rule at the subcommand. A
+        // non-persistent --cert typed before the subcommand meets it, as the
+        // env variant does, yet stays out of the subcommand's parse.
+        $parsed = $this->ok($spec, ['--cert', 'c', '--key', 'k', 'run']);
+        self::assertSame('k', $parsed->value('key'));
+        $this->assertNotInParse($parsed, 'cert');
+
+        // Without it, the rule is unmet wherever --key is typed.
+        foreach ([['--key', 'k', 'run'], ['run', '--key', 'k']] as $argv) {
+            $error = $this->usageError($spec, $argv);
+            self::assertSame(UsageErrorKind::MissingRequirement, $error->kind());
+            self::assertSame('--cert', $error->params()['requires']);
+        }
+    }
+
     public function testNonPersistentParentEnvSatisfiesAParentRequirementAtTheSubcommand(): void
     {
         $spec = CommandSpec::new('app')
