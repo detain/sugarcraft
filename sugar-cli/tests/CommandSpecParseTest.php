@@ -354,6 +354,22 @@ final class CommandSpecParseTest extends TestCase
         );
     }
 
+    public function testTwoEnvMembersOfAParentConflictSetConflictAtTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('json')->withEnv('APP_JSON'))
+            ->withOption(Option::flag('plain')->withEnv('APP_PLAIN'))
+            ->conflicts('json', 'plain')
+            ->withSubcommand(CommandSpec::new('run'));
+
+        $error = $this->usageError($spec, ['run'], ['APP_JSON' => '1', 'APP_PLAIN' => '1']);
+        self::assertSame(UsageErrorKind::ConflictingOptions, $error->kind());
+        self::assertSame('APP_JSON', $error->params()['env']);
+        self::assertSame('APP_PLAIN', $error->params()['otherEnv']);
+        // A falsy variable switches its flag off, so it does not conflict.
+        self::assertSame(['app', 'run'], $this->ok($spec, ['run'], ['APP_JSON' => '1', 'APP_PLAIN' => '0'])->command());
+    }
+
     public function testConflictReportsOptionsInArgvOrder(): void
     {
         $spec = CommandSpec::new('app')

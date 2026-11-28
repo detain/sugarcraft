@@ -252,9 +252,48 @@ final class SpecParser
             ? $options[$name]->env()
             : null;
 
+        // A non-persistent ancestor option outside the leaf's parse still
+        // answers its own command's conflict and requires() rules: a
+        // variable its command would accept counts as given, though the
+        // value stays out of the subcommand's parse. Otherwise the error
+        // would name an option the environment already supplies. A variable
+        // that fails conversion comes back as the InvalidValue the ancestor
+        // itself would report.
+        $suppliedAbove = static function (string $name) use ($leafOptions, $given, $suppressed, $options, $env, $names): bool|UsageError {
+            if (isset($leafOptions[$name]) || isset($given[$name]) || isset($suppressed[$name])) {
+                return false;
+            }
+            $envName = $options[$name]->env();
+            $raw = $envName === null ? '' : ($env[$envName] ?? '');
+            if ($envName === null || $raw === '') {
+                return false;
+            }
+            $value = self::convertEnv($options[$name], $raw, $envName, $names);
+            return $value instanceof UsageError ? $value : $value !== null;
+        };
+
         foreach ($path as $spec) {
             foreach ($spec->conflictSets() as $set) {
-                $hits = array_values(array_filter($set, $present));
+                $hits = [];
+                $hitEnv = [];
+                foreach ($set as $member) {
+                    if ($present($member)) {
+                        $hits[] = $member;
+                        $hitEnv[$member] = $envSource($member);
+                        continue;
+                    }
+                    // A member outside the leaf's parse never gets an Env
+                    // source; without this, two ancestor variables would
+                    // dodge the ancestor's conflict rule at a subcommand.
+                    $above = $suppliedAbove($member);
+                    if ($above instanceof UsageError) {
+                        return $above;
+                    }
+                    if ($above) {
+                        $hits[] = $member;
+                        $hitEnv[$member] = $options[$member]->env();
+                    }
+                }
                 if (count($hits) < 2) {
                     continue;
                 }
@@ -262,8 +301,8 @@ final class SpecParser
                 return self::error(UsageErrorKind::ConflictingOptions, [
                     'option' => '--' . $hits[0],
                     'other' => '--' . $hits[1],
-                    'env' => $envSource($hits[0]),
-                    'otherEnv' => $envSource($hits[1]),
+                    'env' => $hitEnv[$hits[0]],
+                    'otherEnv' => $hitEnv[$hits[1]],
                 ], $names);
             }
         }
@@ -280,25 +319,6 @@ final class SpecParser
                 ], $names);
             }
         }
-
-        // A non-persistent ancestor option outside the leaf's parse still
-        // answers its own command's requires(): a variable its command would
-        // accept satisfies the rule, though the value stays out of the
-        // subcommand's parse. Otherwise the error would name an option the
-        // environment already supplies. A variable that fails conversion
-        // comes back as the InvalidValue the ancestor itself would report.
-        $suppliedAbove = static function (string $name) use ($leafOptions, $given, $suppressed, $options, $env, $names): bool|UsageError {
-            if (isset($leafOptions[$name]) || isset($given[$name]) || isset($suppressed[$name])) {
-                return false;
-            }
-            $envName = $options[$name]->env();
-            $raw = $envName === null ? '' : ($env[$envName] ?? '');
-            if ($envName === null || $raw === '') {
-                return false;
-            }
-            $value = self::convertEnv($options[$name], $raw, $envName, $names);
-            return $value instanceof UsageError ? $value : $value !== null;
-        };
 
         foreach ($path as $spec) {
             foreach ($spec->requirements() as $name => $needs) {
