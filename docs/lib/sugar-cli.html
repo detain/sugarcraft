@@ -550,7 +550,7 @@ vendor/bin/phpunit</code></pre>
 <tr><td>Help screen layout (usage, flag groups, description)</td><td><code>HelpText::render()</code>, <code>renderRows()</code>, <code>renderPage()</code></td></tr>
 <tr><td>Color profile detection (<code>colorprofile.Detect</code>)</td><td><code>Theme::detect()</code>, backed by sugar-core's <code>ColorProfile</code></td></tr>
 <tr><td>Styled title and status output</td><td><code>Banner</code>, <code>StatusLine</code>, <code>Section</code></td></tr>
-<tr><td>Not ported: the argv and cobra integration</td><td>Out of scope. sugar-cli takes data and returns strings</td></tr>
+<tr><td>Command, flag and argument parsing (cobra and pflag)</td><td><code>CommandSpec::parse()</code>, returning <code>ParsedArgs</code> or <code>UsageError</code>. Not ported: cobra itself, so sugar-cli does not run commands</td></tr>
 </table>
     <p style="margin-top: 12px;">The surface inventory is in <a href="https://github.com/sugarcraft/sugar-cli/blob/master/README.md">the README</a>. The port mapping is in <code>docs/MATCHUPS.md</code>.</p>
 

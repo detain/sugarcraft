@@ -24,13 +24,15 @@ final class Suggest
 {
     public const MAX_DISTANCE = 2;
 
-    /** @param iterable<string> $candidates */
+    /** @param iterable<int|string> $candidates */
     public static function closest(string $input, iterable $candidates): ?string
     {
         $limit = min(self::MAX_DISTANCE, strlen($input) - 1);
         $best = null;
         $bestDistance = PHP_INT_MAX;
         foreach ($candidates as $candidate) {
+            // Names taken from array keys arrive as ints when all digits.
+            $candidate = (string) $candidate;
             if ($candidate === $input) {
                 continue;
             }

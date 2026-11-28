@@ -236,7 +236,8 @@ Parse rules:
 - **Spellings.** `--name value`, `--name=value`, `-x value`, `-xvalue`,
   `-x=value`, grouped short flags `-abc` (a value option ends the group and
   takes the rest), `--` ends options, and a lone `-` or a negative number
-  is a positional. A value option followed by another option has no value;
+  is a positional, unless a declared short option uses that digit (then
+  `-5` is that option). A value option followed by another option has no value;
   pass a dash-leading value as `--name=-x`.
 - **Typed and enum values.** `withType(ValueType::Int|Float)` converts;
   `withChoices([...])` restricts to fixed strings; `withEnum(Backed::class)`

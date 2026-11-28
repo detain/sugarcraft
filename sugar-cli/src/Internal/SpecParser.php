@@ -239,8 +239,8 @@ final class SpecParser
             }
         }
 
-        foreach ($options as $name => $option) {
-            if ($option->required() && !$present($name)) {
+        foreach ($options as $option) {
+            if ($option->required() && !$present($option->name())) {
                 return self::error(UsageErrorKind::MissingOption, [
                     'option' => $option->display(),
                     'env' => $option->env(),
@@ -250,6 +250,8 @@ final class SpecParser
 
         foreach ($path as $spec) {
             foreach ($spec->requirements() as $name => $needs) {
+                // An all-digit name comes back from the array key as an int.
+                $name = (string) $name;
                 if (!$present($name)) {
                     continue;
                 }
@@ -431,7 +433,8 @@ final class SpecParser
             ValueType::Int => preg_match('/^[+-]?\d+\z/', $raw) === 1 && is_int(0 + $raw)
                 ? 0 + $raw
                 : self::invalid($option, $raw, 'an integer', $env, $names),
-            ValueType::Float => is_numeric($raw)
+            // `1e400` is numeric but casts to INF; reject it like Int overflow.
+            ValueType::Float => is_numeric($raw) && is_finite((float) $raw)
                 ? (float) $raw
                 : self::invalid($option, $raw, 'a number', $env, $names),
         };

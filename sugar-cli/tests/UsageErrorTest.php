@@ -105,6 +105,10 @@ final class UsageErrorTest extends TestCase
             ['--ratio=abc'], [], UsageErrorKind::InvalidValue,
             'invalid value "abc" for option "--ratio": expected a number',
         ];
+        yield 'float above the float range' => [
+            ['--ratio', '1e400'], [], UsageErrorKind::InvalidValue,
+            'invalid value "1e400" for option "--ratio": expected a number',
+        ];
         yield 'invalid integer from env' => [
             [], ['APP_COUNT' => 'many'], UsageErrorKind::InvalidValue,
             'invalid value "many" for option "--count" (from APP_COUNT): expected an integer',
@@ -211,6 +215,57 @@ final class UsageErrorTest extends TestCase
         self::assertInstanceOf(UsageError::class, $result);
         self::assertNull($result->option());
         self::assertSame('run', $result->suggestion());
+    }
+
+    /**
+     * All-digit names become int array keys; each error path that lists or
+     * checks them must still return a UsageError, not a TypeError.
+     *
+     * @return iterable<string, array{CommandSpec, list<string>, UsageErrorKind, string}>
+     */
+    public static function digitNameErrors(): iterable
+    {
+        yield 'unknown option beside a digit-named option' => [
+            CommandSpec::new('t')->withOption(Option::flag('1')), ['--zz'], UsageErrorKind::UnknownOption,
+            'unknown option "--zz"',
+        ];
+        yield 'suggestion of a digit-named option' => [
+            CommandSpec::new('t')->withOption(Option::flag('12')), ['--13'], UsageErrorKind::UnknownOption,
+            'unknown option "--13" (did you mean "--12"?)',
+        ];
+        yield 'missing digit-named required option' => [
+            CommandSpec::new('t')->withOption(Option::value('1')->withRequired()), [], UsageErrorKind::MissingOption,
+            'required option "--1" is missing',
+        ];
+        yield 'unknown command beside a digit-named subcommand' => [
+            CommandSpec::new('t')->withSubcommand(CommandSpec::new('42')), ['4x'], UsageErrorKind::UnknownCommand,
+            'unknown command "4x" for "t" (did you mean "42"?)',
+        ];
+        yield 'missing requirement of a digit-named option' => [
+            CommandSpec::new('t')->withOption(Option::flag('1'))->withOption(Option::flag('2'))->requires('1', '2'),
+            ['--1'], UsageErrorKind::MissingRequirement,
+            'option "--1" requires "--2"',
+        ];
+    }
+
+    /** @param list<string> $argv */
+    #[DataProvider('digitNameErrors')]
+    public function testDigitNamesStillReturnUsageErrors(CommandSpec $spec, array $argv, UsageErrorKind $kind, string $message): void
+    {
+        $result = $spec->parse($argv, []);
+
+        self::assertInstanceOf(UsageError::class, $result);
+        self::assertSame($kind, $result->kind());
+        self::assertSame($message, $result->message());
+    }
+
+    public function testFloatAboveTheRangeFromEnvIsRejected(): void
+    {
+        $spec = CommandSpec::new('t')->withOption(Option::value('ratio')->withType(ValueType::Float)->withEnv('APP_RATIO'));
+        $result = $spec->parse([], ['APP_RATIO' => '1e400']);
+
+        self::assertInstanceOf(UsageError::class, $result);
+        self::assertSame('invalid value "1e400" for option "--ratio" (from APP_RATIO): expected a number', $result->message());
     }
 
     public function testNewBuildsFromKindParamsAndCommand(): void
