@@ -14,11 +14,15 @@ use SugarCraft\Cli\Internal\WidthProbe;
  * supplied section becomes a labelled block of two-column
  * `KEY  description` rows (like git's `--help` output).
  *
+ * Two ways in, one layout: {@see render()} takes hand-written key and
+ * description pairs, and {@see fromSpec()} derives them from a
+ * {@see CommandSpec} (usage synopsis, subcommands, option groups, and the
+ * required/env/default/allowed-value notes) before laying them out
+ * through the same {@see render()}.
+ *
  * WHY this is not a fang port: fang drives its layout from cobra's typed
- * flag metadata (required/optional/default markers); there is no parsed
- * command tree here, so this surface lays out plain key/description
- * pairs — every such affordance is text the caller supplies, not
- * something parsed. Mirrors charmbracelet/fang's help screen in shape
+ * flag metadata; here the typed metadata is sugar-cli's own spec, and the
+ * page shape is fang's. Mirrors charmbracelet/fang's help screen in shape
  * only.
  */
 final class HelpText
@@ -42,6 +46,19 @@ final class HelpText
      * usable screen.
      */
     public const KEY_COLUMN_CAP = 24;
+
+    /**
+     * The help page of a {@see CommandSpec}: of the root command, or of the
+     * subcommand that `$names` walks down to (`fromSpec($spec, 'run')`).
+     * Call `->render()` on the result; the page is laid out by
+     * {@see render()}, so spec-driven and hand-written help look the same.
+     *
+     * @throws \InvalidArgumentException when a name is not a subcommand of its parent
+     */
+    public static function fromSpec(CommandSpec $spec, string ...$names): HelpPage
+    {
+        return HelpPage::new($spec, ...$names);
+    }
 
     /**
      * Render the full help screen.
