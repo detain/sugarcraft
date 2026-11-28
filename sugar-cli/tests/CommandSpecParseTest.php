@@ -180,6 +180,17 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame(0, $this->ok($spec, [])->value('verbose'));
     }
 
+    public function testRepeatableFlagBoolDefaultIsACount(): void
+    {
+        $on = CommandSpec::new('app')->withOption(Option::flag('v')->withShort('v')->withRepeatable()->withDefault(true));
+        self::assertSame(1, $this->ok($on, [])->value('v'));
+        self::assertSame(ValueSource::Default, $this->ok($on, [])->source('v'));
+        self::assertSame(1, $this->ok($on, ['-v'])->value('v'));
+
+        $off = CommandSpec::new('app')->withOption(Option::flag('v')->withRepeatable()->withDefault(false));
+        self::assertSame(0, $this->ok($off, [])->value('v'));
+    }
+
     public function testNonRepeatableValueKeepsLast(): void
     {
         $spec = CommandSpec::new('app')->withOption(Option::value('model'));
