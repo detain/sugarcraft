@@ -61,11 +61,14 @@ final class WindowsTaskKill
     /**
      * Bound on the MSYS step's PowerShell child query, enforced inside the
      * script by MSYS timeout(1) because PHP's own bound cannot reach that
-     * grandchild on Windows (see {@see MSYS_GROUP_KILL_SCRIPT}). Kept under
-     * {@see CHILD_BOUND_SECONDS} so the query ends before the bash it runs
-     * under is judged wedged.
+     * grandchild on Windows (see {@see MSYS_GROUP_KILL_SCRIPT}). It is a cold
+     * powershell.exe and WMI start, so it gets the same allowance as a whole
+     * killer child; the bash it runs under is bounded by
+     * {@see msysStepBoundSeconds()}, which adds this bound on top of
+     * {@see CHILD_BOUND_SECONDS} so bash startup, `ps -W`, the query, the
+     * taskkill and the group kill all fit before the bash is judged wedged.
      */
-    public const CHILD_QUERY_BOUND_SECONDS = 3;
+    public const CHILD_QUERY_BOUND_SECONDS = 5;
 
     /**
      * Test-only argv runner; null runs the real short-lived child. The seam
@@ -98,6 +101,19 @@ final class WindowsTaskKill
     public static function childBoundSeconds(): float
     {
         return self::$boundOverride ?? self::CHILD_BOUND_SECONDS;
+    }
+
+    /**
+     * The bound the default runner enforces on the MSYS group-kill bash: the
+     * child bound for the script's own work plus
+     * {@see CHILD_QUERY_BOUND_SECONDS} for the PowerShell query it may wait
+     * on. A bound of the child bound alone let a slow bash start plus a
+     * query run to its own timeout end the bash before its taskkill and
+     * group-kill lines, which silently fell back to the plain walk.
+     */
+    public static function msysStepBoundSeconds(): float
+    {
+        return self::childBoundSeconds() + self::CHILD_QUERY_BOUND_SECONDS;
     }
 
     /**
@@ -138,7 +154,7 @@ final class WindowsTaskKill
             return false;
         }
 
-        $run = self::$runner ?? static fn (array $argv): bool => self::runTreeKill($argv);
+        $run = self::$runner ?? static fn (array $argv, float $bound): bool => self::runTreeKill($argv, $bound);
 
         // Git-for-Windows bash first, when the host has one. Its fork
         // emulation leaves backgrounded commands with no living Windows
@@ -154,11 +170,11 @@ final class WindowsTaskKill
         // The real runtime, not the injectable family: MSYS and its /proc
         // winpid map exist only on an actual Windows host.
         $bash = self::$msysBashOverride ?? (\PHP_OS_FAMILY === 'Windows' ? WindowsShell::bash() : '');
-        if ($bash !== '' && (bool) $run(self::msysGroupKillArgv($pid, $bash))) {
+        if ($bash !== '' && (bool) $run(self::msysGroupKillArgv($pid, $bash), self::msysStepBoundSeconds())) {
             return true;
         }
 
-        return (bool) $run(self::treeArgv($pid));
+        return (bool) $run(self::treeArgv($pid), self::childBoundSeconds());
     }
 
     /**
@@ -188,11 +204,13 @@ final class WindowsTaskKill
      * Windows process with its image path, and a native kill whose image is
      * anything else (an MCP server, a php engine child) exits 1 after that
      * one cheap MSYS spawn, never starting powershell.exe. The query also
-     * runs under `timeout -s KILL` at {@see CHILD_QUERY_BOUND_SECONDS}, below
-     * {@see CHILD_BOUND_SECONDS}: when the bound fires, PHP's proc_terminate()
-     * reaches only this bash on Windows, never its powershell.exe grandchild,
-     * so the grandchild carries its own bound, enforced by MSYS timeout(1),
-     * which outlives a terminated bash.
+     * runs under `timeout -s KILL` at {@see CHILD_QUERY_BOUND_SECONDS}: when
+     * PHP's bound fires, proc_terminate() reaches only this bash on Windows,
+     * never its powershell.exe grandchild, so the grandchild carries its own
+     * bound, enforced by MSYS timeout(1), which outlives a terminated bash.
+     * PHP bounds this bash at {@see msysStepBoundSeconds()}, the query bound
+     * plus {@see CHILD_BOUND_SECONDS}, so a query that runs to its timeout
+     * still leaves the script time to reach its taskkill and group kill.
      */
     private const MSYS_GROUP_KILL_SCRIPT = 'w=$1; g=; '
         . 'lookup() { for d in /proc/[0-9]*; do '
@@ -250,8 +268,10 @@ final class WindowsTaskKill
      * unreaped behind it.
      *
      * @param non-empty-list<string> $argv
+     * @param ?float $bound seconds the child may live before it is
+     *     terminated; null is {@see childBoundSeconds()}
      */
-    private static function runTreeKill(array $argv): bool
+    private static function runTreeKill(array $argv, ?float $bound = null): bool
     {
         $spawn = ProcessContainment::spawnSpec($argv);
         $process = @\proc_open($spawn, [
@@ -272,7 +292,7 @@ final class WindowsTaskKill
         // killer (deadline passed with a pipe still open) is stopped; the exit
         // status below then reports the failure honestly.
         $drain = ChildPump::new([1 => $pipes[1], 2 => $pipes[2]])
-            ->withDeadline(Clock::monotonicSeconds() + self::childBoundSeconds())
+            ->withDeadline(Clock::monotonicSeconds() + ($bound ?? self::childBoundSeconds()))
             ->withCap(0)
             ->withDiscard([1, 2])
             ->withRunning(WindowsPipes::runningProbe($process))
