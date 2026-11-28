@@ -66,13 +66,18 @@ final class WindowsTaskKill
      * Bound on the MSYS step's PowerShell child query, enforced inside the
      * script by MSYS timeout(1) because PHP's own bound cannot reach that
      * grandchild on Windows (see {@see MSYS_GROUP_KILL_SCRIPT}). It is a cold
-     * powershell.exe and WMI start, so it gets the same allowance as a whole
-     * killer child; the bash it runs under is bounded by
+     * powershell.exe and WMI start, which on a loaded CI runner (Defender
+     * scanning the image, WMI service spin-up) can run past 5 s; a query
+     * killed by this bound prints nothing, the step exits 1, and the plain
+     * walk leaves the backgrounded sleeps alive with no error shown. So the
+     * bound is generous: it costs time only when the query is actually that
+     * slow, and only for a native `bash.exe` pid. The bash it runs under is
+     * bounded by
      * {@see msysStepBoundSeconds()}, which adds this bound on top of
      * {@see CHILD_BOUND_SECONDS} so bash startup, `ps -W`, the query, the
      * taskkill and the group kill all fit before the bash is judged wedged.
      */
-    public const CHILD_QUERY_BOUND_SECONDS = 5;
+    public const CHILD_QUERY_BOUND_SECONDS = 15;
 
     /**
      * Test-only argv runner; null runs the real short-lived child. The seam
@@ -212,7 +217,11 @@ final class WindowsTaskKill
      * runs only when the pid is a native `bash.exe`: MSYS `ps -W` lists every
      * Windows process with its image path, and a native kill whose image is
      * anything else (an MCP server, a php engine child) exits 1 after that
-     * one cheap MSYS spawn, never starting powershell.exe. The pid is matched
+     * one cheap MSYS spawn, never starting powershell.exe. The image may be
+     * printed in Windows form (`C:\...\bin\bash.exe`) or POSIX form
+     * (`/c/.../bin/bash.exe`), so both separators are accepted; a gate that
+     * knew only the backslash form would skip the query and bring the
+     * surviving-sleeps bug back. The pid is matched
      * in the WINPID column only (the fourth number, after an optional status
      * letter), so a non-bash pid that appears as the PPID of a native
      * bash.exe child does not start the query either. The query also
@@ -235,7 +244,7 @@ final class WindowsTaskKill
         . 'read -r -a f <<< "$l"; '
         . 'case ${f[0]} in *[!0-9]*) f=("${f[@]:1}");; esac; '
         . '[ "${f[3]}" = "$w" ] || continue; '
-        . 'case $l in *\'\\bash.exe\') n=1;; esac; break; '
+        . 'case $l in *\'\\bash.exe\'|*/bash.exe) n=1;; esac; break; '
         . 'done <<< "$(ps -W 2>/dev/null)"; '
         . 'if [ -n "$n" ]; then '
         . 'for c in $(MSYS_NO_PATHCONV=1 timeout -s KILL ' . self::CHILD_QUERY_BOUND_SECONDS . ' '
