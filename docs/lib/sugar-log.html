@@ -402,7 +402,15 @@ $log-&gt;info('where am I');</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null)</code></td><td></td></tr>
+<tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null, public bool $chained = false)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logtickmsg"><code>LogTickMsg</code> <small>final readonly class</small></h4>
+<p>One beat of a LogViewer&#039;s follow chain: the LogViewer::tick() timer fired. It carries no records; the viewer decides on taking it whether to read, so the read always uses the viewer&#039;s current reader and follow setting instead of the ones the timer was armed with.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $viewerId)</code></td><td></td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logviewer"><code>LogViewer</code> <small>final class</small></h4>
@@ -412,16 +420,16 @@ $log-&gt;info('where am I');</code></pre>
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>static new(LogReader $reader, ?LogFilter $filter = null): self</code></td><td>A following viewer over $reader. With no $filter every record shows. Nothing is read until the Cmd from init() runs.</td></tr>
-<tr><td><code>init(): ?\Closure</code></td><td>The first read, whether or not the viewer follows: a viewer that never read has nothing to show.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td>The first read, whether or not the viewer follows (a viewer that never read has nothing to show), which also starts the follow chain.</td></tr>
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
-<tr><td><code>view(): string</code></td><td>The filtered records that fit, one row each, exactly $height rows: blank rows fill the space the records leave.</td></tr>
+<tr><td><code>view(): string</code></td><td>The filtered records that fit, one row each, exactly $height rows. Blank rows fill the space the records leave, after them: a view holding fewer records than its height shows them from the top row, so the newest sits on the bottom row only once the records fill the view.</td></tr>
 <tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
-<tr><td><code>refresh(): \Closure</code></td><td>A Cmd that reads the tail now and hands it back as a LogTailMsg. Issue it after withReader() or withFollow(), which drop the reads already in flight.</td></tr>
-<tr><td><code>tick(): ?\Closure</code></td><td>A Cmd that reads the tail after $interval seconds, or null when the viewer does not follow. The read happens when the tick fires, not when the Cmd is built.</td></tr>
+<tr><td><code>refresh(): \Closure</code></td><td>A Cmd that reads the tail now and hands it back as a LogTailMsg, without waiting for the next tick: after withReader() or withFollow() it catches up at once instead of an interval later. It is a one-off read and never starts a second follow chain.</td></tr>
+<tr><td><code>tick(): \Closure</code></td><td>A Cmd that hands back a LogTickMsg after $interval seconds: one beat of the follow chain init() starts. The viewer decides on taking the tick whether to read, so nothing is read here. The chain reschedules itself; issuing this yourself starts a second one.</td></tr>
 <tr><td><code>visibleRecords(): array</code></td><td>The held records the filter keeps, oldest first — every record the viewer could show, before the height cut.</td></tr>
-<tr><td><code>withReader(LogReader $reader): self</code></td><td>Read another file. Drops reads of the old one in flight; issue refresh() to start again.</td></tr>
+<tr><td><code>withReader(LogReader $reader): self</code></td><td>Read another file. Reads of the old one in flight are dropped; the follow chain reads the new one at its next tick, or issue refresh() to read it at once.</td></tr>
 <tr><td><code>withFilter(LogFilter $filter): self</code></td><td></td></tr>
-<tr><td><code>withFollow(bool $follow): self</code></td><td>Follow the file or freeze on what is held. A change drops the reads in flight, so a paused viewer takes no late read and a resumed one never runs two tick chains; issue refresh() after resuming (the <code>f</code> key does). Setting the current value changes nothing.</td></tr>
+<tr><td><code>withFollow(bool $follow): self</code></td><td>Follow the file or freeze on what is held. A change drops the reads in flight, so a paused viewer takes no late read. The follow chain keeps running while paused without reading, so a resumed viewer reads again at the next tick; issue refresh() to read at once (the <code>f</code> key does). Setting the current value changes nothing.</td></tr>
 <tr><td><code>withInterval(float $seconds): self</code></td><td></td></tr>
 <tr><td><code>withTailSize(int $records): self</code></td><td>How many records each read takes from the end of the file. A strict filter shows only the matches among them, so size it for the filter.</td></tr>
 <tr><td><code>withHeight(int $rows): self</code></td><td></td></tr>

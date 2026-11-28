@@ -517,21 +517,25 @@ Reading across rotation is not part of the reader yet.
 
 `LogViewer::new($reader, $filter)` is a sugar-core `Model` that shows the
 newest records of a log through a `LogFilter` and follows the file as it
-grows. The file is only read inside Cmds: `init()` returns `refresh()`, which
-reads the tail at once, and while following, every read the viewer takes
-schedules the next one through `tick()` (a `Cmd::tick` that reads when it
-fires, every `withInterval()` seconds). Each read replaces the held records
-with the file's last `withTailSize()` records, so new lines land at the
-bottom, repeated identical lines all show, and a truncated file reads as it
-is. The filter applies at render time: `withFilter()` re-renders the records
-already held without reading the file.
+grows. The file is only read inside Cmds: `init()` reads the tail at once and
+starts the viewer's one follow chain, a `Cmd::tick` every `withInterval()`
+seconds (`tick()`) that reads the tail when the viewer follows and only waits
+when it does not. `refresh()` is a one-off read beside the chain and never
+starts a second one. Each read replaces the held records with the file's last
+`withTailSize()` records, so new lines land below the older ones, repeated
+identical lines all show, and a truncated file reads as it is. The filter
+applies at render time: `withFilter()` re-renders the records already held
+without reading the file.
 
 `f` toggles follow; `withFollow()` does the same in code. Either one drops
-the reads already in flight, so a paused viewer takes no late read; after
-`withFollow(true)` or `withReader()`, issue `refresh()` (the `f` key does
-this itself). A failed read keeps the records, sets `$viewer->error` and keeps
-following. `view()` renders exactly `withHeight()` rows, newest at the bottom
-(`withScrollToBottom(false)` shows the oldest held), colored by level
+the reads already in flight, so a paused viewer takes no late read. The chain
+keeps running while paused, so after `withFollow(true)` or `withReader()` the
+viewer reads again at the next tick with no Cmd from you; issue `refresh()` to
+read at once instead (the `f` key does this itself). A failed read keeps the
+records, sets `$viewer->error` and keeps following. `view()` renders exactly
+`withHeight()` rows: when the records overflow it, the newest
+(`withScrollToBottom(false)`: the oldest held), and when they do not, all of
+them from the top row with blank rows after. Rows are colored by level
 (`withColor()`, `withStyles()`), padded and clipped to `withWidth()` when one
 is set. JSON and logfmt records render as `[INF] message key=value`, with
 `withShowTimestamps()` and `withShowLevel()` controlling the time and level;

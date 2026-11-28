@@ -26,15 +26,18 @@ use SugarCraft\Style\Style;
  * ```
  *
  * Reading the file is a side effect, so it only happens inside a Cmd:
- * {@see init()} returns {@see refresh()}, which reads the tail at once, and
- * while following, every {@see LogTailMsg} the viewer takes schedules the
- * next read through {@see tick()} — a `Cmd::tick` that reads when it fires.
- * {@see update()} only folds the result in, and {@see view()} only renders
- * the records it already holds.
+ * {@see init()} reads the tail at once and starts the viewer's one follow
+ * chain. The chain runs for the viewer's whole life: every
+ * {@see tick()} interval it reads the tail if the viewer follows and only
+ * waits if it does not, so a viewer resumed or pointed at another file with
+ * a setter picks the change up at the next tick without any Cmd from the
+ * caller. {@see refresh()} is a one-off read beside the chain, never a second
+ * chain. {@see update()} only folds the result in, and {@see view()} only
+ * renders the records it already holds.
  *
  * Each read replaces the held records with the file's last
  * {@see withTailSize()} records rather than appending a diff. On screen it
- * is the same — new lines arrive at the bottom — but a replace needs no
+ * is the same — new lines arrive below the older ones — but a replace needs no
  * guess about where the old tail ended: two identical lines in a row, a
  * truncated file and a rotated one all come out exactly as the file reads.
  *
@@ -71,7 +74,7 @@ final class LogViewer implements Model
      * @param array<int, Style> $levelStyles Row style per Level->value.
      * @param ?string           $error       Why the last read failed; null after a good read.
      * @param int               $id          Routes this viewer's {@see LogTailMsg}s back to it.
-     * @param int               $generation  Bumped when follow toggles or the reader changes, so a read issued before is dropped.
+     * @param int               $generation  Bumped when follow toggles or the reader changes, so a read issued before has its records dropped.
      */
     private function __construct(
         public readonly LogReader $reader,
@@ -119,10 +122,13 @@ final class LogViewer implements Model
         );
     }
 
-    /** The first read, whether or not the viewer follows: a viewer that never read has nothing to show. */
+    /**
+     * The first read, whether or not the viewer follows (a viewer that never
+     * read has nothing to show), which also starts the follow chain.
+     */
     public function init(): ?\Closure
     {
-        return $this->refresh();
+        return $this->read(chained: true);
     }
 
     /**
@@ -130,16 +136,31 @@ final class LogViewer implements Model
      */
     public function update(Msg $msg): array
     {
-        if ($msg instanceof LogTailMsg) {
-            if ($msg->viewerId !== $this->id || $msg->generation !== $this->generation) {
+        if ($msg instanceof LogTickMsg) {
+            if ($msg->viewerId !== $this->id) {
                 return [$this, null];
             }
-            $next = $msg->error === null
-                ? $this->mutate(['records' => $msg->records, 'error' => null])
-                : $this->mutate(['error' => $msg->error]);
 
-            // A failed read keeps following: the file may appear or come back.
-            return [$next, $next->tick()];
+            // A paused viewer keeps its chain alive without reading, so a
+            // later withFollow(true) needs no Cmd to start reading again.
+            return [$this, $this->follow ? $this->read(chained: true) : $this->tick()];
+        }
+
+        if ($msg instanceof LogTailMsg) {
+            if ($msg->viewerId !== $this->id) {
+                return [$this, null];
+            }
+            $next = $this;
+            if ($msg->generation === $this->generation) {
+                $next = $msg->error === null
+                    ? $this->mutate(['records' => $msg->records, 'error' => null])
+                    : $this->mutate(['error' => $msg->error]);
+            }
+
+            // Only the chain's own read schedules the next tick, so the chain
+            // outlives a dropped read and a refresh() never forks a second
+            // one. A failed read keeps the chain too: the file may come back.
+            return [$next, $msg->chained ? $next->tick() : null];
         }
 
         if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'f'
@@ -155,7 +176,9 @@ final class LogViewer implements Model
 
     /**
      * The filtered records that fit, one row each, exactly {@see $height}
-     * rows: blank rows fill the space the records leave.
+     * rows. Blank rows fill the space the records leave, after them: a view
+     * holding fewer records than its height shows them from the top row, so
+     * the newest sits on the bottom row only once the records fill the view.
      */
     public function view(): string
     {
@@ -179,39 +202,27 @@ final class LogViewer implements Model
     }
 
     /**
-     * A Cmd that reads the tail now and hands it back as a {@see LogTailMsg}.
-     * Issue it after {@see withReader()} or {@see withFollow()}, which drop
-     * the reads already in flight.
+     * A Cmd that reads the tail now and hands it back as a {@see LogTailMsg},
+     * without waiting for the next tick: after {@see withReader()} or
+     * {@see withFollow()} it catches up at once instead of an interval later.
+     * It is a one-off read and never starts a second follow chain.
      */
     public function refresh(): \Closure
     {
-        $reader = $this->reader;
-        $tailSize = $this->tailSize;
-        $id = $this->id;
-        $generation = $this->generation;
-
-        return static fn (): Msg => self::read($reader, $tailSize, $id, $generation);
+        return $this->read(chained: false);
     }
 
     /**
-     * A Cmd that reads the tail after {@see $interval} seconds, or null when
-     * the viewer does not follow. The read happens when the tick fires, not
-     * when the Cmd is built.
+     * A Cmd that hands back a {@see LogTickMsg} after {@see $interval}
+     * seconds: one beat of the follow chain {@see init()} starts. The viewer
+     * decides on taking the tick whether to read, so nothing is read here.
+     * The chain reschedules itself; issuing this yourself starts a second one.
      */
-    public function tick(): ?\Closure
+    public function tick(): \Closure
     {
-        if (!$this->follow) {
-            return null;
-        }
-        $reader = $this->reader;
-        $tailSize = $this->tailSize;
         $id = $this->id;
-        $generation = $this->generation;
 
-        return Cmd::tick(
-            $this->interval,
-            static fn (): Msg => self::read($reader, $tailSize, $id, $generation),
-        );
+        return Cmd::tick($this->interval, static fn (): Msg => new LogTickMsg($id));
     }
 
     /**
@@ -225,7 +236,11 @@ final class LogViewer implements Model
         return $this->filter->apply($this->records);
     }
 
-    /** Read another file. Drops reads of the old one in flight; issue {@see refresh()} to start again. */
+    /**
+     * Read another file. Reads of the old one in flight are dropped; the
+     * follow chain reads the new one at its next tick, or issue
+     * {@see refresh()} to read it at once.
+     */
     public function withReader(LogReader $reader): self
     {
         return $this->mutate(['reader' => $reader, 'generation' => $this->generation + 1]);
@@ -238,9 +253,10 @@ final class LogViewer implements Model
 
     /**
      * Follow the file or freeze on what is held. A change drops the reads in
-     * flight, so a paused viewer takes no late read and a resumed one never
-     * runs two tick chains; issue {@see refresh()} after resuming (the `f`
-     * key does). Setting the current value changes nothing.
+     * flight, so a paused viewer takes no late read. The follow chain keeps
+     * running while paused without reading, so a resumed viewer reads again
+     * at the next tick; issue {@see refresh()} to read at once (the `f` key
+     * does). Setting the current value changes nothing.
      */
     public function withFollow(bool $follow): self
     {
@@ -334,13 +350,21 @@ final class LogViewer implements Model
         return $this->mutate(['levelStyles' => $styles->levels]);
     }
 
-    private static function read(LogReader $reader, int $tailSize, int $id, int $generation): LogTailMsg
+    /** A Cmd that reads the tail when it runs, not when it is built. */
+    private function read(bool $chained): \Closure
     {
-        try {
-            return new LogTailMsg($id, $generation, $reader->tail($tailSize));
-        } catch (\RuntimeException $e) {
-            return new LogTailMsg($id, $generation, [], $e->getMessage());
-        }
+        $reader = $this->reader;
+        $tailSize = $this->tailSize;
+        $id = $this->id;
+        $generation = $this->generation;
+
+        return static function () use ($reader, $tailSize, $id, $generation, $chained): Msg {
+            try {
+                return new LogTailMsg($id, $generation, $reader->tail($tailSize), null, $chained);
+            } catch (\RuntimeException $e) {
+                return new LogTailMsg($id, $generation, [], $e->getMessage(), $chained);
+            }
+        };
     }
 
     private function row(LogRecord $record): string

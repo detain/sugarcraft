@@ -17,6 +17,7 @@ use SugarCraft\Log\LogFormat;
 use SugarCraft\Log\LogReader;
 use SugarCraft\Log\LogRecord;
 use SugarCraft\Log\LogTailMsg;
+use SugarCraft\Log\LogTickMsg;
 use SugarCraft\Log\LogViewer;
 use SugarCraft\Log\Styles;
 use SugarCraft\Style\Style;
@@ -75,12 +76,25 @@ final class LogViewerTest extends TestCase
     }
 
     /** The Msg a tick Cmd produces when its timer fires. */
-    private static function fire(\Closure $tick): LogTailMsg
+    private static function fire(\Closure $tick): LogTickMsg
     {
         $request = $tick();
         self::assertInstanceOf(TickRequest::class, $request);
         $msg = ($request->produce)();
+        self::assertInstanceOf(LogTickMsg::class, $msg);
+
+        return $msg;
+    }
+
+    /** Fires $tick into a following $viewer and runs the read it asks for, as the Program would. */
+    private static function chainRead(LogViewer $viewer, \Closure $tick): LogTailMsg
+    {
+        [$same, $read] = $viewer->update(self::fire($tick));
+        self::assertSame($viewer, $same, 'a tick only asks for a read');
+        self::assertInstanceOf(\Closure::class, $read);
+        $msg = $read();
         self::assertInstanceOf(LogTailMsg::class, $msg);
+        self::assertTrue($msg->chained);
 
         return $msg;
     }
@@ -156,16 +170,19 @@ final class LogViewerTest extends TestCase
         self::assertInstanceOf(TickRequest::class, $cmd());
     }
 
-    public function testInitStillReadsWhenNotFollowingButSchedulesNoTick(): void
+    public function testInitStillReadsWhenNotFollowingAndTheChainIdlesWithoutReading(): void
     {
         $path = $this->file('app.log', self::json('INFO', 'one'));
         $viewer = LogViewer::new(LogReader::new($path, LogFormat::Json))->withFollow(false);
 
-        [$next, $cmd] = self::started($viewer);
-
+        [$next, $tick] = self::started($viewer);
         self::assertSame(['one'], self::messages($next->records));
-        self::assertNull($cmd);
-        self::assertNull($next->tick());
+        self::assertInstanceOf(\Closure::class, $tick);
+
+        [$same, $cmd] = $next->update(self::fire($tick));
+        self::assertSame($next, $same);
+        self::assertInstanceOf(\Closure::class, $cmd);
+        self::assertInstanceOf(TickRequest::class, $cmd(), 'a paused viewer only waits for the next tick');
     }
 
     // ─── Follow ─────────────────────────────────────────────────────
@@ -178,7 +195,7 @@ final class LogViewerTest extends TestCase
         self::assertInstanceOf(\Closure::class, $tick);
 
         \file_put_contents($path, self::json('ERROR', 'three'), \FILE_APPEND);
-        [$after, $nextTick] = $viewer->update(self::fire($tick));
+        [$after, $nextTick] = $viewer->update(self::chainRead($viewer, $tick));
 
         self::assertSame(['one', 'two', 'three'], self::messages($after->records));
         self::assertSame("[INF] one\n[INF] two\n[ERR] three", $after->view());
@@ -191,15 +208,17 @@ final class LogViewerTest extends TestCase
         $path = $this->file('app.log', self::json('INFO', 'one'));
         $viewer = LogViewer::new(LogReader::new($path, LogFormat::Json))->withInterval(0.25);
         $tick = $viewer->tick();
-        self::assertInstanceOf(\Closure::class, $tick);
 
         $request = $tick();
         self::assertInstanceOf(TickRequest::class, $request);
         self::assertSame(0.25, $request->seconds);
 
         \file_put_contents($path, self::json('INFO', 'two'), \FILE_APPEND);
-        $msg = ($request->produce)();
-        self::assertInstanceOf(LogTailMsg::class, $msg);
+        $tickMsg = ($request->produce)();
+        self::assertInstanceOf(LogTickMsg::class, $tickMsg);
+        self::assertSame($viewer->id, $tickMsg->viewerId);
+
+        $msg = self::chainRead($viewer, $tick);
         self::assertSame(['one', 'two'], self::messages($msg->records));
     }
 
@@ -210,7 +229,7 @@ final class LogViewerTest extends TestCase
         [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json)));
 
         \file_put_contents($path, $line, \FILE_APPEND);
-        [$after] = $viewer->update(self::fire($tick));
+        [$after] = $viewer->update(self::chainRead($viewer, $tick));
 
         self::assertSame(['same', 'same', 'same'], self::messages($after->records));
     }
@@ -223,22 +242,27 @@ final class LogViewerTest extends TestCase
         self::assertSame(['b', 'c'], self::messages($viewer->records));
     }
 
-    public function testFKeyPausesFollowAndDropsTheTickAlreadyInFlight(): void
+    public function testFKeyPausesFollowAndDropsTheReadAlreadyInFlight(): void
     {
         $path = $this->file('app.log', self::json('INFO', 'one'));
         [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json)));
+        \file_put_contents($path, self::json('INFO', 'two'), \FILE_APPEND);
+        $inFlight = self::chainRead($viewer, $tick);
 
         [$paused, $cmd] = $viewer->update(self::f());
         self::assertFalse($paused->follow);
         self::assertTrue($viewer->follow, 'toggling is an immutable change');
         self::assertNull($cmd);
 
-        \file_put_contents($path, self::json('INFO', 'two'), \FILE_APPEND);
-        [$still, $after] = $paused->update(self::fire($tick));
-
+        [$still, $next] = $paused->update($inFlight);
         self::assertSame($paused, $still, 'a paused viewer takes no late read');
-        self::assertNull($after);
         self::assertSame(['one'], self::messages($paused->records));
+        self::assertInstanceOf(\Closure::class, $next, 'the chain outlives the dropped read');
+
+        [$idle, $wait] = $paused->update(self::fire($next));
+        self::assertSame($paused, $idle);
+        self::assertInstanceOf(\Closure::class, $wait);
+        self::assertInstanceOf(TickRequest::class, $wait(), 'a paused tick reads nothing and only waits');
     }
 
     public function testFKeyResumesWithAnImmediateReadAndOneTickChain(): void
@@ -254,13 +278,56 @@ final class LogViewerTest extends TestCase
         $msg = $read();
         self::assertInstanceOf(LogTailMsg::class, $msg, 'resume reads at once, not after an interval');
 
-        [$caughtUp, $tick] = $resumed->update($msg);
+        [$caughtUp, $none] = $resumed->update($msg);
         self::assertSame(['one', 'two'], self::messages($caughtUp->records));
+        self::assertNull($none, 'the catch-up read starts no second chain');
+
+        \file_put_contents($path, self::json('INFO', 'three'), \FILE_APPEND);
+        [$after, $tick] = $caughtUp->update(self::chainRead($caughtUp, $oldTick));
+        self::assertSame(['one', 'two', 'three'], self::messages($after->records), 'the one chain reads again');
+        self::assertInstanceOf(\Closure::class, $tick);
+    }
+
+    public function testRefreshWhileFollowingNeverForksASecondChain(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'one'));
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json)));
         self::assertInstanceOf(\Closure::class, $tick);
 
-        [$same, $none] = $caughtUp->update(self::fire($oldTick));
-        self::assertSame($caughtUp, $same, 'the chain from before the pause stays dead');
-        self::assertNull($none);
+        \file_put_contents($path, self::json('INFO', 'two'), \FILE_APPEND);
+        $msg = $viewer->refresh()();
+        self::assertInstanceOf(LogTailMsg::class, $msg);
+        self::assertFalse($msg->chained);
+
+        [$fresh, $cmd] = $viewer->update($msg);
+        self::assertSame(['one', 'two'], self::messages($fresh->records));
+        self::assertNull($cmd, 'the pending tick stays the only chain');
+
+        // Run the one chain for a few rounds: each beat yields exactly one next beat.
+        $pending = [$tick];
+        for ($round = 0; $round < 3; $round++) {
+            $next = [];
+            foreach ($pending as $beat) {
+                [$fresh, $cmd] = $fresh->update(self::chainRead($fresh, $beat));
+                if ($cmd !== null) {
+                    $next[] = $cmd;
+                }
+            }
+            $pending = $next;
+            self::assertCount(1, $pending, 'round ' . $round);
+        }
+    }
+
+    public function testWithFollowTrueResumesAtTheNextTickWithNoCmd(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'one'));
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json))->withFollow(false));
+
+        $resumed = $viewer->withFollow(true);
+        \file_put_contents($path, self::json('INFO', 'two'), \FILE_APPEND);
+        [$after] = $resumed->update(self::chainRead($resumed, $tick));
+
+        self::assertSame(['one', 'two'], self::messages($after->records));
     }
 
     public function testModifiedFKeyAndOtherMessagesAreIgnored(): void
@@ -279,10 +346,11 @@ final class LogViewerTest extends TestCase
         $viewer = LogViewer::new(LogReader::new($this->dir . '/none.log'));
         $record = new LogRecord('x', Level::Info, 'x');
 
-        [$next, $cmd] = $viewer->update(new LogTailMsg($viewer->id + 1000, $viewer->generation, [$record]));
-
-        self::assertSame($viewer, $next);
-        self::assertNull($cmd);
+        foreach ([new LogTailMsg($viewer->id + 1000, $viewer->generation, [$record], null, true), new LogTickMsg($viewer->id + 1000)] as $msg) {
+            [$next, $cmd] = $viewer->update($msg);
+            self::assertSame($viewer, $next);
+            self::assertNull($cmd);
+        }
     }
 
     public function testWithFollowOnlyDropsReadsInFlightWhenItChangesTheValue(): void
@@ -305,7 +373,7 @@ final class LogViewerTest extends TestCase
 
         \unlink($path);
         \mkdir($path);
-        [$failed, $retry] = $viewer->update(self::fire($tick));
+        [$failed, $retry] = $viewer->update(self::chainRead($viewer, $tick));
 
         self::assertSame(['one'], self::messages($failed->records));
         self::assertNotNull($failed->error);
@@ -314,21 +382,26 @@ final class LogViewerTest extends TestCase
 
         \rmdir($path);
         \file_put_contents($path, self::json('INFO', 'back'));
-        [$recovered] = $failed->update(self::fire($retry));
+        [$recovered] = $failed->update(self::chainRead($failed, $retry));
         self::assertNull($recovered->error);
         self::assertSame(['back'], self::messages($recovered->records));
     }
 
-    public function testWithReaderDropsReadsOfTheOldFileAndRefreshReadsTheNewOne(): void
+    public function testWithReaderDropsReadsOfTheOldFileAndTheChainReadsTheNewOne(): void
     {
         $old = $this->file('old.log', self::json('INFO', 'old'));
         $new = $this->file('new.log', self::json('INFO', 'new'));
         [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($old, LogFormat::Json)));
+        $inFlight = self::chainRead($viewer, $tick);
 
         $switched = $viewer->withReader(LogReader::new($new, LogFormat::Json));
         self::assertSame($viewer->generation + 1, $switched->generation);
-        [$same] = $switched->update(self::fire($tick));
-        self::assertSame($switched, $same);
+        [$same, $next] = $switched->update($inFlight);
+        self::assertSame($switched, $same, 'the old file\'s read is dropped');
+        self::assertInstanceOf(\Closure::class, $next, 'the chain survives the swap with no Cmd from the caller');
+
+        [$chained] = $switched->update(self::chainRead($switched, $next));
+        self::assertSame(['new'], self::messages($chained->records), 'the next tick reads the new file');
 
         $msg = $switched->refresh()();
         self::assertInstanceOf(LogTailMsg::class, $msg);
@@ -445,6 +518,9 @@ final class LogViewerTest extends TestCase
 
         self::assertSame("c\nd", $viewer->view());
         self::assertSame("a\nb", $viewer->withScrollToBottom(false)->view());
+
+        $underfilled = self::holding(LogViewer::new(LogReader::new($this->dir . '/none.log'))->withHeight(4), \array_slice($records, 0, 2));
+        self::assertSame("a\nb\n\n", $underfilled->view(), 'fewer records than rows show from the top');
     }
 
     public function testAnEmptyViewerRendersBlankRowsOfTheWidth(): void
