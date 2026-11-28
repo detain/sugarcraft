@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Server;
 
+use SugarCraft\Log\LogTailWindow;
+
 /**
  * The shared tail reader for the server's own 0600 log file.
  *
@@ -54,30 +56,20 @@ final class LogTail
     /**
      * The last $count lines of $path and the byte offset reading stopped at.
      *
+     * The read is sugar-log's {@see LogTailWindow}, held to {@see self::WINDOW_BYTES}:
+     * blank lines kept and counted, a carriage return kept on its line, the
+     * window's first (possibly partial) line dropped when the file outruns
+     * it, the offset taken from the handle that read the window, and an
+     * unopenable path answering no lines at offset 0. Both callers lstat-check
+     * a regular file and ask for at least one line first, so the window's
+     * own refusal of a symlink, fifo or directory, and of a negative count,
+     * never reaches them.
+     *
      * @return array{0: list<string>, 1: int}
      */
     public static function tail(string $path, int $count): array
     {
-        $handle = @\fopen($path, 'r');
-        if ($handle === false) {
-            return [[], 0];
-        }
-        $size = (int) (\fstat($handle)['size'] ?? 0);
-        $window = self::WINDOW_BYTES;
-        $from = \max(0, $size - $window);
-        \fseek($handle, $from);
-        $text = (string) \stream_get_contents($handle, $size - $from);
-        \fclose($handle);
-
-        $lines = \explode("\n", \rtrim($text, "\n"));
-        if ($from > 0) {
-            \array_shift($lines);
-        }
-        if ($lines === ['']) {
-            $lines = [];
-        }
-
-        return [\array_slice($lines, -$count), $size];
+        return LogTailWindow::new($path)->withWindowBytes(self::WINDOW_BYTES)->lines($count);
     }
 
     /**
