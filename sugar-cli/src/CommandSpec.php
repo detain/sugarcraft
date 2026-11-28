@@ -225,9 +225,12 @@ final class CommandSpec
 
     /**
      * Options grouped for help output: group name => options, groups in
-     * order of first appearance; the ungrouped options sit under `''`.
+     * order of first appearance; the ungrouped options sit under `''`. PHP
+     * turns an all-digit group name such as `2024` into an int key; cast the
+     * key with `(string)` or read {@see Option::group()} when a string is
+     * needed.
      *
-     * @return array<string, list<Option>>
+     * @return array<array-key, list<Option>>
      */
     public function groups(): array
     {

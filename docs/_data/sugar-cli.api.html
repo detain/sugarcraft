@@ -33,7 +33,7 @@
 <tr><td><code>option(string $name): ?Option</code></td><td>The option with this long name, or null.</td></tr>
 <tr><td><code>subcommands(): array</code></td><td>Declared subcommands, keyed by name, in declaration order. An all-digit name comes back as an int key; read the name from CommandSpec::name() when a string is needed.</td></tr>
 <tr><td><code>subcommand(string $name): ?CommandSpec</code></td><td>The subcommand with this name, or null.</td></tr>
-<tr><td><code>groups(): array</code></td><td>Options grouped for help output: group name =&gt; options, groups in order of first appearance; the ungrouped options sit under <code>&#039;&#039;</code>.</td></tr>
+<tr><td><code>groups(): array</code></td><td>Options grouped for help output: group name =&gt; options, groups in order of first appearance; the ungrouped options sit under <code>&#039;&#039;</code>. PHP turns an all-digit group name such as <code>2024</code> into an int key; cast the key with <code>(string)</code> or read Option::group() when a string is needed.</td></tr>
 <tr><td><code>conflictSets(): array</code></td><td></td></tr>
 <tr><td><code>requirements(): array</code></td><td></td></tr>
 <tr><td><code>minArguments(): int</code></td><td></td></tr>

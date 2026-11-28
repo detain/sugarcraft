@@ -99,7 +99,7 @@ final class UsageErrorTest extends TestCase
         ];
         yield 'integer with a trailing newline' => [
             ['--count', "5\n"], [], UsageErrorKind::InvalidValue,
-            "invalid value \"5\n\" for option \"--count\": expected an integer",
+            'invalid value "5 " for option "--count": expected an integer',
         ];
         yield 'invalid float' => [
             ['--ratio=abc'], [], UsageErrorKind::InvalidValue,
@@ -266,6 +266,39 @@ final class UsageErrorTest extends TestCase
 
         self::assertInstanceOf(UsageError::class, $result);
         self::assertSame('invalid value "1e400" for option "--ratio" (from APP_RATIO): expected a number', $result->message());
+    }
+
+    public function testMessageStripsEscapeSequencesFromAnUnknownCommand(): void
+    {
+        $spec = CommandSpec::new('app')->withSubcommand(CommandSpec::new('run'));
+        $result = $spec->parse(["\x1b]0;evil\x07"], []);
+
+        self::assertInstanceOf(UsageError::class, $result);
+        self::assertSame(UsageErrorKind::UnknownCommand, $result->kind());
+        self::assertSame('unknown command "" for "app"', $result->message());
+        self::assertSame("\x1b]0;evil\x07", $result->params()['given']);
+    }
+
+    public function testMessageStripsControlBytesFromValuesOptionsAndEnvValues(): void
+    {
+        $result = self::spec()->parse(['--mode', "f\x1b[2Jast\nx"], []);
+        self::assertInstanceOf(UsageError::class, $result);
+        self::assertSame(
+            'invalid value "fast x" for option "--mode": expected one of fast, slow',
+            $result->message(),
+        );
+
+        $result = self::spec()->parse(["--zz\x1b[31m\x07"], []);
+        self::assertInstanceOf(UsageError::class, $result);
+        self::assertSame('unknown option "--zz"', $result->message());
+
+        $result = self::spec()->parse([], ['APP_COUNT' => "9\x1b]52;c;aGk=\x07\r\n"]);
+        self::assertInstanceOf(UsageError::class, $result);
+        self::assertSame(
+            'invalid value "9 " for option "--count" (from APP_COUNT): expected an integer',
+            $result->message(),
+        );
+        self::assertStringNotContainsString("\x1b", $result->message());
     }
 
     public function testNewBuildsFromKindParamsAndCommand(): void

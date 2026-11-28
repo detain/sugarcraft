@@ -118,6 +118,19 @@ final class CommandSpecTest extends TestCase
         self::assertSame(['Model' => ['model', 'temp'], '' => ['json'], 'Debug' => ['debug']], $groups);
     }
 
+    public function testAnAllDigitGroupNameComesBackAsAnIntKey(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('a')->withGroup('2024'))
+            ->withOption(Option::flag('b'));
+
+        $groups = $spec->groups();
+
+        self::assertSame([2024, ''], array_keys($groups));
+        self::assertSame('2024', (string) array_key_first($groups));
+        self::assertSame('2024', $groups[2024][0]->group());
+    }
+
     public function testEffectiveMaxIsZeroWithSubcommandsUnlessSetEvenToNull(): void
     {
         $spec = CommandSpec::new('app')->withSubcommand(CommandSpec::new('run'));

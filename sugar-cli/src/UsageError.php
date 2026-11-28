@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Cli;
 
+use SugarCraft\Cli\Internal\SafeText;
+
 /**
  * The result of a {@see CommandSpec::parse()} that broke a rule: which rule
  * ({@see kind()}), the values involved ({@see params()}), the command path it
@@ -75,10 +77,18 @@ final class UsageError
         return is_string($suggestion) ? $suggestion : null;
     }
 
-    /** One-line English description of the error, without a trailing period. */
+    /**
+     * One-line English description of the error, without a trailing period.
+     *
+     * The interpolated values come from argv and the environment, so each
+     * string is passed through {@see SafeText::line()}: an escape sequence or
+     * control byte in a bad value must not reach the terminal the caller
+     * prints this to, and a newline must not split the line. {@see params()}
+     * keeps the raw values.
+     */
     public function message(): string
     {
-        $p = $this->params;
+        $p = self::safe($this->params);
         $from = isset($p['env']) && is_string($p['env']) ? sprintf(' (from %s)', $p['env']) : '';
         $message = match ($this->kind) {
             UsageErrorKind::UnknownOption => sprintf('unknown option "%s"', $p['option']),
@@ -126,6 +136,24 @@ final class UsageError
                 ),
         };
         $suggestion = $this->suggestion();
-        return $suggestion === null ? $message : sprintf('%s (did you mean "%s"?)', $message, $suggestion);
+        return $suggestion === null
+            ? $message
+            : sprintf('%s (did you mean "%s"?)', $message, SafeText::line($suggestion));
+    }
+
+    /**
+     * @param array<array-key, mixed> $params
+     * @return array<array-key, mixed>
+     */
+    private static function safe(array $params): array
+    {
+        foreach ($params as $key => $value) {
+            if (is_string($value)) {
+                $params[$key] = SafeText::line($value);
+            } elseif (is_array($value)) {
+                $params[$key] = self::safe($value);
+            }
+        }
+        return $params;
     }
 }
