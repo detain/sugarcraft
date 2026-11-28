@@ -49,6 +49,24 @@ final class LogTailTest extends TestCase
         self::assertSame(\strlen($contents), $offset);
     }
 
+    public function testTailKeepsItsPublicSurfaceForDirectCallers(): void
+    {
+        // The read moved onto sugar-log's LogTailWindow, which answers no
+        // lines for a zero count, throws on a negative one and refuses a
+        // symlink. LogTail::tail() is public, so it keeps the shape it had:
+        // array_slice($lines, -$count) over the window, and a link followed.
+        $contents = "line1\nline2\nline3\n";
+        \file_put_contents($this->dir . '/server.log', $contents);
+        $path = $this->dir . '/server.log';
+
+        self::assertSame([['line1', 'line2', 'line3'], \strlen($contents)], LogTail::tail($path, 0));
+        self::assertSame([['line3'], \strlen($contents)], LogTail::tail($path, -2));
+
+        \rename($path, $this->dir . '/elsewhere.txt');
+        \symlink($this->dir . '/elsewhere.txt', $path);
+        self::assertSame([['line2', 'line3'], \strlen($contents)], LogTail::tail($path, 2));
+    }
+
     public function testAnswerCrossesARotationBoundary(): void
     {
         $state = StateDir::open($this->dir);

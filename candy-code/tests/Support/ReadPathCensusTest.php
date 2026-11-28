@@ -1059,10 +1059,6 @@ final class ReadPathCensusTest extends TestCase
         'Server/Http/StaticFiles.php|file_get_contents' => [
             'CONTAINED — a static asset, read only for a path \SugarCraft\Core\Util\PathJail::within() keeps under the web root',
         ],
-        'Server/LogTail.php|fopen' => [
-            'SELF_LOCATED — tail(): the window end of server.log that both log doors read; '
-                . 'every caller lstat-checks a regular file inside the private state dir first',
-        ],
         'Server/Push/VapidKeys.php|file_get_contents' => [
             'SELF_LOCATED — the VAPID signing PEM this class minted into the `serve` state dir '
                 . 'PrivateRetainedDir::verified() keeps 0700 and ours; lstat refuses a link and '

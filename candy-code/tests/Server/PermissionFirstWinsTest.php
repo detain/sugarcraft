@@ -218,7 +218,17 @@ final class PermissionFirstWinsTest extends TestCase
         [$a, , $sessionId] = $this->twoClientsOnARunningTurn();
         $ask = $this->fixture->backend->ask('c1', 'Bash', ['command' => 'ls']);
 
-        $this->fixture->run(0.25);
+        // Run until the timeout settles the ask, bounded, rather than for one
+        // fixed window: under a loaded parallel run a single starved gap can
+        // make the dispatcher's pump tick (which arms the 0.05 s timer) and a
+        // fixed stop timer fall due in the same loop tick, stopping the loop
+        // before the armed timeout can fire. The note below still proves the
+        // timeout, not some other path, is what answered.
+        $deadline = \microtime(true) + 5.0;
+        while (!$ask->isSettled() && \microtime(true) < $deadline) {
+            $this->fixture->run(0.05);
+        }
+        $this->fixture->run();
 
         self::assertSame(PermissionReply::Reject, $ask->resolution()?->reply);
         self::assertSame('timed out after 0.05 s', $ask->resolution()?->note);

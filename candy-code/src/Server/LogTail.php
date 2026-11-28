@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Server;
 
+use SugarCraft\Log\LogTailWindow;
+
 /**
  * The shared tail reader for the server's own 0600 log file.
  *
@@ -54,30 +56,34 @@ final class LogTail
     /**
      * The last $count lines of $path and the byte offset reading stopped at.
      *
+     * The read is sugar-log's {@see LogTailWindow}, held to {@see self::WINDOW_BYTES}:
+     * blank lines kept and counted, a carriage return kept on its line, the
+     * window's first (possibly partial) line dropped when the file outruns
+     * it, the offset taken from the handle that read the window, and an
+     * unopenable path answering no lines at offset 0.
+     *
+     * The public surface is kept as it was before the read moved onto the
+     * window, for direct callers that do not pre-check: $count is applied
+     * as `array_slice($lines, -$count)` over every line in the window, so 0
+     * answers every line and a negative count drops that many from the
+     * front instead of throwing, and a symlink at $path is followed to its
+     * target (the window itself refuses one by lstat). Two path shapes do
+     * answer differently from the old fopen() read: a directory now answers
+     * no lines at offset 0 rather than its fstat size, and a fifo answers
+     * no lines at offset 0 rather than blocking in fopen(). Both current
+     * callers lstat-check a regular file and ask for at least one line
+     * first, so none of these differences reaches them.
+     *
      * @return array{0: list<string>, 1: int}
      */
     public static function tail(string $path, int $count): array
     {
-        $handle = @\fopen($path, 'r');
-        if ($handle === false) {
-            return [[], 0];
-        }
-        $size = (int) (\fstat($handle)['size'] ?? 0);
-        $window = self::WINDOW_BYTES;
-        $from = \max(0, $size - $window);
-        \fseek($handle, $from);
-        $text = (string) \stream_get_contents($handle, $size - $from);
-        \fclose($handle);
+        $target = \realpath($path);
+        [$lines, $offset] = LogTailWindow::new($target === false ? $path : $target)
+            ->withWindowBytes(self::WINDOW_BYTES)
+            ->lines(\PHP_INT_MAX);
 
-        $lines = \explode("\n", \rtrim($text, "\n"));
-        if ($from > 0) {
-            \array_shift($lines);
-        }
-        if ($lines === ['']) {
-            $lines = [];
-        }
-
-        return [\array_slice($lines, -$count), $size];
+        return [\array_slice($lines, -$count), $offset];
     }
 
     /**
