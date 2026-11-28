@@ -37,9 +37,13 @@ use SugarCraft\Async\Clock;
  * `setsid(1)` to probe), so the argv rides the array form UNCHANGED — which
  * is exactly the shape PHP hands CreateProcess, quoted by its rules, never
  * through cmd.exe. {@see self::tree()} is the public entry point; the
- * default runner is bounded ({@see CHILD_BOUND_SECONDS}) so a wedged
- * taskkill can never extend a teardown past its declared window — a wall
- * the taskkill child gets, not a blanket timeout on anything user-facing.
+ * default runner bounds each killer child so a wedged one can never extend
+ * a teardown past its declared window: the taskkill child at
+ * {@see CHILD_BOUND_SECONDS}, the MSYS group-kill bash (when the host has
+ * Git bash) at {@see msysStepBoundSeconds()}. A synchronous tree() can
+ * therefore wait up to the sum of the two when the MSYS step fails and the
+ * plain walk follows. These are walls the killer children get, not a
+ * blanket timeout on anything user-facing.
  *
  * The class is seam-testable as data on any host — {@see self::tree()}
  * routes through {@see self::setRunnerForTesting()} — so the argv table and
@@ -72,9 +76,14 @@ final class WindowsTaskKill
 
     /**
      * Test-only argv runner; null runs the real short-lived child. The seam
-     * receives the {@see self::treeArgv()} list and answers bool — "did the
+     * is called as `(array $argv, float $bound)` and answers bool — "did the
      * tree die" — which is exactly what the production runner derives from
-     * taskkill's exit status.
+     * the child's exit status. When the MSYS step is active (a Git bash on a
+     * Windows host, or {@see setMsysBashForTesting()}), the first call
+     * carries {@see self::msysGroupKillArgv()} with
+     * {@see msysStepBoundSeconds()}, and {@see self::treeArgv()} with
+     * {@see childBoundSeconds()} follows only when that call answered false;
+     * with the step off, the only call is the treeArgv() one.
      */
     private static ?\Closure $runner = null;
 
@@ -203,7 +212,10 @@ final class WindowsTaskKill
      * runs only when the pid is a native `bash.exe`: MSYS `ps -W` lists every
      * Windows process with its image path, and a native kill whose image is
      * anything else (an MCP server, a php engine child) exits 1 after that
-     * one cheap MSYS spawn, never starting powershell.exe. The query also
+     * one cheap MSYS spawn, never starting powershell.exe. The pid is matched
+     * in the WINPID column only (the fourth number, after an optional status
+     * letter), so a non-bash pid that appears as the PPID of a native
+     * bash.exe child does not start the query either. The query also
      * runs under `timeout -s KILL` at {@see CHILD_QUERY_BOUND_SECONDS}: when
      * PHP's bound fires, proc_terminate() reaches only this bash on Windows,
      * never its powershell.exe grandchild, so the grandchild carries its own
@@ -220,7 +232,10 @@ final class WindowsTaskKill
         . 'lookup "$w"; '
         . 'if [ -z "$g" ]; then n=; '
         . 'while IFS= read -r l; do l=${l%$\'\r\'}; '
-        . 'case $l in *" $w "*\'\\bash.exe\') n=1; break;; esac; '
+        . 'read -r -a f <<< "$l"; '
+        . 'case ${f[0]} in *[!0-9]*) f=("${f[@]:1}");; esac; '
+        . '[ "${f[3]}" = "$w" ] || continue; '
+        . 'case $l in *\'\\bash.exe\') n=1;; esac; break; '
         . 'done <<< "$(ps -W 2>/dev/null)"; '
         . 'if [ -n "$n" ]; then '
         . 'for c in $(MSYS_NO_PATHCONV=1 timeout -s KILL ' . self::CHILD_QUERY_BOUND_SECONDS . ' '
