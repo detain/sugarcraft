@@ -120,9 +120,13 @@ final readonly class LogTailWindow
 
     /**
      * A read handle on a regular file at the path, or null. The shape is
-     * checked before opening, so a fifo planted at the path is never opened
+     * checked before opening, so a fifo already at the path is never opened
      * (opening one blocks until a writer comes), and again on the handle, so
-     * a swap between the check and the open is caught too.
+     * a directory or symlink target swapped in between the check and the
+     * open is caught too. A fifo swapped in inside that window is not: the
+     * fopen() itself blocks on it before the handle check runs. That residual
+     * race is accepted, since it needs a racing writer in a directory the
+     * same user already owns.
      *
      * @return resource|null
      */
