@@ -13,6 +13,35 @@
 <tr><td><code>static title(string $title, string $subtitle = &#039;&#039;, ?Theme $theme = null, ?Border $border = null, int|AutoWidth|null $width = null): string</code></td><td></td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-cli-commandspec"><code>CommandSpec</code> <small>final class</small></h4>
+<p>Declarative description of a command: its options, subcommands, the rules between options (requires, conflicts) and how many positional arguments it takes. parse() turns an argv list into ParsedArgs or a UsageError; help, completions and man pages are generated from the same object.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $name): self</code></td><td></td></tr>
+<tr><td><code>withDescription(string $description): self</code></td><td>One-line summary for help and completion output.</td></tr>
+<tr><td><code>withOption(Option $option): self</code></td><td>Declare an option. Long and short names must be unique on this command.</td></tr>
+<tr><td><code>withSubcommand(CommandSpec $subcommand): self</code></td><td>Declare a subcommand, selected by its name as the first positional.</td></tr>
+<tr><td><code>conflicts(string ...$options): self</code></td><td>At most one of these options may be given. Options supplied on argv also silence the environment fallback of the others in the set, so an exported variable never makes an explicit command line invalid.</td></tr>
+<tr><td><code>requires(string $option, string ...$required): self</code></td><td>When <code>$option</code> is given (argv or env), each of <code>$required</code> must be too. Repeated calls for one option add to its list.</td></tr>
+<tr><td><code>withMinArguments(int $min): self</code></td><td>Fewest positional arguments accepted.</td></tr>
+<tr><td><code>withMaxArguments(?int $max): self</code></td><td>Most positional arguments accepted; null is unbounded. When never called, a command with subcommands accepts none, so a mistyped subcommand is reported as one instead of being taken as an argument; an explicit null keeps such a command unbounded.</td></tr>
+<tr><td><code>name(): string</code></td><td></td></tr>
+<tr><td><code>description(): string</code></td><td></td></tr>
+<tr><td><code>options(): array</code></td><td>Declared options, keyed by long name, in declaration order.</td></tr>
+<tr><td><code>option(string $name): ?Option</code></td><td>The option with this long name, or null.</td></tr>
+<tr><td><code>subcommands(): array</code></td><td>Declared subcommands, keyed by name, in declaration order.</td></tr>
+<tr><td><code>subcommand(string $name): ?CommandSpec</code></td><td>The subcommand with this name, or null.</td></tr>
+<tr><td><code>groups(): array</code></td><td>Options grouped for help output: group name =&gt; options, groups in order of first appearance; the ungrouped options sit under <code>&#039;&#039;</code>.</td></tr>
+<tr><td><code>conflictSets(): array</code></td><td></td></tr>
+<tr><td><code>requirements(): array</code></td><td></td></tr>
+<tr><td><code>minArguments(): int</code></td><td></td></tr>
+<tr><td><code>maxArguments(): ?int</code></td><td>The configured maximum, or null when unbounded or never set (see effectiveMaxArguments()).</td></tr>
+<tr><td><code>effectiveMaxArguments(): ?int</code></td><td>The maximum parse() enforces: the configured one, else 0 with subcommands, else unbounded (null).</td></tr>
+<tr><td><code>parse(array $argv, ?array $env = null): ParsedArgs|UsageError</code></td><td>Parse an argument list against this spec.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-cli-frame"><code>Frame</code> <small>final class</small></h4>
 <p>Full-screen application chrome: a double-line box that fills the terminal exactly, with a centred title bar, top/bottom dividers, and a status bar.</p>
 <p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
@@ -51,6 +80,62 @@
 <tr><td><code>fits(int $cols): bool</code></td><td>True when every art line fits within <code>$cols</code> display cells.</td></tr>
 <tr><td><code>withColor(string|Color $color): self</code></td><td>Render the logo with a foreground color.</td></tr>
 <tr><td><code>render(?ColorProfile $profile = null): string</code></td><td>Render the logo as a string, applying the chosen color (if any) once.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cli-option"><code>Option</code> <small>final class</small></h4>
+<p>One declared command-line option of a CommandSpec: a flag (<code>--verbose</code>) or a value option (<code>--model gpt</code>), with its short alias, environment fallback, value type, allowed values, default and help group.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static flag(string $name): self</code></td><td>A switch with no value: <code>--name</code> (or <code>-x</code> once withShort() is set).</td></tr>
+<tr><td><code>static value(string $name): self</code></td><td>An option that takes one value: <code>--name value</code> or <code>--name=value</code>.</td></tr>
+<tr><td><code>withShort(string $short): self</code></td><td>Single-character alias, used as <code>-x</code>. Letters and digits only.</td></tr>
+<tr><td><code>withEnv(string $env): self</code></td><td>Environment variable read when the option is absent from argv. An empty variable counts as unset.</td></tr>
+<tr><td><code>withDescription(string $description): self</code></td><td>One-line help text.</td></tr>
+<tr><td><code>withType(ValueType $type): self</code></td><td>Convert the raw value into an int or float; a value that does not convert is a usage error. Only meaningful on a value option.</td></tr>
+<tr><td><code>withChoices(array $choices): self</code></td><td>Restrict the value to a fixed set of strings (compared exactly). Replaces any withEnum() binding.</td></tr>
+<tr><td><code>withEnum(string $enum): self</code></td><td>Restrict the value to the backing values of a backed enum; the parsed value is the enum case, not the string.</td></tr>
+<tr><td><code>withRepeatable(bool $repeatable = true): self</code></td><td>Accept the option more than once. A repeatable value option collects a list; a repeatable flag counts its occurrences (<code>-vvv</code> is 3). A non-repeatable option given twice keeps the last value.</td></tr>
+<tr><td><code>withRequired(bool $required = true): self</code></td><td>Fail with a usage error when neither argv nor the env variable supplies the option.</td></tr>
+<tr><td><code>withDefault(mixed $default): self</code></td><td>Value reported when neither argv nor env supplies the option. Taken as given: it is not converted or checked against the choices.</td></tr>
+<tr><td><code>withGroup(string $group): self</code></td><td>Help-page section this option is listed under; <code>&#039;&#039;</code> is the ungrouped section.</td></tr>
+<tr><td><code>withValueName(string $valueName): self</code></td><td>Placeholder for the value in help output, e.g. <code>--model &lt;MODEL&gt;</code>.</td></tr>
+<tr><td><code>withPersistent(bool $persistent = true): self</code></td><td>Also accept this option after any subcommand of the command that declares it.</td></tr>
+<tr><td><code>name(): string</code></td><td>Long name, without the leading <code>--</code>.</td></tr>
+<tr><td><code>kind(): OptionKind</code></td><td></td></tr>
+<tr><td><code>takesValue(): bool</code></td><td>True for a value option, false for a flag.</td></tr>
+<tr><td><code>short(): ?string</code></td><td>Short alias without the <code>-</code>, or null.</td></tr>
+<tr><td><code>env(): ?string</code></td><td>Fallback environment variable, or null.</td></tr>
+<tr><td><code>description(): string</code></td><td></td></tr>
+<tr><td><code>type(): ValueType</code></td><td></td></tr>
+<tr><td><code>choices(): array</code></td><td>Allowed raw values; empty means any value.</td></tr>
+<tr><td><code>enum(): ?string</code></td><td>Backed enum the value maps to, or null.</td></tr>
+<tr><td><code>repeatable(): bool</code></td><td></td></tr>
+<tr><td><code>required(): bool</code></td><td></td></tr>
+<tr><td><code>default(): mixed</code></td><td>The configured default, or null when none was set.</td></tr>
+<tr><td><code>group(): string</code></td><td></td></tr>
+<tr><td><code>valueName(): string</code></td><td>Value placeholder for help output; defaults to the upper-cased name.</td></tr>
+<tr><td><code>persistent(): bool</code></td><td></td></tr>
+<tr><td><code>display(): string</code></td><td><code>--name</code>, the spelling used in usage errors and help.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cli-optionkind"><code>OptionKind</code> <small>enum</small></h4>
+<p>Whether an Option is a bare switch or carries a value.</p>
+<p>Cases: <code>Flag</code> · <code>Value</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
+<h4 id="api-sugarcraft-cli-parsedargs"><code>ParsedArgs</code> <small>final class</small></h4>
+<p>The successful result of CommandSpec::parse(): the selected command path, every declared option&#039;s resolved value with its source, and the positional arguments.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(array $command, array $values, array $sources, array $arguments): self</code></td><td></td></tr>
+<tr><td><code>command(): array</code></td><td>Selected command path, root first (<code>[&#039;git&#039;, &#039;remote&#039;, &#039;add&#039;]</code>).</td></tr>
+<tr><td><code>has(string $name): bool</code></td><td>True when the option came from argv or its env variable (a default does not count).</td></tr>
+<tr><td><code>value(string $name): mixed</code></td><td>Resolved value of an option by long name.</td></tr>
+<tr><td><code>source(string $name): ?ValueSource</code></td><td>Where the value came from, or null when nothing (not even a default) supplied one.</td></tr>
+<tr><td><code>values(): array</code></td><td>Every declared option&#039;s resolved value, keyed by long name.</td></tr>
+<tr><td><code>arguments(): array</code></td><td>Positional arguments in order, including everything after <code>--</code>.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-cli-section"><code>Section</code> <small>final class</small></h4>
@@ -106,3 +191,29 @@
 <tr><td><code>static detectFor(mixed $stream): self</code></td><td>Detect for one named stream — the entry point for callers that already know their destination (a file handle, a pty master) and want the detect() downgrade without going through the default-stream substitution.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-cli-usageerror"><code>UsageError</code> <small>final class</small></h4>
+<p>The result of a CommandSpec::parse() that broke a rule: which rule (kind()), the values involved (params()), the command path it was raised in, and a ready English message().</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(UsageErrorKind $kind, array $params, array $command): self</code></td><td></td></tr>
+<tr><td><code>kind(): UsageErrorKind</code></td><td></td></tr>
+<tr><td><code>params(): array</code></td><td></td></tr>
+<tr><td><code>command(): array</code></td><td>Command path the error was raised in, root first (<code>[&#039;git&#039;, &#039;remote&#039;]</code>).</td></tr>
+<tr><td><code>option(): ?string</code></td><td>The option the error is about as <code>--name</code> (an unknown short option keeps its <code>-x</code> spelling), or null for a command or argument error.</td></tr>
+<tr><td><code>suggestion(): ?string</code></td><td>The did-you-mean candidate, or null when nothing was close enough.</td></tr>
+<tr><td><code>message(): string</code></td><td>One-line English description of the error, without a trailing period.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cli-usageerrorkind"><code>UsageErrorKind</code> <small>enum</small></h4>
+<p>Which parse rule a UsageError broke. Callers that localize their CLI switch on this and UsageError::params() instead of the English UsageError::message().</p>
+<p>Cases: <code>UnknownOption</code> · <code>UnknownCommand</code> · <code>MissingValue</code> · <code>UnexpectedValue</code> · <code>InvalidValue</code> · <code>InvalidChoice</code> · <code>MissingOption</code> · <code>MissingRequirement</code> · <code>ConflictingOptions</code> · <code>TooFewArguments</code> · <code>TooManyArguments</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
+<h4 id="api-sugarcraft-cli-valuesource"><code>ValueSource</code> <small>enum</small></h4>
+<p>Where a resolved option value in ParsedArgs came from.</p>
+<p>Cases: <code>Argv</code> · <code>Env</code> · <code>Default</code></p>
+<p>PHP also provides <code>cases()</code>.</p>
+<h4 id="api-sugarcraft-cli-valuetype"><code>ValueType</code> <small>enum</small></h4>
+<p>The PHP type a value Option converts its raw string into.</p>
+<p>Cases: <code>String</code> · <code>Int</code> · <code>Float</code></p>
+<p>PHP also provides <code>cases()</code>.</p>

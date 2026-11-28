@@ -197,6 +197,70 @@ echo StatusLine::error('connection refused'), "\n";
   terminal-sized unless asked; and `HelpText::renderPage()` defaults to
   `null`, which means never re-wrap an already-authored page.
 
+## Command spec
+
+`CommandSpec` declares a command once — options, subcommands and the rules
+between them — and `parse()` turns argv into a `ParsedArgs` or a
+`UsageError`. The same object is what help, completions and man pages are
+generated from. Every builder call returns a new instance.
+
+```php
+use SugarCraft\Cli\{CommandSpec, Option, ParsedArgs, UsageError, ValueType};
+
+$spec = CommandSpec::new('candy-code')
+    ->withOption(Option::value('model')->withShort('m')->withEnv('CANDY_CODE_MODEL')->withGroup('Model'))
+    ->withOption(Option::value('effort')->withChoices(['low', 'high'])->withDefault('low'))
+    ->withOption(Option::flag('verbose')->withShort('v')->withRepeatable()->withPersistent())
+    ->withOption(Option::flag('json'))
+    ->withOption(Option::flag('plain'))
+    ->conflicts('json', 'plain')
+    ->withSubcommand(
+        CommandSpec::new('run')
+            ->withOption(Option::value('max-turns')->withType(ValueType::Int))
+            ->withMinArguments(1),
+    );
+
+$result = $spec->parse(array_slice($argv, 1));
+if ($result instanceof UsageError) {
+    fwrite(STDERR, $result->message() . "\n");   // unknown option "--modle" (did you mean "--model"?)
+    exit(2);
+}
+$result->command();          // ['candy-code', 'run']
+$result->value('model');     // from argv, else CANDY_CODE_MODEL, else null
+$result->value('verbose');   // -vv => 2
+$result->arguments();        // positionals, including everything after --
+```
+
+Parse rules:
+
+- **Spellings.** `--name value`, `--name=value`, `-x value`, `-xvalue`,
+  `-x=value`, grouped short flags `-abc` (a value option ends the group and
+  takes the rest), `--` ends options, and a lone `-` or a negative number
+  is a positional. A value option followed by another option has no value;
+  pass a dash-leading value as `--name=-x`.
+- **Typed and enum values.** `withType(ValueType::Int|Float)` converts;
+  `withChoices([...])` restricts to fixed strings; `withEnum(Backed::class)`
+  restricts to the backing values and yields the enum case.
+- **Repeatables.** A repeatable value option collects a list, a repeatable
+  flag counts (`-vvv` is 3); otherwise the last occurrence wins.
+- **Environment fallback.** `withEnv()` is read only when argv lacks the
+  option; an empty variable counts as unset, and a flag accepts
+  `1/true/yes/on` and `0/false/no/off`. `withDefault()` applies after both.
+- **Requires and conflicts.** `requires('key', 'cert')` and `conflicts('json',
+  'plain')` count argv and env, never a default. An option given on argv
+  silences the env fallback of the others in its conflict set.
+- **Subcommands.** The first positional selects a subcommand. A command
+  with subcommands takes no positionals unless `withMaxArguments()` says
+  so, which is what turns a typo into `unknown command "rnu" for
+  "candy-code" (did you mean "run"?)`. Only `withPersistent()` options carry into subcommands.
+- **Groups.** `withGroup('Model')` sorts options into help sections;
+  `CommandSpec::groups()` returns them in first-appearance order.
+
+A `UsageError` carries `kind()` (a `UsageErrorKind`), `params()` and an
+English `message()`; a localized CLI renders its own text from the kind and
+params. A malformed spec (duplicate names, a rule naming an undeclared
+option) throws instead, since it is a programmer error.
+
 ## Output assumptions
 
 **Charset.** The color ladder (see `Theme::detect()` above) governs escape
@@ -229,11 +293,11 @@ border *is* the truncation marker.
 sugar-cli is the **presentation half** of a CLI: it renders strings and
 leaves every other decision to you.
 
-- **No argument parsing, exit codes or output routing.** Every helper
-  returns a string; whether it goes to STDOUT or STDERR and what the
-  process exits with is the application's call. Feed sugar-cli from
-  symfony/console, a `getopt()` loop, or your own argv code — it only
-  ever renders strings.
+- **No exit codes or output routing.** Argument parsing is in scope
+  through the declarative `CommandSpec` (see [Command spec](#command-spec)),
+  but `parse()` only returns `ParsedArgs` or a `UsageError` value; whether
+  a message goes to STDOUT or STDERR and what the process exits with is
+  still the application's call.
 - **No interaction machinery.** Line editing and prompts live in
   `sugar-readline`; scripted TUI shells in `candy-scriptui`. This library
   only decorates the text you already decided to print.
