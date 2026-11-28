@@ -567,6 +567,29 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame('--tls', $error->params()['requires']);
     }
 
+    public function testNonPersistentParentEnvTriggersAParentRequirementAtTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('key')->withEnv('APP_KEY'))
+            ->withOption(Option::value('cert'))
+            ->requires('key', 'cert')
+            ->withSubcommand(CommandSpec::new('run'));
+        $env = ['APP_KEY' => 'k'];
+
+        // A trigger set only by its variable enforces the rule at the leaf as
+        // it does at the root, so the environment cannot bypass it.
+        foreach ([[], ['run']] as $argv) {
+            $error = $this->usageError($spec, $argv, $env);
+            self::assertSame(UsageErrorKind::MissingRequirement, $error->kind());
+            self::assertSame('--key', $error->params()['option']);
+            self::assertSame('--cert', $error->params()['requires']);
+            self::assertSame('APP_KEY', $error->params()['env']);
+        }
+        $parsed = $this->ok($spec, ['--cert', 'c', 'run'], $env);
+        $this->assertNotInParse($parsed, 'key');
+        $this->ok($spec, ['run']);
+    }
+
     public function testInvalidNonPersistentParentEnvReportsTheVariableAtTheSubcommand(): void
     {
         $spec = CommandSpec::new('app')

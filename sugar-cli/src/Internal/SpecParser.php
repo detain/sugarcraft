@@ -304,8 +304,20 @@ final class SpecParser
             foreach ($spec->requirements() as $name => $needs) {
                 // An all-digit name comes back from the array key as an int.
                 $name = (string) $name;
+                $triggerEnv = $envSource($name);
                 if (!$present($name)) {
-                    continue;
+                    // A trigger outside the leaf's parse never gets an Env
+                    // source, so its variable is checked the same way as a
+                    // needed option's: otherwise setting the variable instead
+                    // of typing the option would bypass the rule.
+                    $above = $suppliedAbove($name);
+                    if ($above instanceof UsageError) {
+                        return $above;
+                    }
+                    if (!$above) {
+                        continue;
+                    }
+                    $triggerEnv = $options[$name]->env();
                 }
                 foreach ($needs as $need) {
                     if ($present($need)) {
@@ -319,7 +331,7 @@ final class SpecParser
                         return self::error(UsageErrorKind::MissingRequirement, [
                             'option' => '--' . $name,
                             'requires' => '--' . $need,
-                            'env' => $envSource($name),
+                            'env' => $triggerEnv,
                         ], $names);
                     }
                 }
