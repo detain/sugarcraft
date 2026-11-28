@@ -163,6 +163,19 @@ final class CommandSpecTest extends TestCase
         CommandSpec::new('app')->withOption(Option::flag('x'))->withOption(Option::value('x'));
     }
 
+    public function testRequiredOptionWithDefaultThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('"--key" on "app" is required and has a default');
+        CommandSpec::new('app')->withOption(Option::value('key')->withRequired()->withDefault('dflt'));
+    }
+
+    public function testRequiredFlagWithFalseDefaultAlsoThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        CommandSpec::new('app')->withOption(Option::flag('force')->withDefault(false)->withRequired());
+    }
+
     public function testDuplicateShortOptionThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);

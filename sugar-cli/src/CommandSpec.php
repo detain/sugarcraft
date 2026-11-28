@@ -77,10 +77,20 @@ final class CommandSpec
     /**
      * Declare an option. Long and short names must be unique on this command.
      *
-     * @throws \InvalidArgumentException on a duplicate long or short name
+     * @throws \InvalidArgumentException on a duplicate long or short name, or
+     *         an option that is both required and has a default
      */
     public function withOption(Option $option): self
     {
+        if ($option->required() && $option->default() !== null) {
+            // The required check ignores defaults, so the default could never
+            // be reported: the spec contradicts itself.
+            throw new \InvalidArgumentException(sprintf(
+                'Option "--%s" on "%s" is required and has a default; use one or the other.',
+                $option->name(),
+                $this->name,
+            ));
+        }
         if (isset($this->options[$option->name()])) {
             throw new \InvalidArgumentException(sprintf('Option "--%s" is already declared on "%s".', $option->name(), $this->name));
         }

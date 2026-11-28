@@ -263,7 +263,8 @@ Parse rules:
 A `UsageError` carries `kind()` (a `UsageErrorKind`), `params()` and an
 English `message()`; a localized CLI renders its own text from the kind and
 params. A malformed spec (duplicate names, a rule naming an undeclared
-option) throws instead, since it is a programmer error.
+option, a required option with a default) throws instead, since it is a
+programmer error.
 
 ## Output assumptions
 

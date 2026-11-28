@@ -154,7 +154,11 @@ final class Option
         return $this->mutate(['repeatable' => $repeatable]);
     }
 
-    /** Fail with a usage error when neither argv nor the env variable supplies the option. */
+    /**
+     * Fail with a usage error when neither argv nor the env variable supplies
+     * the option. A default never satisfies it, so
+     * {@see CommandSpec::withOption()} rejects an option with both.
+     */
     public function withRequired(bool $required = true): self
     {
         return $this->mutate(['required' => $required]);
@@ -162,7 +166,8 @@ final class Option
 
     /**
      * Value reported when neither argv nor env supplies the option. Taken
-     * as given: it is not converted or checked against the choices.
+     * as given: it is not converted or checked against the choices. Not
+     * allowed on a required option ({@see withRequired()}).
      */
     public function withDefault(mixed $default): self
     {
