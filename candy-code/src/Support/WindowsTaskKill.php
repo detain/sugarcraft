@@ -245,7 +245,15 @@ final class WindowsTaskKill
      * missed would skip the query and bring the surviving-sleeps bug back, so
      * it fails open. The image test is case-insensitive and takes `bash` or
      * `bash.exe` after a backslash, a slash or a space (Windows form, POSIX
-     * form, bare name). And the column test is trusted only when the header
+     * form, bare name). Whether `ps -W` prints the launcher's argv after its
+     * image (`C:\Program Files\Git\bin\bash.exe -c ...`) is also UNVERIFIED,
+     * and an end-anchored image test would miss that line, skip the query
+     * and bring the surviving sleeps back, so the line is first cut at its
+     * first `.exe ` (the image path ends there when argv follows) and the
+     * test runs on what is left: a bash.exe launcher matches with or without
+     * argv, and a non-bash image whose argv names bash.exe still does not.
+     * A bare `bash` image is matched only with nothing after it. And the
+     * column test is trusted only when the header
      * names WINPID as the fourth column: a missing or different header, or no
      * `ps -W` output at all, runs the query for every pid, trading the cheap
      * skip for the kill. Only a recognized header with the pid listed under a
@@ -272,7 +280,8 @@ final class WindowsTaskKill
         . 'if [ "${f[0]}" = PID ]; then [ "${f[3]}" = WINPID ] && h=1; continue; fi; '
         . 'case ${f[0]} in *[!0-9]*) f=("${f[@]:1}");; esac; '
         . '[ "${f[3]}" = "$w" ] || continue; '
-        . 'case ${l,,} in *\'\\bash.exe\'|*\'\\bash\'|*/bash.exe|*/bash|*\' bash.exe\'|*\' bash\') n=1;; esac; break; '
+        . 'i=${l,,}; [[ $i == *\'.exe \'* ]] && i=${i%%.exe *}.exe; '
+        . 'case $i in *\'\\bash.exe\'|*\'\\bash\'|*/bash.exe|*/bash|*\' bash.exe\'|*\' bash\') n=1;; esac; break; '
         . 'done <<< "$(ps -W 2>/dev/null)"; '
         . '[ -n "$h" ] || n=1; '
         . 'if [ -n "$n" ]; then '
