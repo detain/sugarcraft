@@ -109,7 +109,7 @@ final class ColorGateTest extends TestCase
         // incoming formatter (which adoption re-seeds).
         $logger->setReportTimestamp(false);
         $first = new TextFormatter();
-        $logger->setFormatter($first);
+        $logger = $logger->withFormatter($first);
         $logger->info('one');
 
         // A DIFFERENT TextFormatter instance must not inherit the first one's
@@ -117,7 +117,7 @@ final class ColorGateTest extends TestCase
         // mirror must carry them (identity compare, not class compare).
         $logger->setReportTimestamp(true);
         $second = new TextFormatter();
-        $logger->setFormatter($second);
+        $logger = $logger->withFormatter($second);
         $logger->info('two');
 
         \fclose($stream);

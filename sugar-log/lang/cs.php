@@ -22,4 +22,6 @@ return [
     'log.fatal_user' => 'Uživatelská chyba',
     'log.fatal_shutdown' => 'Chyba ukončení',
     'logger.unopenable_stream' => 'nelze otevřít soubor protokolu \'{path}\'',
+    'reader.negative_count' => 'počet řádků musí být nula nebo více; zadáno {count}',
+    'reader.unreadable' => 'nelze číst soubor protokolu \'{path}\'',
 ];

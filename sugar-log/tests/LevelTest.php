@@ -53,6 +53,18 @@ final class LevelTest extends TestCase
         $this->assertSame('FTL', Level::Fatal->shortLabel());
     }
 
+    public function testFromLabelReadsFullAndShortLabelsInAnyCase(): void
+    {
+        foreach (Level::cases() as $level) {
+            $this->assertSame($level, Level::fromLabel($level->label()));
+            $this->assertSame($level, Level::fromLabel($level->shortLabel()));
+            $this->assertSame($level, Level::fromLabel(\strtolower($level->label())));
+        }
+        $this->assertSame(Level::Info, Level::fromLabel(' INF  '), 'padded text labels parse');
+        $this->assertNull(Level::fromLabel('NOTICE'));
+        $this->assertNull(Level::fromLabel(''));
+    }
+
     public function testCasesAreExhaustive(): void
     {
         $this->assertCount(5, Level::cases());

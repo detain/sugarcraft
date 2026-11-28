@@ -60,14 +60,14 @@ final class LogTest extends TestCase
     public function testDefaultLazilyCreatesLogger(): void
     {
         // Before setting a logger, default() should create one lazily
-        $default = Log::default();
+        $default = Log::logger();
         $this->assertInstanceOf(Logger::class, $default);
     }
 
     public function testDefaultReturnsSameInstanceOnSubsequentCalls(): void
     {
-        $first = Log::default();
-        $second = Log::default();
+        $first = Log::logger();
+        $second = Log::logger();
         $this->assertSame($first, $second);
     }
 
@@ -76,14 +76,14 @@ final class LogTest extends TestCase
         $custom = $this->logger();
         Log::setLogger($custom);
 
-        $this->assertSame($custom, Log::default());
+        $this->assertSame($custom, Log::logger());
     }
 
     public function testResetClearsDefault(): void
     {
-        $first = Log::default();
+        $first = Log::logger();
         Log::reset();
-        $second = Log::default();
+        $second = Log::logger();
 
         $this->assertNotSame($first, $second);
     }

@@ -10,7 +10,7 @@ use SugarCraft\Log\Support\Stdio;
 /**
  * Static facade over a process-wide default {@see Logger}.
  *
- * `Log::debug('hi')` is equivalent to `Log::default()->debug('hi')`.
+ * `Log::debug('hi')` is equivalent to `Log::logger()->debug('hi')`.
  * Swap the default logger with `Log::setLogger($custom)` (handy for tests).
  *
  * Lives in its own class because PHP can't have static and instance methods
@@ -47,8 +47,15 @@ final class Log
      */
     private static int $panicPushes = 0;
 
-    /** Get (or lazily create) the process-wide default logger. */
-    public static function default(): Logger
+    /**
+     * Get (or lazily create) the process-wide default logger.
+     *
+     * Mirrors charmbracelet/log.Default. Named `logger()` rather than
+     * `default()` (banned by the fleet factory rule) or `new()` (it returns
+     * the one shared instance, it does not build one); it is the bare
+     * accessor that pairs with {@see setLogger()}.
+     */
+    public static function logger(): Logger
     {
         return self::$default ??= Logger::new();
     }
@@ -67,33 +74,33 @@ final class Log
 
     public static function debug(string $message, array $context = []): void
     {
-        self::default()->log(Level::Debug, $message, $context);
+        self::logger()->log(Level::Debug, $message, $context);
     }
 
     public static function info(string $message, array $context = []): void
     {
-        self::default()->log(Level::Info, $message, $context);
+        self::logger()->log(Level::Info, $message, $context);
     }
 
     public static function warn(string $message, array $context = []): void
     {
-        self::default()->log(Level::Warn, $message, $context);
+        self::logger()->log(Level::Warn, $message, $context);
     }
 
     public static function error(string $message, array $context = []): void
     {
-        self::default()->log(Level::Error, $message, $context);
+        self::logger()->log(Level::Error, $message, $context);
     }
 
     public static function fatal(string $message, array $context = []): void
     {
-        self::default()->log(Level::Fatal, $message, $context);
+        self::logger()->log(Level::Fatal, $message, $context);
     }
 
     /** Always print, ignoring level filters. */
     public static function print(string $message, array $context = []): void
     {
-        self::default()->print($message, $context);
+        self::logger()->print($message, $context);
     }
 
     /**
@@ -103,27 +110,27 @@ final class Log
      */
     public static function debugf(string $format, mixed $context = [], mixed ...$args): void
     {
-        self::default()->debugf($format, $context, ...$args);
+        self::logger()->debugf($format, $context, ...$args);
     }
 
     public static function infof(string $format, mixed $context = [], mixed ...$args): void
     {
-        self::default()->infof($format, $context, ...$args);
+        self::logger()->infof($format, $context, ...$args);
     }
 
     public static function warnf(string $format, mixed $context = [], mixed ...$args): void
     {
-        self::default()->warnf($format, $context, ...$args);
+        self::logger()->warnf($format, $context, ...$args);
     }
 
     public static function errorf(string $format, mixed $context = [], mixed ...$args): void
     {
-        self::default()->errorf($format, $context, ...$args);
+        self::logger()->errorf($format, $context, ...$args);
     }
 
     public static function fatalf(string $format, mixed $context = [], mixed ...$args): void
     {
-        self::default()->fatalf($format, $context, ...$args);
+        self::logger()->fatalf($format, $context, ...$args);
     }
 
     /**
