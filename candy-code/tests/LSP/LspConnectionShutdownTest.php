@@ -50,13 +50,21 @@ final class LspConnectionShutdownTest extends TestCase
     private const BOUND_SECONDS = 4.0;
 
     /**
-     * Tighter than {@see BOUND_SECONDS}, because {@see \SugarCraft\Code\LSP\LspConnection::__destruct()} has no
-     * protocol phase to pay for: it is the ~1.0s SIGTERM grace plus the reap,
-     * and nothing else. Sized to sit between that and the 8.0s request timeout
-     * {@see testDroppingTheLastReferenceKillsTheServer()} configures precisely
-     * so a destructor that sends `shutdown` cannot slip under it.
+     * {@see \SugarCraft\Code\LSP\LspConnection::__destruct()} has no protocol
+     * phase to pay for: it is the ~1.0s SIGTERM grace plus the reap, and
+     * nothing else. The bound only has to separate that ladder from a
+     * destructor that sends `shutdown` against the 8.0s request timeout
+     * {@see testDroppingTheLastReferenceKillsTheServer()} configures, which
+     * cannot finish in under ~9.0s (8.0s unanswered `shutdown` + the ladder),
+     * however idle the box.
+     *
+     * MEASURED AGAINST LOAD, NOT IDLE. The honest ladder takes ~1.0s idle but
+     * measured 3.08s under 32 ParaTest workers, which reddened the old 3.0s
+     * bound on a correct destructor. 6.0s is about twice that loaded figure and
+     * still 3.0s under the ~9.0s floor of the protocol-speaking mutant, and load
+     * only makes the mutant slower, so it cannot slip under the bound.
      */
-    private const DESTRUCTOR_BOUND_SECONDS = 3.0;
+    private const DESTRUCTOR_BOUND_SECONDS = 6.0;
 
     /**
      * Suffixes appended to the pid-file path. A fixture writes a marker there to

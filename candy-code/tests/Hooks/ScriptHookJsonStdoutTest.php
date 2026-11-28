@@ -395,13 +395,22 @@ final class ScriptHookJsonStdoutTest extends TestCase
 
     /**
      * CC-1 (ChildRun): the DEADLINE leg. The child writes its bytes at once and
-     * then sits on the pipes past the 0.15 s budget: what it already said
+     * then sits on the pipes past the 3.0 s budget: what it already said
      * survives, and the run reports TIMED_OUT, because it was the budget, not
      * the child, that ended it — the status the hook's deny is built from.
+     *
+     * THE BUDGET STARTS AT SPAWN, SO IT MUST COVER PHP START-UP. The old 0.15 s
+     * budget was shorter than the child's own start-up under load, so the
+     * deadline fired before `echo` ran and stdout came back empty. MEASURED on
+     * this host, spawn to first stdout byte for this child shape: 0.09 to 0.11 s
+     * idle, up to 0.47 s with the CPUs twice oversubscribed, and 0.32 to 0.52 s
+     * in a full-suite run. 3.0 s is about six times that worst figure, and the
+     * 30 s sleep is ten times the budget, so the deadline still ends a child
+     * that has already written its bytes.
      */
     public function testTheDeadlinePathKeepsTheBufferedBytesAndReportsTimedOut(): void
     {
-        [$stdout, $stderr, $run] = $this->runThroughChildRun('echo "swept"; fflush(STDOUT); usleep(3_000_000);', 0.15);
+        [$stdout, $stderr, $run] = $this->runThroughChildRun('echo "swept"; fflush(STDOUT); usleep(30_000_000);', 3.0);
 
         $this->assertSame('swept', $stdout, 'the deadline exit lost the bytes that were already there');
         $this->assertSame('', $stderr);
