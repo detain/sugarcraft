@@ -138,8 +138,10 @@ final class WindowsTaskKill
         // sleep.exe running, their parents being fork stubs that had already
         // exited. The MSYS group kill reaches them; it also runs the taskkill
         // walk itself, first and while bash is still alive, for native
-        // descendants. A pid that is no MSYS process falls through to the
-        // plain walk below.
+        // descendants. The pid may be Git's native bin\bash.exe launcher, so
+        // the step also looks one Windows level down for the MSYS bash it
+        // started. A pid with no MSYS process at or under it falls through
+        // to the plain walk below.
         // The real runtime, not the injectable family: MSYS and its /proc
         // winpid map exist only on an actual Windows host.
         $bash = self::$msysBashOverride ?? (\PHP_OS_FAMILY === 'Windows' ? WindowsShell::bash() : '');
@@ -156,17 +158,37 @@ final class WindowsTaskKill
      * anything dies, because the /proc entry goes with the process. It then
      * runs taskkill's tree walk (natives still linked to a living parent) and
      * SIGKILLs the MSYS group (members whose Windows parent is a dead fork
-     * stub). Exit 0 means the group was found and signalled; exit 1 means no
-     * MSYS process has that pid. Only shell builtins sit on the lookup path,
-     * so scanning /proc spawns nothing per entry.
+     * stub). Exit 0 means the group was found and signalled; exit 1 means
+     * neither the pid nor any Windows child of it is an MSYS process. Only
+     * shell builtins sit on the /proc lookup, so the scan spawns nothing per
+     * entry.
+     *
+     * The child step exists because the pid is often not the MSYS bash. The
+     * bash.exe a plain Windows PATH finds is Git for Windows' `bin\bash.exe`,
+     * a native launcher that starts `usr\bin\bash.exe` as its child and
+     * waits; the launcher has no /proc entry, so a pid-only lookup missed,
+     * the plain taskkill walk ran instead, and the backgrounded sleeps of the
+     * windows-smoke timeout leg survived (CI run 45110506050). The 2026-11-13
+     * measurement passed because that host's PATH found `usr\bin\bash.exe`
+     * directly. MSYS /proc carries no Windows parent pid, so the launcher's
+     * children are asked of Windows once, and only when the pid itself is
+     * not an MSYS process.
      */
-    private const MSYS_GROUP_KILL_SCRIPT = 'w=$1; for d in /proc/[0-9]*; do '
+    private const MSYS_GROUP_KILL_SCRIPT = 'w=$1; g=; '
+        . 'lookup() { for d in /proc/[0-9]*; do '
         . 'read -r x < "$d/winpid" 2>/dev/null || continue; '
-        . '[ "$x" = "$w" ] || continue; '
-        . 'read -r g < "$d/pgid" 2>/dev/null || exit 1; '
+        . '[ "$x" = "$1" ] || continue; '
+        . 'read -r g < "$d/pgid" 2>/dev/null; return; done; }; '
+        . 'lookup "$w"; '
+        . 'if [ -z "$g" ]; then '
+        . 'for c in $(MSYS_NO_PATHCONV=1 powershell.exe -NoLogo -NoProfile -NonInteractive -Command '
+        . '"Get-CimInstance Win32_Process -Filter \'ParentProcessId=$w\' | ForEach-Object ProcessId" '
+        . '</dev/null 2>/dev/null); do '
+        . 'lookup "${c%$\'\r\'}"; [ -n "$g" ] && break; done; fi; '
+        . '[ -n "$g" ] || exit 1; '
         . 'MSYS_NO_PATHCONV=1 taskkill /T /F /PID "$w" >/dev/null 2>&1; '
         . 'kill -9 -- "-$g" 2>/dev/null; '
-        . 'exit 0; done; exit 1';
+        . 'exit 0';
 
     /**
      * Test-only: the bash the MSYS step runs under, '' to skip the step, or

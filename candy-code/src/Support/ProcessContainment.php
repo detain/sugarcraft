@@ -1053,11 +1053,15 @@ final class ProcessContainment
      * WINDOWS ARM FIRST, and it skips the freeze-walk entirely: /proc and
      * process groups do not exist there, so {@see ProcessTree} is Linux-only
      * by construction and this method never consults it on Windows. The
-     * single `taskkill /T /F` already carries the terminal force (no second
-     * rung to escalate through) and reaches every descendant (the `/T`),
-     * which is why $termGraceSeconds costs nothing on that host — there is
-     * no waiting between a kill that is already maximal and the reaping
-     * caller (C-TUI-6.a).
+     * Windows kill is {@see WindowsTaskKill::tree()}: under Git bash, an MSYS
+     * group-kill step that finds the MSYS bash at the pid or one Windows
+     * level under it (Git's native `bin\bash.exe` launcher has no /proc
+     * entry, so it may start powershell.exe once to list the launcher's
+     * children), then, unless that step confirmed the kill, a
+     * `taskkill /T /F` walk. It runs synchronously, each child under
+     * {@see WindowsTaskKill::CHILD_BOUND_SECONDS}. Every rung is already a
+     * force kill (no soft signal to escalate from), which is why
+     * $termGraceSeconds is not consulted on that host (C-TUI-6.a).
      */
     public static function killTree(int $pid, float $termGraceSeconds = 0.0): void
     {
