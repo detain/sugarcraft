@@ -171,14 +171,15 @@ final class SpecParser
         // The leaf's parse: its own options plus persistent ancestors, as
         // only withPersistent() options carry into a subcommand. A
         // non-persistent ancestor option argv typed at its own command's
-        // level still answers that command's conflict and requires() rules
-        // through $sources, but its value stays out of the parse.
+        // level takes no part in it: it silences no env fallback, triggers
+        // no requires() and counts toward no conflict at the subcommand. It
+        // can only meet a requirement a leaf-parse option triggers.
         [$leafOptions] = self::visible($path);
 
         $suppressed = [];
         foreach ($path as $spec) {
             foreach ($spec->conflictSets() as $set) {
-                if (array_intersect($set, array_keys($given)) !== []) {
+                if (array_intersect($set, array_keys(array_intersect_key($given, $leafOptions))) !== []) {
                     foreach ($set as $member) {
                         $suppressed[$member] = true;
                     }
@@ -252,13 +253,13 @@ final class SpecParser
             ? $options[$name]->env()
             : null;
 
-        // A non-persistent ancestor option outside the leaf's parse still
-        // answers its own command's conflict and requires() rules: a
-        // variable its command would accept counts as given, though the
-        // value stays out of the subcommand's parse. Otherwise the error
-        // would name an option the environment already supplies. A variable
-        // that fails conversion comes back as the InvalidValue the ancestor
-        // itself would report.
+        // A non-persistent ancestor option outside the leaf's parse can
+        // still meet a requirement a leaf-parse option triggers: a variable
+        // its command would accept counts as given, though the value stays
+        // out of the subcommand's parse. Otherwise the error would name an
+        // option the environment already supplies. A variable that fails
+        // conversion comes back as the InvalidValue the ancestor itself
+        // would report.
         $suppliedAbove = static function (string $name) use ($leafOptions, $given, $suppressed, $options, $env, $names): bool|UsageError {
             if (isset($leafOptions[$name]) || isset($given[$name]) || isset($suppressed[$name])) {
                 return false;
@@ -277,21 +278,11 @@ final class SpecParser
                 $hits = [];
                 $hitEnv = [];
                 foreach ($set as $member) {
-                    if ($present($member)) {
+                    // A member outside the leaf's parse is not part of the
+                    // subcommand, so it cannot make the subcommand conflict.
+                    if (isset($leafOptions[$member]) && $present($member)) {
                         $hits[] = $member;
                         $hitEnv[$member] = $envSource($member);
-                        continue;
-                    }
-                    // A member outside the leaf's parse never gets an Env
-                    // source; without this, two ancestor variables would
-                    // dodge the ancestor's conflict rule at a subcommand.
-                    $above = $suppliedAbove($member);
-                    if ($above instanceof UsageError) {
-                        return $above;
-                    }
-                    if ($above) {
-                        $hits[] = $member;
-                        $hitEnv[$member] = $options[$member]->env();
                     }
                 }
                 if (count($hits) < 2) {
@@ -324,21 +315,13 @@ final class SpecParser
             foreach ($spec->requirements() as $name => $needs) {
                 // An all-digit name comes back from the array key as an int.
                 $name = (string) $name;
-                $triggerEnv = $envSource($name);
-                if (!$present($name)) {
-                    // A trigger outside the leaf's parse never gets an Env
-                    // source, so its variable is checked the same way as a
-                    // needed option's: otherwise setting the variable instead
-                    // of typing the option would bypass the rule.
-                    $above = $suppliedAbove($name);
-                    if ($above instanceof UsageError) {
-                        return $above;
-                    }
-                    if (!$above) {
-                        continue;
-                    }
-                    $triggerEnv = $options[$name]->env();
+                // A trigger outside the leaf's parse is not part of the
+                // subcommand, whether argv typed it before the subcommand or
+                // its variable is set, so it enforces nothing there.
+                if (!isset($leafOptions[$name]) || !$present($name)) {
+                    continue;
                 }
+                $triggerEnv = $envSource($name);
                 foreach ($needs as $need) {
                     if ($present($need)) {
                         continue;

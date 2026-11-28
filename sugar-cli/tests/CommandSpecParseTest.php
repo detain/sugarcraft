@@ -354,11 +354,28 @@ final class CommandSpecParseTest extends TestCase
         );
     }
 
-    public function testTwoEnvMembersOfAParentConflictSetConflictAtTheSubcommand(): void
+    public function testTwoEnvMembersOfAParentConflictSetConflictAtTheParentOnly(): void
     {
         $spec = CommandSpec::new('app')
             ->withOption(Option::flag('json')->withEnv('APP_JSON'))
             ->withOption(Option::flag('plain')->withEnv('APP_PLAIN'))
+            ->conflicts('json', 'plain')
+            ->withSubcommand(CommandSpec::new('run'));
+        $env = ['APP_JSON' => '1', 'APP_PLAIN' => '1'];
+
+        $error = $this->usageError($spec, [], $env);
+        self::assertSame(UsageErrorKind::ConflictingOptions, $error->kind());
+        self::assertSame('APP_JSON', $error->params()['env']);
+        self::assertSame('APP_PLAIN', $error->params()['otherEnv']);
+        // Neither non-persistent option is part of the subcommand's parse.
+        self::assertSame(['app', 'run'], $this->ok($spec, ['run'], $env)->command());
+    }
+
+    public function testTwoEnvMembersOfAPersistentParentConflictSetConflictAtTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('json')->withEnv('APP_JSON')->withPersistent())
+            ->withOption(Option::flag('plain')->withEnv('APP_PLAIN')->withPersistent())
             ->conflicts('json', 'plain')
             ->withSubcommand(CommandSpec::new('run'));
 
@@ -368,6 +385,30 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame('APP_PLAIN', $error->params()['otherEnv']);
         // A falsy variable switches its flag off, so it does not conflict.
         self::assertSame(['app', 'run'], $this->ok($spec, ['run'], ['APP_JSON' => '1', 'APP_PLAIN' => '0'])->command());
+    }
+
+    public function testNonPersistentParentOptionTypedBeforeTheSubcommandDoesNotSilenceAPersistentEnv(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('json'))
+            ->withOption(Option::flag('plain')->withEnv('APP_PLAIN')->withPersistent())
+            ->conflicts('json', 'plain')
+            ->withSubcommand(CommandSpec::new('run'));
+        $env = ['APP_PLAIN' => '1'];
+
+        // At the root, the typed --json silences APP_PLAIN as usual.
+        $root = $this->ok($spec, ['--json'], $env);
+        self::assertTrue($root->value('json'));
+        self::assertFalse($root->value('plain'));
+
+        // At the subcommand --json is not part of the parse, so the variable
+        // reaches --plain exactly as it does without --json.
+        foreach ([['run'], ['--json', 'run']] as $argv) {
+            $parsed = $this->ok($spec, $argv, $env);
+            self::assertTrue($parsed->value('plain'));
+            self::assertSame(ValueSource::Env, $parsed->source('plain'));
+            $this->assertNotInParse($parsed, 'json');
+        }
     }
 
     public function testConflictReportsOptionsInArgvOrder(): void
@@ -536,7 +577,7 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame(UsageErrorKind::InvalidValue, $this->usageError($typed, ['--count', 'x', 'run'])->kind());
     }
 
-    public function testNonPersistentParentOptionTypedBeforeTheSubcommandStillMeetsItsCommandsRules(): void
+    public function testNonPersistentParentOptionTypedBeforeTheSubcommandTriggersNoneOfItsCommandsRules(): void
     {
         $spec = CommandSpec::new('app')
             ->withOption(Option::flag('json'))
@@ -547,9 +588,15 @@ final class CommandSpecParseTest extends TestCase
             ->requires('key', 'cert')
             ->withSubcommand(CommandSpec::new('run'));
 
-        self::assertSame(UsageErrorKind::ConflictingOptions, $this->usageError($spec, ['--json', '--plain', 'run'])->kind());
-        self::assertSame(UsageErrorKind::MissingRequirement, $this->usageError($spec, ['--key', 'k', 'run'])->kind());
-        $parsed = $this->ok($spec, ['--key', 'k', '--cert', 'c', 'run']);
+        self::assertSame(UsageErrorKind::ConflictingOptions, $this->usageError($spec, ['--json', '--plain'])->kind());
+        self::assertSame(UsageErrorKind::MissingRequirement, $this->usageError($spec, ['--key', 'k'])->kind());
+
+        // The subcommand's parse holds none of them, so the root's rules have
+        // nothing of the subcommand's to enforce.
+        $parsed = $this->ok($spec, ['--json', '--plain', 'run']);
+        $this->assertNotInParse($parsed, 'json');
+        $this->assertNotInParse($parsed, 'plain');
+        $parsed = $this->ok($spec, ['--key', 'k', 'run']);
         $this->assertNotInParse($parsed, 'key');
         $this->assertNotInParse($parsed, 'cert');
     }
@@ -557,7 +604,7 @@ final class CommandSpecParseTest extends TestCase
     public function testNonPersistentParentEnvSatisfiesAParentRequirementAtTheSubcommand(): void
     {
         $spec = CommandSpec::new('app')
-            ->withOption(Option::value('key'))
+            ->withOption(Option::value('key')->withPersistent())
             ->withOption(Option::value('cert')->withEnv('APP_CERT'))
             ->withOption(Option::flag('tls')->withEnv('APP_TLS'))
             ->requires('key', 'cert')
@@ -565,13 +612,14 @@ final class CommandSpecParseTest extends TestCase
             ->withSubcommand(CommandSpec::new('run'));
         $env = ['APP_CERT' => 'c', 'APP_TLS' => '1'];
 
-        // Typed at the root's level, --key is still checked at the leaf, and
-        // the root-only variables satisfy its rules there as they do at the
-        // root, without entering the subcommand's parse.
+        // The persistent --key is part of the leaf's parse, so its rule is
+        // checked there, and the root-only variables satisfy it as they do at
+        // the root, without entering the subcommand's parse.
         $this->ok($spec, ['--key', 'k'], $env);
         $parsed = $this->ok($spec, ['--key', 'k', 'run'], $env);
         $this->assertNotInParse($parsed, 'cert');
         $this->assertNotInParse($parsed, 'tls');
+        $this->ok($spec, ['run', '--key', 'k'], $env);
         $this->ok($spec, ['--key', 'k', '--cert', 'c', '--tls', 'run']);
 
         // Unset, or a falsy flag variable, still leaves the rule unmet.
@@ -583,7 +631,7 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame('--tls', $error->params()['requires']);
     }
 
-    public function testNonPersistentParentEnvTriggersAParentRequirementAtTheSubcommand(): void
+    public function testNonPersistentParentEnvDoesNotTriggerAParentRequirementAtTheSubcommand(): void
     {
         $spec = CommandSpec::new('app')
             ->withOption(Option::value('key')->withEnv('APP_KEY'))
@@ -592,8 +640,28 @@ final class CommandSpecParseTest extends TestCase
             ->withSubcommand(CommandSpec::new('run'));
         $env = ['APP_KEY' => 'k'];
 
-        // A trigger set only by its variable enforces the rule at the leaf as
-        // it does at the root, so the environment cannot bypass it.
+        $error = $this->usageError($spec, [], $env);
+        self::assertSame(UsageErrorKind::MissingRequirement, $error->kind());
+        self::assertSame('APP_KEY', $error->params()['env']);
+
+        // --key is not part of the subcommand's parse, so its variable
+        // triggers nothing there.
+        $parsed = $this->ok($spec, ['run'], $env);
+        $this->assertNotInParse($parsed, 'key');
+        $this->assertNotInParse($parsed, 'cert');
+    }
+
+    public function testPersistentParentEnvTriggersAParentRequirementAtTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('key')->withEnv('APP_KEY')->withPersistent())
+            ->withOption(Option::value('cert'))
+            ->requires('key', 'cert')
+            ->withSubcommand(CommandSpec::new('run'));
+        $env = ['APP_KEY' => 'k'];
+
+        // A trigger in the leaf's parse set only by its variable enforces the
+        // rule at the leaf as it does at the root.
         foreach ([[], ['run']] as $argv) {
             $error = $this->usageError($spec, $argv, $env);
             self::assertSame(UsageErrorKind::MissingRequirement, $error->kind());
@@ -601,15 +669,14 @@ final class CommandSpecParseTest extends TestCase
             self::assertSame('--cert', $error->params()['requires']);
             self::assertSame('APP_KEY', $error->params()['env']);
         }
-        $parsed = $this->ok($spec, ['--cert', 'c', 'run'], $env);
-        $this->assertNotInParse($parsed, 'key');
+        self::assertSame('k', $this->ok($spec, ['--cert', 'c', 'run'], $env)->value('key'));
         $this->ok($spec, ['run']);
     }
 
     public function testInvalidNonPersistentParentEnvReportsTheVariableAtTheSubcommand(): void
     {
         $spec = CommandSpec::new('app')
-            ->withOption(Option::value('key'))
+            ->withOption(Option::value('key')->withPersistent())
             ->withOption(Option::value('cert')->withType(ValueType::Int)->withEnv('APP_CERT'))
             ->requires('key', 'cert')
             ->withSubcommand(CommandSpec::new('run'));

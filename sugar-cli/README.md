@@ -256,7 +256,9 @@ Parse rules:
 - **Subcommands.** The first positional selects a subcommand. A command
   with subcommands takes no positionals unless `withMaxArguments()` says
   so, which is what turns a typo into `unknown command "rnu" for
-  "candy-code" (did you mean "run"?)`. Only `withPersistent()` options carry into subcommands.
+  "candy-code" (did you mean "run"?)`. Only `withPersistent()` options carry into subcommands:
+  a non-persistent ancestor option, even typed before the subcommand, takes no
+  part in its parse or in its ancestors' rules there.
 - **Groups.** `withGroup('Model')` sorts options into help sections;
   `CommandSpec::groups()` returns them in first-appearance order.
 
