@@ -742,13 +742,67 @@ final class Style
      * For unstyled content the output is byte-identical to
      * `Style::new()->tabWidth($w)->render($line)` — pinned — and render()
      * itself runs through this method, so the two can never drift.
+     *
+     * Grapheme clusters survive the expansion. A tab is a UAX#29 Control, so
+     * whatever follows it starts a cluster of its own: in `"\t" . U+1F3FD` the
+     * skin-tone modifier stands alone and `Width::string()` charges it 2
+     * cells. A space is not a Control, so a bare substitution would let an
+     * Extend / SpacingMark / ZWJ codepoint after the tab join the last space
+     * (GB9/GB9a) and be re-measured as part of it: 6 cells in, 4 out. When
+     * the text after a tab would join a space, a U+200B ZERO WIDTH SPACE is
+     * placed after the spaces. It is itself a Control (GB4/GB5 break around
+     * it), measures 0 cells, and so restores the boundary the tab provided
+     * without moving the width. The join test asks the same segmenter
+     * `Width` measures with ({@see Width::nextCluster()}), so it tracks
+     * whatever ICU is loaded instead of a hard-coded property list.
      */
     public static function expandTabs(string $content, int $tabWidth = Width::TAB_WIDTH): string
     {
         if ($tabWidth <= 0 || !str_contains($content, "\t")) {
             return $content;
         }
-        return str_replace("\t", str_repeat(' ', $tabWidth), $content);
+        $spaces = str_repeat(' ', $tabWidth);
+        $segments = explode("\t", $content);
+        $out = array_shift($segments);
+        foreach ($segments as $segment) {
+            $out .= $spaces;
+            if (self::joinsAPrecedingSpace($segment)) {
+                $out .= self::CLUSTER_BREAK;
+            }
+            $out .= $segment;
+        }
+        return $out;
+    }
+
+    /**
+     * U+200B ZERO WIDTH SPACE: a zero-cell UAX#29 Control that {@see
+     * expandTabs()} uses to keep a tab's cluster boundary once the tab is
+     * spaces.
+     */
+    private const CLUSTER_BREAK = "\u{200B}";
+
+    /**
+     * Would the first cluster of `$text` merge into a space placed before it?
+     * ANSI is stripped first because `Width::string()` measures the stripped
+     * text, where an SGR between the tab and the mark no longer separates
+     * them. Printable ASCII never extends a preceding space, so only a
+     * non-ASCII start reaches the segmenter.
+     */
+    private static function joinsAPrecedingSpace(string $text): bool
+    {
+        if ($text === '') {
+            return false;
+        }
+        if ($text[0] === "\x1b") {
+            $text = Ansi::strip($text);
+            if ($text === '') {
+                return false;
+            }
+        }
+        if (\ord($text[0]) < 0x80) {
+            return false;
+        }
+        return strlen(Width::nextCluster(' ' . $text, 0)) > 1;
     }
 
     /**

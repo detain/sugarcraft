@@ -1896,15 +1896,16 @@ final class StyleTest extends TestCase
      * where alone it charges 2. Pinned here as the exception to "Style and
      * Width agree on tabs" for every ICU that still joins the pair.
      *
-     * **STATUS AT THIS COMMIT: the family is CLOSED on this rig.** sugar-core
-     * `2039e65fa` (printable-ASCII fast path in `Width::string()`) measures
-     * `" " . U+1F3FD` as 3 cells — the modifier keeps its own 2-cell charge
-     * after a space — so expanding a tab no longer rewrites the answer:
-     * 6 cells in, 6 out. The equality asserted below is what Style owns; the
-     * mechanism itself (`Width::string()` clustering) is sugar-core's to pin,
-     * so the old isolated-mechanism legs were dropped rather than re-spelled
-     * here. An ICU or core change that re-joins the pair reddens this test —
-     * that is the tripwire working, not the gap re-opening by accident.
+     * **STATUS: closed in Style, on every ICU.** The family was first closed
+     * by accident: sugar-core `2039e65fa`'s printable-ASCII fast path in
+     * `Width::string()` consumed the last space before the segmenter saw it,
+     * so the modifier kept its own charge. Once that fast path correctly
+     * stopped one byte short of a non-ASCII byte, `" " . U+1F3FD` was one
+     * 1-cell cluster again and this test went red (CI run 45110506050).
+     * `Style::expandTabs()` now places a zero-width U+200B Control after the
+     * spaces whenever the following text would join a space, so the tab's
+     * cluster boundary survives the expansion: 6 cells in, 6 out. The bytes
+     * are pinned in {@see self::testExpandTabsKeepsTheTabsClusterBoundary()}.
      */
     public function testExpandingATabNoLongerReclustersAFollowingCombiningMark(): void
     {
@@ -1951,6 +1952,33 @@ final class StyleTest extends TestCase
         $this->assertSame("a\tb", Style::expandTabs("a\tb", -2), 'negative fails safe to literal');
         $this->assertSame('plain', Style::expandTabs('plain', 3), 'tab-free content is identity');
         $this->assertSame('a' . str_repeat(' ', Width::TAB_WIDTH) . 'b', Style::expandTabs("a\tb"), 'default width is Width::TAB_WIDTH');
+    }
+
+    /**
+     * A tab is a UAX#29 Control, so the cluster after it stands alone; the
+     * spaces that replace it are not. Where the following text would join a
+     * space, the expansion carries a zero-width U+200B Control after the
+     * spaces so the boundary, and so the measured width, is unchanged. Text
+     * that cannot join a space gets no extra byte.
+     */
+    public function testExpandTabsKeepsTheTabsClusterBoundary(): void
+    {
+        $zwsp = "\u{200B}";
+        $this->assertSame("   {$zwsp}\u{1F3FD}", Style::expandTabs("\t\u{1F3FD}", 3), 'skin-tone modifier (Extend)');
+        $this->assertSame("   {$zwsp}\u{0301}", Style::expandTabs("\t\u{0301}", 3), 'combining acute (Extend)');
+        $this->assertSame("   {$zwsp}\e[31m\u{0903}", Style::expandTabs("\t\e[31m\u{0903}", 3), 'SpacingMark behind an SGR still joins once ANSI is stripped');
+        $this->assertSame("a   {$zwsp}\u{200D}b", Style::expandTabs("a\t\u{200D}b", 3), 'ZWJ');
+        $this->assertSame('   日', Style::expandTabs("\t日", 3), 'a base character starts its own cluster: no break needed');
+        $this->assertSame("   \e[31mx", Style::expandTabs("\t\e[31mx", 3), 'ASCII after an SGR: no break needed');
+        $this->assertSame('a   ', Style::expandTabs("a\t", 3), 'trailing tab: nothing follows');
+
+        foreach (["\t\u{1F3FD}", "\t\u{0301}", "\t\u{0903}", "\t\e[31m\u{1F3FD}", "x\t\t\u{0301}\t", "\t\u{200D}x"] as $input) {
+            $this->assertSame(
+                Width::string($input),
+                Width::string(Style::expandTabs($input)),
+                sprintf('expandTabs() moved the width of %s', bin2hex($input)),
+            );
+        }
     }
 
     public function testExpandTabsIsByteIdenticalToRenderForPlainStyles(): void
