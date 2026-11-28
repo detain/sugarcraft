@@ -295,8 +295,9 @@ file_put_contents('candy-code.1', Manpage::render($spec));
 - **Man page.** roff with NAME, SYNOPSIS, OPTIONS, one section per group,
   COMMANDS (every subcommand at any depth, with its own options) and
   ENVIRONMENT. Optional section number and footer date.
-- **Terminal width.** `Terminal::columns(?resource $stream = null): ?int`
-  answers the exported `COLUMNS` first, then — only for a terminal stream
+- **Terminal width.** `Terminal::columns(mixed $stream = null): ?int`
+  takes a stream resource or null (anything else throws
+  `InvalidArgumentException`) and answers the exported `COLUMNS` first, then — only for a terminal stream
   (STDOUT by default) — the live window size; a pipe or file without
   `COLUMNS` is null. The presenters never call it: pass its answer as
   `$width` where a measured width is wanted.
