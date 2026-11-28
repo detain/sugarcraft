@@ -67,9 +67,12 @@ final class LogTail
      * as `array_slice($lines, -$count)` over every line in the window, so 0
      * answers every line and a negative count drops that many from the
      * front instead of throwing, and a symlink at $path is followed to its
-     * target (the window itself refuses one by lstat). Both current callers
-     * lstat-check a regular file and ask for at least one line first, so
-     * neither difference reaches them.
+     * target (the window itself refuses one by lstat). Two path shapes do
+     * answer differently from the old fopen() read: a directory now answers
+     * no lines at offset 0 rather than its fstat size, and a fifo answers
+     * no lines at offset 0 rather than blocking in fopen(). Both current
+     * callers lstat-check a regular file and ask for at least one line
+     * first, so none of these differences reaches them.
      *
      * @return array{0: list<string>, 1: int}
      */
