@@ -540,6 +540,26 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame('--tls', $error->params()['requires']);
     }
 
+    public function testInvalidNonPersistentParentEnvReportsTheVariableAtTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('key'))
+            ->withOption(Option::value('cert')->withType(ValueType::Int)->withEnv('APP_CERT'))
+            ->requires('key', 'cert')
+            ->withSubcommand(CommandSpec::new('run'));
+        $env = ['APP_CERT' => 'x'];
+
+        // The root and the leaf both name the invalid variable, rather than
+        // the leaf claiming --cert is missing while APP_CERT is set.
+        foreach ([['--key', 'k'], ['--key', 'k', 'run']] as $argv) {
+            $error = $this->usageError($spec, $argv, $env);
+            self::assertSame(UsageErrorKind::InvalidValue, $error->kind());
+            self::assertSame('APP_CERT', $error->params()['env']);
+            self::assertSame('x', $error->params()['value']);
+            self::assertSame('an integer', $error->params()['expected']);
+        }
+    }
+
     public function testPersistentParentOptionCarriesRequiredEnvAndDefaultIntoTheSubcommand(): void
     {
         $spec = CommandSpec::new('app')

@@ -282,8 +282,9 @@ final class SpecParser
         // answers its own command's requires(): a variable its command would
         // accept satisfies the rule, though the value stays out of the
         // subcommand's parse. Otherwise the error would name an option the
-        // environment already supplies.
-        $suppliedAbove = static function (string $name) use ($leafOptions, $given, $suppressed, $options, $env, $names): bool {
+        // environment already supplies. A variable that fails conversion
+        // comes back as the InvalidValue the ancestor itself would report.
+        $suppliedAbove = static function (string $name) use ($leafOptions, $given, $suppressed, $options, $env, $names): bool|UsageError {
             if (isset($leafOptions[$name]) || isset($given[$name]) || isset($suppressed[$name])) {
                 return false;
             }
@@ -293,7 +294,7 @@ final class SpecParser
                 return false;
             }
             $value = self::convertEnv($options[$name], $raw, $envName, $names);
-            return $value !== null && !$value instanceof UsageError;
+            return $value instanceof UsageError ? $value : $value !== null;
         };
 
         foreach ($path as $spec) {
@@ -304,7 +305,14 @@ final class SpecParser
                     continue;
                 }
                 foreach ($needs as $need) {
-                    if (!$present($need) && !$suppliedAbove($need)) {
+                    if ($present($need)) {
+                        continue;
+                    }
+                    $above = $suppliedAbove($need);
+                    if ($above instanceof UsageError) {
+                        return $above;
+                    }
+                    if (!$above) {
                         return self::error(UsageErrorKind::MissingRequirement, [
                             'option' => '--' . $name,
                             'requires' => '--' . $need,

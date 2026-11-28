@@ -252,9 +252,7 @@ Parse rules:
 - **Requires and conflicts.** `requires('key', 'cert')` and `conflicts('json',
   'plain')` count argv and env, never a default. An option given on argv
   silences the env fallback of the others in its conflict set, and a
-  silenced variable does not satisfy `withRequired()`. At a subcommand, a
-  parent's non-persistent option still meets its parent's `requires()`
-  through its variable, though the value stays out of the subcommand's parse.
+  silenced variable does not satisfy `withRequired()`.
 - **Subcommands.** The first positional selects a subcommand. A command
   with subcommands takes no positionals unless `withMaxArguments()` says
   so, which is what turns a typo into `unknown command "rnu" for
