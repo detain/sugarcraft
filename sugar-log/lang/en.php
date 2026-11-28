@@ -23,4 +23,5 @@ return [
     'logger.unopenable_stream' => 'cannot open log file \'{path}\'',
     'reader.negative_count' => 'tail count must be zero or more; got {count}',
     'reader.unreadable' => 'cannot read log file \'{path}\'',
+    'viewer.not_positive' => '{name} must be greater than zero; got {value}',
 ];

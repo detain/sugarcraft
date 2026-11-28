@@ -24,4 +24,5 @@ return [
     'logger.unopenable_stream' => 'Protokolldatei \'{path}\' kann nicht geöffnet werden',
     'reader.negative_count' => 'Zeilenanzahl muss null oder mehr sein; erhalten {count}',
     'reader.unreadable' => 'Protokolldatei \'{path}\' kann nicht gelesen werden',
+    'viewer.not_positive' => '{name} muss größer als null sein; erhalten {value}',
 ];

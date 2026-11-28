@@ -24,4 +24,5 @@ return [
     'logger.unopenable_stream' => '로그 파일 \'{path}\' 열 수 없습니다',
     'reader.negative_count' => '줄 수는 0 이상이어야 합니다. 받은 값: {count}',
     'reader.unreadable' => '로그 파일 \'{path}\'을(를) 읽을 수 없습니다',
+    'viewer.not_positive' => '{name}은(는) 0보다 커야 합니다. 받은 값: {value}',
 ];

@@ -24,4 +24,5 @@ return [
     'logger.unopenable_stream' => 'impossible d\'ouvrir le fichier de journal \'{path}\'',
     'reader.negative_count' => 'le nombre de lignes doit être nul ou positif ; reçu {count}',
     'reader.unreadable' => 'impossible de lire le fichier de journal \'{path}\'',
+    'viewer.not_positive' => '{name} doit être supérieur à zéro ; reçu {value}',
 ];

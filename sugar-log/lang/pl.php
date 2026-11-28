@@ -24,4 +24,5 @@ return [
     'logger.unopenable_stream' => 'nie można otworzyć pliku dziennika \'{path}\'',
     'reader.negative_count' => 'liczba wierszy musi wynosić zero lub więcej; otrzymano {count}',
     'reader.unreadable' => 'nie można odczytać pliku dziennika \'{path}\'',
+    'viewer.not_positive' => '{name} musi być większe od zera; otrzymano {value}',
 ];
