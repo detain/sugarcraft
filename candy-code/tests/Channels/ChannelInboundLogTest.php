@@ -25,9 +25,25 @@ final class ChannelInboundLogTest extends TestCase
     private string $inboxConfig;
     private int $now = 1_700_000_000;
 
+    /**
+     * The ledger lives on tmpfs when the host has one. There is no wait in these
+     * tests: every record() is a full AtomicJsonFile publish with two fsyncs (the
+     * temp file and the directory), and the saturation tests fill the store to
+     * MAX_RECORDS, so 512 records cost 1,024 fsyncs. Measured 2026-11-28 on the
+     * md RAID /tmp: 3.6 s for that fill when quiet, 21.7 s for the saturation
+     * test alone while other suites ran, and past the 60 s defaultTimeLimit in a
+     * full ParaTest run. The same fill on /dev/shm took 0.18 s. Nothing here
+     * asserts disk durability, and every assertion is unchanged; a host without
+     * a writable /dev/shm keeps the system temp dir.
+     */
+    private static function inboxRoot(): string
+    {
+        return \is_dir('/dev/shm') && \is_writable('/dev/shm') ? '/dev/shm' : \sys_get_temp_dir();
+    }
+
     protected function setUp(): void
     {
-        $this->inboxHome = \sys_get_temp_dir() . '/candy-code-inbox-test-' . \uniqid((string) \getmypid(), true);
+        $this->inboxHome = self::inboxRoot() . '/candy-code-inbox-test-' . \uniqid((string) \getmypid(), true);
         \mkdir($this->inboxHome, 0777, true);
         $this->inboxConfig = $this->inboxHome . '/cfg';
         \mkdir($this->inboxConfig, 0700);

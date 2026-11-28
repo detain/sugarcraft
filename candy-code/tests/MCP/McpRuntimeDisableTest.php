@@ -205,14 +205,26 @@ final class McpRuntimeDisableTest extends TestCase
         return $client;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The start budget is a hang-catcher here, never something a test
+     * asserts. A launch runs synchronously up to its first wait: the
+     * exchange lock's stale-file sweep globs the system temp dir, so alpha's
+     * budget also pays beta's synchronous launch before either handshake is
+     * read. Measured 2026-11-28 with ~530,000 entries in /tmp: 1.0 s for the
+     * pair when idle, 1.8 s with 48 copies running at once. In a full
+     * ParaTest run under fsync pressure the old 5 s budget lapsed on alpha
+     * alone: it settled `failed`, and the first callTool('alpha') threw
+     * "Unknown MCP server: alpha". 30 s still ends a hung child.
+     *
+     * @return array<string, mixed>
+     */
     private function runtimeEntry(string $name): array
     {
         return [
             'type' => 'stdio',
             'command' => PHP_BINARY,
             'args' => [$this->dir . '/server.php', $name],
-            'startTimeout' => 5,
+            'startTimeout' => 30,
         ];
     }
 

@@ -10,6 +10,7 @@ use SugarCraft\Code\Background\BackgroundStopOutcome;
 use SugarCraft\Code\Tests\Server\Support\ProtocolFixture;
 use SugarCraft\Code\Tests\Server\Support\WireClient;
 use SugarCraft\Code\Tests\Sessions\StoppableDaemonFixtureTrait;
+use SugarCraft\Code\Tests\Support\SupervisorPump;
 
 /**
  * P4-12 CC-1 row f over the wire: `bg.spawn` and `bg.stop` answer through the
@@ -49,7 +50,7 @@ final class BgAsyncAnswerTest extends TestCase
 
     public function testASpawnAnswersWhenItsDaemonAuthenticatesAndItsStopAnswersAfterItsRungs(): void
     {
-        \putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; exec sleep 30');
+        $workerPidFile = $this->armHoldStillBackend();
         $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
         $client = $this->serve($supervisor)->client();
 
@@ -58,6 +59,7 @@ final class BgAsyncAnswerTest extends TestCase
         $this->fixtureDaemons[] = $this->daemonOf($supervisor, $bgId);
 
         self::assertSame(\SugarCraft\Code\Background\BackgroundSessionStatus::Running, $supervisor->session($bgId)?->status, 'the answer comes once the session is live');
+        $this->awaitDaemonServing($workerPidFile);
         self::assertSame(
             BackgroundStopOutcome::StoppedViaIpc->value,
             $client->call('bg.stop', ['bgId' => $bgId])['outcome'],
@@ -67,13 +69,15 @@ final class BgAsyncAnswerTest extends TestCase
 
     public function testAStopAnswersWhileAnotherSpawnIsStillPending(): void
     {
-        \putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; exec sleep 30');
+        $firstWorkerPidFile = $this->armHoldStillBackend();
         $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
         $fixture = $this->serve($supervisor);
         $client = $fixture->client();
 
         $first = (string) $client->call('bg.spawn', ['task' => 'first', 'idempotencyKey' => 'spawn-first'])['bgId'];
         $this->fixtureDaemons[] = $this->daemonOf($supervisor, $first);
+        $this->awaitDaemonServing($firstWorkerPidFile);
+        $this->armHoldStillBackend();
 
         // The second launch is sent but not yet answered: its daemon has not authenticated.
         $client->raw('{"jsonrpc":"2.0","id":"spawn-second","method":"bg.spawn","params":{"task":"second","idempotencyKey":"spawn-second"}}');
@@ -112,11 +116,12 @@ final class BgAsyncAnswerTest extends TestCase
      */
     public function testAGracefulStopIsAnsweredByThePumpNotTheBackgroundPoll(): void
     {
-        \putenv('CANDY_CODE_BACKEND_CMD=cat >/dev/null; exec sleep 30');
+        $workerPidFile = $this->armHoldStillBackend();
         $supervisor = new BackgroundSupervisor(tempRoot: $this->tempRoot);
         $fixture = $this->serve($supervisor);
         $bgId = (string) $fixture->client()->call('bg.spawn', ['task' => 'hold still', 'idempotencyKey' => 'spawn-pump'])['bgId'];
         $this->fixtureDaemons[] = $this->daemonOf($supervisor, $bgId);
+        $this->awaitDaemonServing($workerPidFile);
 
         $client = WireClient::open($fixture->dispatcher, 'c-pump');
         $client->hello();
@@ -194,6 +199,41 @@ final class BgAsyncAnswerTest extends TestCase
         self::assertSame($pendingId, (string) $answer['result']['bgId']);
         $this->fixtureDaemons[] = $this->daemonOf($supervisor, $pendingId);
         self::assertSame(\SugarCraft\Code\Background\BackgroundSessionStatus::Running, $supervisor->session($pendingId)?->status, 'the refused stop did not touch the launch');
+    }
+
+    /**
+     * Arm the hold-still backend so the daemon's worker writes its own pid to a
+     * fresh file once it runs; the trait kills that pid in tearDown. Returns the file.
+     */
+    private function armHoldStillBackend(): string
+    {
+        $pidFile = $this->fixtureHome . '/backend-' . \bin2hex(\random_bytes(4)) . '.pid';
+        $this->fixturePidFiles[] = $pidFile;
+        \putenv('CANDY_CODE_BACKEND_CMD=echo $$ > ' . \escapeshellarg($pidFile) . '; cat >/dev/null; exec sleep 30');
+
+        return $pidFile;
+    }
+
+    /**
+     * Hold a stop back until the daemon serves its own socket. `bg.spawn` answers on
+     * the handshake, and the supervisor then closes its listener, leaving the socket
+     * node in place. Until the daemon forks its worker, unlinks that node and binds
+     * its own, rung 1 cannot connect and the stop goes straight to SIGTERM
+     * (`stopped-signal`), which is the red a loaded full ParaTest run showed. The
+     * worker's pid file is the readiness signal {@see StoppableDaemonFixtureTrait}
+     * already uses. The daemon re-binds right after the fork, while the worker
+     * first builds its backend and starts a shell, so the file appears well after
+     * the re-bind. Nothing here ticks the supervisor or polls the session.
+     */
+    private function awaitDaemonServing(string $workerPidFile): void
+    {
+        $deadline = \microtime(true) + 15.0;
+        while (\trim((string) @\file_get_contents($workerPidFile)) === '') {
+            if (\microtime(true) >= $deadline) {
+                self::fail('the background worker never started its backend, so the daemon never re-bound its socket');
+            }
+            SupervisorPump::pace(0.05);
+        }
     }
 
     private function serve(BackgroundSupervisor $supervisor): ProtocolFixture
