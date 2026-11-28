@@ -784,6 +784,10 @@ final class CommandSpec
                 ->withTimeout($timeoutSeconds)
                 ->withMaxBytes(self::MAX_SUBSTITUTION_BYTES)
                 ->withExitGrace(null)
+                // The group is recorded from the pid at spawn: read later, the wrapper and bash
+                // may already be reaped under load, the group read comes back null (ISS-014) and
+                // the kill ladder signals only the dead leader, leaking the backgrounded job.
+                ->withGroupLeader(ProcessContainment::groupsSpawns())
                 ->withOnSpawn(ProcessContainment::detachedSpawnPrefix() === [] ? null : ProcessContainment::awaitGroupLeader(...))
                 ->run();
         } catch (\RuntimeException) {
