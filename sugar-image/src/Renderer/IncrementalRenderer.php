@@ -21,8 +21,10 @@ use SugarCraft\Image\ImageSource;
  *
  * This interface exposes the row-at-a-time shape. {@see
  * \SugarCraft\Image\PacedAsyncRenderer} consumes it: it pumps the generator
- * against a Deadline SLICE budget, yielding the loop between slices so other
- * watchers run while the encode stays alive across ticks.
+ * a tick at a time, and each tick's Deadline paces the loop, yielding it
+ * (mid-slice if need be) so other watchers run while the encode stays alive
+ * across ticks. A finite row cap alone decides where slices end; only an
+ * unbounded cap lets the deadline close a slice.
  *
  * Contract: concatenating every yielded chunk in order reproduces
  * {@see Renderer::render()} byte-for-byte for the same arguments. A chunk is
