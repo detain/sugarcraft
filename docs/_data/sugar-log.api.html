@@ -80,9 +80,10 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static new(string $path, LogFormat $format = LogFormat::Text): self</code></td><td>A reader over $path that parses lines as $format.</td></tr>
+<tr><td><code>static new(string $path, LogFormat $format = LogFormat::Text, ?PartsOrder $partsOrder = null): self</code></td><td>A reader over $path that parses lines as $format. $partsOrder is the writer&#039;s text layout (TextFormatter::withPartsOrder()); it only steers where a text line&#039;s level is looked for, and defaults to PartsOrder::new(), the layout a TextFormatter writes unless told otherwise.</td></tr>
 <tr><td><code>withPath(string $path): self</code></td><td></td></tr>
 <tr><td><code>withFormat(LogFormat $format): self</code></td><td></td></tr>
+<tr><td><code>withPartsOrder(PartsOrder $partsOrder): self</code></td><td>The PartsOrder the text lines were written with; JSON and logfmt ignore it.</td></tr>
 <tr><td><code>tail(int $n): array</code></td><td>The last $n records of the file, oldest first.</td></tr>
 </tbody>
 </table>

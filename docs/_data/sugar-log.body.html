@@ -105,7 +105,7 @@ $log-&gt;info('where am I');</code></pre>
     <tr><td><code>CallerFormatter</code></td><td><code>find()</code></td><td>Finds the nearest caller outside the library, or <code>null</code>.</td></tr>
     <tr><td><code>RecordKeys</code></td><td><code>claim()</code>, <code>isReserved()</code></td><td>Namespaces context keys that collide with reserved record keys under the <code>ctx_</code> prefix.</td></tr>
     <tr><td><code>ValueCoercion</code></td><td><code>stringify()</code>, <code>coerce()</code></td><td>Turns arbitrary context values into printable text.</td></tr>
-    <tr><td><code>LogReader</code></td><td><code>new($path, $format)</code>, <code>tail($n)</code>, <code>withPath()</code>, <code>withFormat()</code></td><td>Reads the last records of a JSON, logfmt or text log from its end, without loading the whole file.</td></tr>
+    <tr><td><code>LogReader</code></td><td><code>new($path, $format, $partsOrder)</code>, <code>tail($n)</code>, <code>withPath()</code>, <code>withFormat()</code>, <code>withPartsOrder()</code></td><td>Reads the last records of a JSON, logfmt or text log from its end, without loading the whole file.</td></tr>
     <tr><td><code>LogFilter</code></td><td><code>new()</code>, <code>withMinLevel()</code>, <code>withField()</code>, <code>matches()</code>, <code>apply()</code></td><td>Keeps the <code>LogRecord</code>s that meet a level threshold and field values.</td></tr>
     <tr><td><code>LogRecord</code></td><td><code>field()</code>, <code>hasField()</code></td><td>One parsed line: <code>line</code>, <code>level</code>, <code>message</code>, <code>time</code>, <code>prefix</code>, <code>caller</code>, <code>fields</code>.</td></tr>
     </table>

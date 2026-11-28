@@ -9,10 +9,12 @@ use SugarCraft\Log\Formatter\JsonFormatter;
 use SugarCraft\Log\Formatter\LogfmtFormatter;
 use SugarCraft\Log\Formatter\TextFormatter;
 use SugarCraft\Log\Level;
+use SugarCraft\Log\LogFilter;
 use SugarCraft\Log\LogFormat;
 use SugarCraft\Log\Logger;
 use SugarCraft\Log\LogReader;
 use SugarCraft\Log\LogRecord;
+use SugarCraft\Log\PartsOrder;
 use SugarCraft\Log\Tests\Support\CountingReadStream;
 
 final class LogReaderTest extends TestCase
@@ -187,6 +189,76 @@ final class LogReaderTest extends TestCase
         $this->assertNull($plain->level, 'a lower-case message word is not a level');
     }
 
+    public function testColoredTextRecordsStillLiftTheLevel(): void
+    {
+        $before = \getenv('CLICOLOR_FORCE');
+        \putenv('CLICOLOR_FORCE=1');
+        try {
+            $path = $this->dir . '/colored.txt';
+            $logger = Logger::new(formatter: new TextFormatter(useColors: true), level: Level::Debug, stream: $path);
+            $logger->info('warming up');
+            $logger->error('burnt', ['tray' => 2]);
+        } finally {
+            $before === false ? \putenv('CLICOLOR_FORCE') : \putenv("CLICOLOR_FORCE={$before}");
+        }
+        $this->assertStringContainsString("\x1b[", (string) \file_get_contents($path), 'the fixture must be colored');
+
+        $records = LogReader::new($path, LogFormat::Text)->tail(50);
+
+        $this->assertSame([Level::Info, Level::Error], \array_map(static fn (LogRecord $r): ?Level => $r->level, $records));
+        $this->assertStringContainsString("\x1b[", $records[1]->line, 'the record keeps the line as written');
+        $this->assertCount(1, LogFilter::new()->withMinLevel(Level::Warn)->apply($records));
+    }
+
+    public function testTextLevelIsLookedForWhereTheWritersPartsOrderPutsIt(): void
+    {
+        $messageFirst = PartsOrder::messageFirst();
+        $path = $this->dir . '/message-first.txt';
+        $logger = Logger::new(
+            formatter: new TextFormatter(useColors: false),
+            level: Level::Debug,
+            stream: $path,
+            partsOrder: $messageFirst,
+        );
+        $logger->warn('Upload ERR retry ERROR', ['n' => 1]);
+        $this->assertStringStartsWith('Upload ERR retry ERROR WRN ', (string) \file_get_contents($path));
+
+        [$record] = LogReader::new($path, LogFormat::Text, $messageFirst)->tail(1);
+        $this->assertSame(Level::Warn, $record->level, 'a label word in the message precedes the level');
+        $this->assertSame([], LogFilter::new()->withMinLevel(Level::Error)->apply([$record]));
+
+        $default = $this->dir . '/default.txt';
+        Logger::new(formatter: new TextFormatter(useColors: false), level: Level::Debug, stream: $default)
+            ->info('FATAL ERROR FTL ERR in the message');
+        [$info] = LogReader::new($default, LogFormat::Text)->tail(1);
+        $this->assertSame(Level::Info, $info->level, 'the level written first wins; full labels are message words');
+
+        $noLevel = new PartsOrder([PartsOrder::PART_TIMESTAMP, PartsOrder::PART_MESSAGE]);
+        $bare = $this->dir . '/no-level.txt';
+        Logger::new(formatter: new TextFormatter(useColors: false), level: Level::Debug, stream: $bare, partsOrder: $noLevel)
+            ->error('disk ERR full');
+        $reader = LogReader::new($bare, LogFormat::Text);
+        $this->assertSame(Level::Error, $reader->tail(1)[0]->level, 'read with the wrong order, the message word is taken');
+        $this->assertNull($reader->withPartsOrder($noLevel)->tail(1)[0]->level, 'no level part, no level');
+    }
+
+    public function testTailOfOneVeryLongLineCostsItsLengthNotItsSquare(): void
+    {
+        // About 1,000 chunks: re-joining the whole carry on every step took
+        // seconds here; touching each byte a bounded number of times takes
+        // tens of milliseconds.
+        $long = \str_repeat('z', 8_000_000);
+        $path = $this->file('long-line.log', "first\n{$long}\n");
+
+        $started = \hrtime(true);
+        $records = LogReader::new($path)->tail(1);
+        $seconds = (\hrtime(true) - $started) / 1e9;
+
+        $this->assertCount(1, $records);
+        $this->assertSame($long, $records[0]->line);
+        $this->assertLessThan(1.0, $seconds, 'tail(1) of one 8 MB line must not be quadratic in its length');
+    }
+
     public function testLinesTheFormatCannotParseComeBackRaw(): void
     {
         $json = $this->file('torn.json', "{\"level\":\"INFO\",\"msg\":\"ok\"}\n{\"level\":\"IN\n[1,2]\n");
@@ -219,5 +291,13 @@ final class LogReaderTest extends TestCase
         $this->assertSame(LogFormat::Text, $moved->format);
         $this->assertSame(LogFormat::Json, $json->format);
         $this->assertSame('/a.log', $json->path);
+
+        $this->assertEquals(PartsOrder::new(), $reader->partsOrder);
+        $syslog = PartsOrder::syslog();
+        $reordered = $reader->withPartsOrder($syslog);
+        $this->assertNotSame($reader, $reordered);
+        $this->assertSame($syslog, $reordered->partsOrder);
+        $this->assertEquals(PartsOrder::new(), $reader->partsOrder, 'withPartsOrder must not touch the original');
+        $this->assertSame($syslog, LogReader::new('/c.log', LogFormat::Text, $syslog)->partsOrder);
     }
 }

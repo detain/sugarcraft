@@ -477,7 +477,11 @@ Untrusted data can never forge or reshape a record:
 in fixed chunks, so tailing a large log costs the lines asked for, not the
 file size. `LogFormat::Json` and `LogFormat::Logfmt` recover the level,
 message, time, prefix, caller and context fields; `LogFormat::Text` keeps the
-line as the message and lifts only the level. Blank lines are not records, a
+line as the message and lifts only the level: the short label the text
+formatter writes (`WRN`), with any color stripped first, looked for where the
+writer's `PartsOrder` puts it (pass the same order as the third argument, or
+`withPartsOrder()`, when the logger used a non-default one such as
+`PartsOrder::messageFirst()`). Blank lines are not records, a
 file nobody has written yet has none, and a line the format cannot parse comes
 back with a null level and the raw line as its message.
 

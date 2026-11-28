@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Log;
 
+use SugarCraft\Log\Formatter\TextFormatter;
+
 /**
  * Read side of a log file: `LogReader::new($path, LogFormat::Json)->tail(50)`.
  *
@@ -25,13 +27,19 @@ final readonly class LogReader
     private function __construct(
         public string $path,
         public LogFormat $format,
+        public PartsOrder $partsOrder,
     ) {
     }
 
-    /** A reader over $path that parses lines as $format. */
-    public static function new(string $path, LogFormat $format = LogFormat::Text): self
+    /**
+     * A reader over $path that parses lines as $format. $partsOrder is the
+     * writer's text layout ({@see TextFormatter::withPartsOrder()}); it only
+     * steers where a text line's level is looked for, and defaults to
+     * PartsOrder::new(), the layout a TextFormatter writes unless told otherwise.
+     */
+    public static function new(string $path, LogFormat $format = LogFormat::Text, ?PartsOrder $partsOrder = null): self
     {
-        return new self($path, $format);
+        return new self($path, $format, $partsOrder ?? PartsOrder::new());
     }
 
     public function withPath(string $path): self
@@ -42,6 +50,12 @@ final readonly class LogReader
     public function withFormat(LogFormat $format): self
     {
         return $this->mutate(['format' => $format]);
+    }
+
+    /** The PartsOrder the text lines were written with; JSON and logfmt ignore it. */
+    public function withPartsOrder(PartsOrder $partsOrder): self
+    {
+        return $this->mutate(['partsOrder' => $partsOrder]);
     }
 
     /**
@@ -85,7 +99,12 @@ final readonly class LogReader
 
         try {
             $position = (int) (\fstat($handle)['size'] ?? 0);
-            $carry = '';
+            // The unfinished line, as the chunks read so far, newest first.
+            // Only each new chunk is searched for newlines, and the pieces are
+            // joined once the line is complete, so a line many chunks long
+            // costs its length, not its length squared.
+            /** @var list<string> $carry */
+            $carry = [];
             /** @var list<string> $newestFirst */
             $newestFirst = [];
 
@@ -93,19 +112,24 @@ final readonly class LogReader
                 $step = \min(self::CHUNK_BYTES, $position);
                 $position -= $step;
                 \fseek($handle, $position);
-                $carry = self::readExactly($handle, $step) . $carry;
+                $pieces = \explode("\n", self::readExactly($handle, $step));
+                if (\count($pieces) === 1) {
+                    $carry[] = $pieces[0];
+                    continue;
+                }
 
-                $pieces = \explode("\n", $carry);
+                $carry[] = \array_pop($pieces);
+                self::collect(\implode('', \array_reverse($carry)), $newestFirst);
                 // The first piece may continue into bytes not read yet, so it
                 // waits for the next step (or for the start of the file).
-                $carry = \array_shift($pieces);
+                $carry = [\array_shift($pieces)];
                 for ($i = \count($pieces) - 1; $i >= 0 && \count($newestFirst) < $n; --$i) {
                     self::collect($pieces[$i], $newestFirst);
                 }
             }
 
             if ($position === 0 && \count($newestFirst) < $n) {
-                self::collect($carry, $newestFirst);
+                self::collect(\implode('', \array_reverse($carry)), $newestFirst);
             }
         } finally {
             \fclose($handle);
@@ -147,7 +171,7 @@ final readonly class LogReader
         return match ($this->format) {
             LogFormat::Json => self::parseJson($line),
             LogFormat::Logfmt => self::parseLogfmt($line),
-            LogFormat::Text => self::parseText($line),
+            LogFormat::Text => $this->parseText($line),
         };
     }
 
@@ -278,27 +302,54 @@ final readonly class LogReader
     }
 
     /**
-     * Text lines keep their bytes as the message; only the level is lifted,
-     * from the first whitespace-separated token that is a level label (the
-     * text formatter's layout moves with PartsOrder and the time format, so
-     * nothing else has a fixed position to parse from). Only upper-case
-     * tokens count, as the formatter writes them, so a message word such as
-     * "info" or "error" never passes for the level.
+     * Text lines keep their bytes as the message; only the level is lifted.
+     *
+     * The text formatter writes the level as its short label (`WRN`), so only
+     * those count: a message word such as `ERROR`, `info` or `Warn` never
+     * passes for the level. Styling is stripped before the search, since a
+     * colored file (`CLICOLOR_FORCE`) wraps the label in SGR sequences, while
+     * the record keeps the line exactly as written.
+     *
+     * Where the label sits follows the writer's PartsOrder ({@see
+     * withPartsOrder()}): no level part means no level, a level written
+     * before the message is the first label on the line, and one written
+     * after it is the last, so a label-shaped word in the message is passed
+     * over. What stays ambiguous is a context value containing a spaced label
+     * word on a line whose level follows the message.
      */
-    private static function parseText(string $line): LogRecord
+    private function parseText(string $line): LogRecord
     {
+        if (!$this->partsOrder->has(PartsOrder::PART_LEVEL)) {
+            return new LogRecord($line, null, $line);
+        }
+
+        $labels = [];
+        foreach (Level::cases() as $case) {
+            $labels[$case->shortLabel()] = $case;
+        }
         $level = null;
-        foreach (\preg_split('/\s+/', \trim($line)) ?: [] as $token) {
-            if ($token !== \strtoupper($token)) {
-                continue;
-            }
-            $level = Level::fromLabel($token);
-            if ($level !== null) {
+        $tokens = \preg_split('/\s+/', \trim(self::stripAnsi($line))) ?: [];
+        foreach (self::levelFollowsMessage($this->partsOrder) ? \array_reverse($tokens) : $tokens as $token) {
+            if (isset($labels[$token])) {
+                $level = $labels[$token];
                 break;
             }
         }
 
         return new LogRecord($line, $level, $line);
+    }
+
+    private static function levelFollowsMessage(PartsOrder $order): bool
+    {
+        $message = \array_search(PartsOrder::PART_MESSAGE, $order->parts, true);
+
+        return $message !== false && $message < \array_search(PartsOrder::PART_LEVEL, $order->parts, true);
+    }
+
+    /** Drops CSI (SGR and friends), OSC and two-byte ESC sequences: the escapes styling writes. */
+    private static function stripAnsi(string $line): string
+    {
+        return \preg_replace('/\x1b\[[0-?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\\\)?|\x1b[@-Z\\\\-_]/', '', $line) ?? $line;
     }
 
     /**
