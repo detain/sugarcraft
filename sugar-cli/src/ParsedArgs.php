@@ -10,12 +10,12 @@ namespace SugarCraft\Cli;
  * parse, and the positional arguments.
  *
  * The parse holds the selected command's own options and its ancestors'
- * persistent ones; a non-persistent ancestor option joins it only when argv
- * typed it at its own command's level, before the subcommand. Every option in
- * the parse has an entry, so {@see value()} needs no fallback at the call
- * site: one nobody supplied reports its default, or the kind's empty value
- * (`false` or `0` for a flag, `null` or `[]` for a value option). Any other
- * name, a non-persistent ancestor option argv did not type included, throws.
+ * persistent ones; a non-persistent ancestor option never joins it, even when
+ * argv typed it at its own command's level, before the subcommand. Every
+ * option in the parse has an entry, so {@see value()} needs no fallback at the
+ * call site: one nobody supplied reports its default, or the kind's empty
+ * value (`false` or `0` for a flag, `null` or `[]` for a value option). Any
+ * other name, a non-persistent ancestor option included, throws.
  *
  * Original work: no charmbracelet upstream parses argv.
  */
@@ -67,7 +67,7 @@ final class ParsedArgs
      * Resolved value of an option by long name.
      *
      * @throws \InvalidArgumentException when no option of that name is part of this command's parse
-     *         (its own options, persistent ancestors, and an ancestor option typed before the subcommand)
+     *         (its own options and its ancestors' persistent ones)
      */
     public function value(string $name): mixed
     {

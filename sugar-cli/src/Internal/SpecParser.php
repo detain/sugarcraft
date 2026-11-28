@@ -168,10 +168,11 @@ final class SpecParser
     ): ParsedArgs|UsageError {
         $options = self::pathOptions($path);
         self::assertRules($path, $options);
-        // The leaf's parse: its own options plus persistent ancestors. A
-        // non-persistent ancestor option keeps only what argv typed at its
-        // own command's level; its env, default and withRequired() stop at
-        // the subcommand, as only withPersistent() options carry into it.
+        // The leaf's parse: its own options plus persistent ancestors, as
+        // only withPersistent() options carry into a subcommand. A
+        // non-persistent ancestor option argv typed at its own command's
+        // level still answers that command's conflict and requires() rules
+        // through $sources, but its value stays out of the parse.
         [$leafOptions] = self::visible($path);
 
         $suppressed = [];
@@ -189,6 +190,10 @@ final class SpecParser
         $sources = [];
         foreach ($options as $name => $option) {
             if (isset($given[$name])) {
+                $sources[$name] = ValueSource::Argv;
+                if (!isset($leafOptions[$name])) {
+                    continue;
+                }
                 $occurrences = $given[$name];
                 $values[$name] = match (true) {
                     !$option->takesValue() && $option->repeatable() => count($occurrences),
@@ -196,13 +201,11 @@ final class SpecParser
                     $option->repeatable() => $occurrences,
                     default => $occurrences[count($occurrences) - 1],
                 };
-                $sources[$name] = ValueSource::Argv;
                 continue;
             }
 
-            // Not part of the subcommand's parse unless argv typed it at its
-            // own command's level: no value key, so ParsedArgs rejects the
-            // name like any other undeclared one.
+            // Not part of the subcommand's parse: no value key, so ParsedArgs
+            // rejects the name like any other undeclared one.
             if (!isset($leafOptions[$name])) {
                 continue;
             }
@@ -341,7 +344,7 @@ final class SpecParser
             ], $names);
         }
 
-        return ParsedArgs::new($names, $values, $sources, $arguments);
+        return ParsedArgs::new($names, $values, array_intersect_key($sources, $leafOptions), $arguments);
     }
 
     /**

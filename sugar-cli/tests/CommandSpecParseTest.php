@@ -399,7 +399,8 @@ final class CommandSpecParseTest extends TestCase
 
         $parsed = $this->ok($spec, ['--verbose', 'run', '--count', '2', 'file']);
         self::assertSame(['app', 'run'], $parsed->command());
-        self::assertTrue($parsed->value('verbose'));
+        // Only withPersistent() options carry into a subcommand's parse.
+        $this->assertNotInParse($parsed, 'verbose');
         self::assertSame('2', $parsed->value('count'));
         self::assertSame(['file'], $parsed->arguments());
     }
@@ -496,19 +497,45 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame([], $parsed->values());
     }
 
-    public function testNonPersistentParentOptionTypedBeforeTheSubcommandStaysInItsParse(): void
+    public function testNonPersistentParentOptionTypedBeforeTheSubcommandStaysOutOfItsParse(): void
     {
         $spec = CommandSpec::new('app')
             ->withOption(Option::value('effort')->withDefault('low'))
             ->withOption(Option::flag('json'))
             ->withSubcommand(CommandSpec::new('run')->withOption(Option::flag('dry')));
 
-        $parsed = $this->ok($spec, ['--effort', 'high', 'run']);
-        self::assertSame('high', $parsed->value('effort'));
-        self::assertSame(ValueSource::Argv, $parsed->source('effort'));
-        self::assertTrue($parsed->has('effort'));
+        // Typed at the root's level it is accepted, but, as after the
+        // subcommand, it is not part of the subcommand's parse.
+        $parsed = $this->ok($spec, ['--effort', 'high', '--json', 'run']);
+        self::assertSame(['app', 'run'], $parsed->command());
+        $this->assertNotInParse($parsed, 'effort');
         $this->assertNotInParse($parsed, 'json');
-        self::assertSame(['effort' => 'high', 'dry' => false], $parsed->values());
+        self::assertSame(['dry' => false], $parsed->values());
+        self::assertSame(UsageErrorKind::UnknownOption, $this->usageError($spec, ['run', '--effort', 'high'])->kind());
+
+        // An invalid value is still rejected at its own command's level.
+        $typed = CommandSpec::new('app')
+            ->withOption(Option::value('count')->withType(ValueType::Int))
+            ->withSubcommand(CommandSpec::new('run'));
+        self::assertSame(UsageErrorKind::InvalidValue, $this->usageError($typed, ['--count', 'x', 'run'])->kind());
+    }
+
+    public function testNonPersistentParentOptionTypedBeforeTheSubcommandStillMeetsItsCommandsRules(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('json'))
+            ->withOption(Option::flag('plain'))
+            ->withOption(Option::value('key'))
+            ->withOption(Option::value('cert'))
+            ->conflicts('json', 'plain')
+            ->requires('key', 'cert')
+            ->withSubcommand(CommandSpec::new('run'));
+
+        self::assertSame(UsageErrorKind::ConflictingOptions, $this->usageError($spec, ['--json', '--plain', 'run'])->kind());
+        self::assertSame(UsageErrorKind::MissingRequirement, $this->usageError($spec, ['--key', 'k', 'run'])->kind());
+        $parsed = $this->ok($spec, ['--key', 'k', '--cert', 'c', 'run']);
+        $this->assertNotInParse($parsed, 'key');
+        $this->assertNotInParse($parsed, 'cert');
     }
 
     public function testNonPersistentParentEnvSatisfiesAParentRequirementAtTheSubcommand(): void
