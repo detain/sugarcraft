@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'de hoogte van de help-overlay moet >= 1 zijn',
     'key_view.bad_columns' => 'kolommen van de toetsweergave moeten een lijst van lijsten met actienamen zijn',
     'key_view.column_size_nonneg' => 'de kolomgrootte van de toetsweergave moet >= 0 zijn',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'het te typen bevestigingswoord mag niet leeg zijn',
 ];

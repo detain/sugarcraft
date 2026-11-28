@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'the help overlay height must be >= 1',
     'key_view.bad_columns' => 'key view columns must be a list of lists of action names',
     'key_view.column_size_nonneg' => 'key view column size must be >= 0',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'the typed confirmation word must not be empty',
 ];

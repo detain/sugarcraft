@@ -11,7 +11,7 @@
         "candy-code": {
             "readme": {
                 "needles": [
-                    "Terminal AI coding agent (TUI) — eleven provider type keys over nine engines (OpenAI / Anthropic / Claude Code / Codex / SGLang / Bedrock / Vertex / Gemini / custom), thirty-eight built-in tools on every launch behind permission modes, sub-agents, teams and workflows, MCP client and server, hooks, skills and image/video generation — plus an offline echo backend for demos."
+                    "Terminal AI coding agent (TUI) — nine provider engines, thirty-eight built-in tools behind permission modes, sub-agents, teams, workflows, MCP, hooks and skills, plus an offline echo backend."
                 ],
                 "dead": []
             },
@@ -171,7 +171,7 @@
         "candy-mail": {
             "readme": {
                 "needles": [
-                    "Email library + CLI — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface."
+                    "Email library + CLI — SMTP, Resend API and Mailgun API transports, attachments, HTML + plain-text multipart, fluent interface."
                 ],
                 "dead": []
             },
@@ -337,7 +337,7 @@
         "sugar-async": {
             "readme": {
                 "needles": [
-                    "Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, onPending, singleFlight) + TTL async cache."
+                    "Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, pendingNotice, singleFlight) + TTL async cache."
                 ],
                 "dead": []
             },
@@ -625,7 +625,7 @@
         "sugar-mouse": {
             "readme": {
                 "needles": [
-                    "Mouse hit-testing — mark rendered regions, scan the frame, hit-test the event; `ZoneClickTracker` for press/release dedupe, plus the absorbed bubblezone-style `Zones` facade and the `Zones\\Manager` layer (hover / drag / multi-click) under `SugarCraft\\Mouse\\Zones`. Shared default via `Zones::defaultManager()`; `newGlobal()` mints a fresh independent one. Pointer-driven; keyboard paths are consumer-owned — see sugar-mouse README Accessibility."
+                    "Mouse hit-testing — mark rendered regions, scan the frame, hit-test events; hover / drag / multi-click managers included."
                 ],
                 "dead": []
             },
@@ -867,13 +867,139 @@
         "sugar-widgets": {
             "readme": {
                 "needles": [
-                    "Components: Tabs, Tree, Table, Progress, Help, Key, Paginator, Stopwatch, Timer, TextEdit, OptionRow; plus 8 deprecated sugar-forms re-export alias families (Cursor, FilePicker, ItemList, Scrollbar, Spinner, TextArea, TextInput, Viewport) — prefer sugar-forms."
+                    "Components: Tabs, Tree, Table, Progress, Help, Key, Paginator, Stopwatch, Timer, TextEdit, OptionRow, Disclosure, CollapsibleList; plus 8 deprecated sugar-forms re-export alias families (Cursor, FilePicker, ItemList, Scrollbar, Spinner, TextArea, TextInput, Viewport) — prefer sugar-forms."
                 ],
                 "dead": []
             },
             "matchups": {
                 "needles": [
                     "First-party components"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-releases": {
+            "readme": {
+                "needles": [
+                    "Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling latest channel), sha256-sidecar and pinned-key Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap. Extracted from candy-code."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Phar self-update engine + launch-time update notice"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-ignore": {
+            "readme": {
+                "needles": [
+                    "gitignore-style ignore matching over injected file contents (no IO) — negation, dir-only, anchoring, `**`, escapes, nested ignore files, `.git/info/exclude` precedence, and a backtrack-free matcher that fails closed on hostile patterns. Extracted from candy-code."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "gitignore-style ignore matching over injected file contents (no IO)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-plugins": {
+            "readme": {
+                "needles": [
+                    "Generic plugin core for SugarCraft hosts — the plugin and channel contracts, the plugin launch context, the prompt-fence escape, and the generic loader, quarantine ledger, registry and manifest reader. Original work; no upstream port."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Generic plugin core for SugarCraft hosts — the plugin and channel contracts"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-serve-protocol": {
+            "readme": {
+                "needles": [
+                    "Wire contract for the `candy-code.v1` serve protocol — WebSocket subprotocol names, frame cap, discovery and token readers, and address-to-WebSocket URL normalisation."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Wire contract for the `candy-code.v1` serve protocol — subprotocol names"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-plugin-installer": {
+            "readme": {
+                "needles": [
+                    "Composer installer for `sugar-plugin` packages: stages each plugin to the user or project bundle tree that the root project's `extra.sugar-plugin-installer` selects. Original work; no upstream port."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Composer installer for `sugar-plugin` packages"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-jwt": {
+            "readme": {
+                "needles": [
+                    "JWT and JWK verification — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "JWT and JWK verification — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-codec": {
+            "readme": {
+                "needles": [
+                    "YAML codec for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "YAML codec — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-clipboard": {
+            "readme": {
+                "needles": [
+                    "Clipboard access for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Clipboard access — skeleton (namespace and wiring only)"
+                ],
+                "dead": []
+            }
+        },
+        "sugar-ws-rpc": {
+            "readme": {
+                "needles": [
+                    "WebSocket RPC transport for SugarCraft — skeleton: namespace and wiring only"
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "WebSocket RPC transport — skeleton (namespace and wiring only)"
                 ],
                 "dead": []
             }

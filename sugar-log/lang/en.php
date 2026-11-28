@@ -21,4 +21,6 @@ return [
     'log.fatal_user' => 'User error',
     'log.fatal_shutdown' => 'Shutdown error',
     'logger.unopenable_stream' => 'cannot open log file \'{path}\'',
+    'reader.negative_count' => 'tail count must be zero or more; got {count}',
+    'reader.unreadable' => 'cannot read log file \'{path}\'',
 ];

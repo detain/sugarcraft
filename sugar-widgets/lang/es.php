@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'la altura de la superposición de ayuda debe ser >= 1',
     'key_view.bad_columns' => 'las columnas de la vista de teclas deben ser una lista de listas de nombres de acción',
     'key_view.column_size_nonneg' => 'el tamaño de columna de la vista de teclas debe ser >= 0',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'la palabra de confirmación que se debe escribir no puede estar vacía',
 ];

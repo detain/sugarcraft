@@ -22,4 +22,6 @@ return [
     'log.fatal_user' => 'Error de usuario',
     'log.fatal_shutdown' => 'Error de apagado',
     'logger.unopenable_stream' => 'no se puede abrir el archivo de registro \'{path}\'',
+    'reader.negative_count' => 'el número de líneas debe ser cero o más; se recibió {count}',
+    'reader.unreadable' => 'no se puede leer el archivo de registro \'{path}\'',
 ];

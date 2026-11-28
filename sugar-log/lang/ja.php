@@ -22,4 +22,6 @@ return [
     'log.fatal_user' => 'ユーザエラー',
     'log.fatal_shutdown' => 'シャットダウンエラー',
     'logger.unopenable_stream' => 'ログファイル \'{path}\' を開けません',
+    'reader.negative_count' => '行数は 0 以上である必要があります（{count} が指定されました）',
+    'reader.unreadable' => 'ログファイル \'{path}\' を読み取れません',
 ];

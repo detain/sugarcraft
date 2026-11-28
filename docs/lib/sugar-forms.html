@@ -1934,6 +1934,8 @@ vendor/bin/phpunit</code></pre>
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td>Render the component as a multi-line ANSI string.</td></tr>
 <tr><td><code>setContent(string $content): self</code></td><td></td></tr>
+<tr><td><code>withContent(string|array $content): self</code></td><td>Immutable content replacement. Mirrors charmbracelet/bubbles <code>viewport.Model.SetContent</code>, spelled as a <code>with*()</code> setter so a caller can chain <code>Viewport::new()-&gt;withContent($lines)-&gt;scrollBy($n)</code> without reaching for the set* family.</td></tr>
+<tr><td><code>scrollBy(int $n): self</code></td><td>Immutable relative vertical scroll: a positive <code>$n</code> moves the window down, a negative one moves it up, and the result is clamped to <code>[0, maxOffset]</code>. Mirrors charmbracelet/bubbles <code>viewport.Model.ScrollDown</code> / <code>ScrollUp</code> folded into one signed step.</td></tr>
 <tr><td><code>withSize(int $width, int $height): self</code></td><td></td></tr>
 <tr><td><code>setWidth(int $width): self</code></td><td>Resize only the visible width. Mirrors charmbracelet/bubbles. <code>Viewport.SetWidth(int)</code> — separate from <code>SetHeight</code> so callers can resize one axis at a time without rebuilding the whole geometry. Negative values throw.</td></tr>
 <tr><td><code>setHeight(int $height): self</code></td><td>Resize only the visible height. Mirrors charmbracelet/bubbles. <code>Viewport.SetHeight(int)</code>. Negative values throw.</td></tr>

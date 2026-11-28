@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'die Höhe des Hilfe-Overlays muss >= 1 sein',
     'key_view.bad_columns' => 'Spalten der Tastenansicht müssen eine Liste von Listen mit Aktionsnamen sein',
     'key_view.column_size_nonneg' => 'die Spaltengröße der Tastenansicht muss >= 0 sein',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'das einzugebende Bestätigungswort darf nicht leer sein',
 ];

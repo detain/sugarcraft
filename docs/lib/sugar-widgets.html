@@ -171,6 +171,7 @@
             <li class="toc-h3"><a href="#testing">Testing</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets">SugarCraft\Widgets</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-button">SugarCraft\Widgets\Button</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-widgets-confirm">SugarCraft\Widgets\Confirm</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-disclosure">SugarCraft\Widgets\Disclosure</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-help">SugarCraft\Widgets\Help</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-input">SugarCraft\Widgets\Input</a></li>
@@ -184,6 +185,7 @@
             <li class="toc-h3"><a href="#sugarcraft-widgets-tabs">SugarCraft\Widgets\Tabs</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-timer">SugarCraft\Widgets\Timer</a></li>
             <li class="toc-h3"><a href="#sugarcraft-widgets-tree">SugarCraft\Widgets\Tree</a></li>
+            <li class="toc-h3"><a href="#sugarcraft-widgets-window">SugarCraft\Widgets\Window</a></li>
             <li class="toc-h2"><a href="#troubleshooting">Troubleshooting</a></li>
             <li class="toc-h3"><a href="#a-spinner-freezes-on-its-first-frame">A spinner freezes on its first frame</a></li>
             <li class="toc-h3"><a href="#a-tab-click-activates-a-tab-on-another-bar">A tab click activates a tab on another bar</a></li>
@@ -441,6 +443,40 @@ vendor/bin/phpunit</code></pre>
 <tr><td><code>announcement(): string</code></td><td>Screen-reader / status-line text for the activation (localised).</td></tr>
 </tbody>
 </table>
+<h3 id="sugarcraft-widgets-confirm">SugarCraft\Widgets\Confirm</h3>
+<h4 id="api-sugarcraft-widgets-confirm-confirm"><code>Confirm</code> <small>final class</small></h4>
+<p>A yes/no prompt that can demand a typed confirmation word before a destructive action.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $prompt): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>prompt(): string</code></td><td></td></tr>
+<tr><td><code>typedConfirm(): string</code></td><td>The word that must be typed to confirm, or <code>&#039;&#039;</code> in single-key mode.</td></tr>
+<tr><td><code>typed(): string</code></td><td>The text typed so far in typed-word mode.</td></tr>
+<tr><td><code>isConfirmed(): bool</code></td><td></td></tr>
+<tr><td><code>isCancelled(): bool</code></td><td></td></tr>
+<tr><td><code>isPending(): bool</code></td><td></td></tr>
+<tr><td><code>isRejected(): bool</code></td><td>True after a wrong word was submitted, until the next edit.</td></tr>
+<tr><td><code>withTypedConfirm(string $word): self</code></td><td>Require <code>$word</code> to be typed and submitted with Enter before the prompt confirms. Clears any typed text and makes an answered prompt pending again, since the new word was never typed. A word that is empty once sanitized throws rather than silently falling back to a single <code>y</code>.</td></tr>
+<tr><td><code>withoutTypedConfirm(): self</code></td><td>Back to single-key mode; clears any typed text and makes an answered prompt pending again.</td></tr>
+<tr><td><code>withPrompt(string $prompt): self</code></td><td>A new prompt is a new question, so an answered prompt becomes pending again with no typed text; a pending prompt keeps what was typed.</td></tr>
+<tr><td><code>reset(): self</code></td><td>Pending again, with no typed text, keeping the prompt and the word.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-confirm-confirmresolvedmsg"><code>ConfirmResolvedMsg</code> <small>final class</small></h4>
+<p>Sent through a Cmd when a key resolves a pending Confirm: <code>true</code> after the confirm key (or the exact typed word, submitted), <code>false</code> after a cancel. Only the resolving key sends it; every key before and after returns a null Cmd, so a host can treat each message as the single edge from pending to answered.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly string $prompt, public readonly bool $confirmed)</code></td><td></td></tr>
+</tbody>
+</table>
 <h3 id="sugarcraft-widgets-disclosure">SugarCraft\Widgets\Disclosure</h3>
 <h4 id="api-sugarcraft-widgets-disclosure-collapsiblelist"><code>CollapsibleList</code> <small>final class</small></h4>
 <p>A vertical stack of Disclosure items under one cursor: each item opens and closes on its own, and the cursor picks which one the keys act on.</p>
@@ -656,6 +692,69 @@ vendor/bin/phpunit</code></pre>
 </tbody>
 </table>
 <h3 id="sugarcraft-widgets-menu">SugarCraft\Widgets\Menu</h3>
+<h4 id="api-sugarcraft-widgets-menu-menu"><code>Menu</code> <small>final class</small></h4>
+<p>A keyboard-driven menu over a tree of MenuItems, with cascades (submenus) and an optional dropdown layout under a menu bar.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(array $tree): self</code></td><td></td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td></td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td></td></tr>
+<tr><td><code>__toString(): string</code></td><td></td></tr>
+<tr><td><code>items(): array</code></td><td></td></tr>
+<tr><td><code>cursor(): MenuCursor</code></td><td></td></tr>
+<tr><td><code>isDropdown(): bool</code></td><td>True when view() draws the root level as a bar with dropdowns.</td></tr>
+<tr><td><code>depth(): int</code></td><td>0 on the root level, 1 inside the first cascade, and so on.</td></tr>
+<tr><td><code>isOpen(): bool</code></td><td>True while a cascade is open.</td></tr>
+<tr><td><code>level(): array</code></td><td></td></tr>
+<tr><td><code>current(): ?MenuItem</code></td><td>The item under the cursor, or null for an empty menu.</td></tr>
+<tr><td><code>withItems(array $tree): self</code></td><td>A new tree, with the cursor back on the first root item and every cascade closed, since the old path may not exist in the new tree.</td></tr>
+<tr><td><code>withDropdown(bool $dropdown = true): self</code></td><td>Draw the root level as a menu bar and the open cascade as a dropdown below it.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-menu-menucursor"><code>MenuCursor</code> <small>final class</small></h4>
+<p>The position of a Menu cursor as an immutable path of indices: the first entry is the index on the root level, each further entry the index inside the cascade opened from the entry before it. The last entry is the active level, the one the up and down keys move in.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td>On the first root item, with no cascade open.</td></tr>
+<tr><td><code>path(): array</code></td><td></td></tr>
+<tr><td><code>depth(): int</code></td><td>0 on the root level, 1 inside the first cascade, and so on.</td></tr>
+<tr><td><code>index(): int</code></td><td>The index on the active level.</td></tr>
+<tr><td><code>withIndex(int $index): self</code></td><td>Moves on the active level; a negative index is raised to 0.</td></tr>
+<tr><td><code>descend(): self</code></td><td>One level deeper, on the first item of the cascade.</td></tr>
+<tr><td><code>ascend(): self</code></td><td>Back to the parent level, keeping its index; the root stays as it is.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-menu-menuitem"><code>MenuItem</code> <small>final class</small></h4>
+<p>One entry of a Menu tree: a label, an optional id that a selection reports back, and an optional list of child items. An item with children is a branch and opens a cascade; an item with no children is a leaf and is selectable.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $label, ?string $id = null, array $children = []): self</code></td><td></td></tr>
+<tr><td><code>label(): string</code></td><td></td></tr>
+<tr><td><code>id(): ?string</code></td><td></td></tr>
+<tr><td><code>children(): array</code></td><td></td></tr>
+<tr><td><code>hasChildren(): bool</code></td><td>True when the item opens a cascade rather than being selectable.</td></tr>
+<tr><td><code>withLabel(string $label): self</code></td><td></td></tr>
+<tr><td><code>withId(?string $id): self</code></td><td></td></tr>
+<tr><td><code>withChildren(array $children): self</code></td><td></td></tr>
+<tr><td><code>static listOf(array $items): array</code></td><td>Reindexes to a list and lets the variadic type check reject anything that is not a MenuItem with a \TypeError naming the bad argument.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-menu-menuselectedmsg"><code>MenuSelectedMsg</code> <small>final class</small></h4>
+<p>Sent through a Cmd when Enter selects a leaf of a Menu. Only that key sends it: moving, opening and closing cascades all return a null Cmd.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public readonly ?string $id, public readonly string $label, public readonly array $path)</code></td><td></td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-widgets-menu-optionrow"><code>OptionRow</code> <small>final class</small></h4>
 <p>Options-menu row geometry as a convention helper, so every consumer&#039;s options screen lands on the same shape. Two modes:</p>
 <table class="api-table">
@@ -1091,6 +1190,26 @@ vendor/bin/phpunit</code></pre>
 <tr><td><code>collapseAtCursor(): self</code></td><td></td></tr>
 <tr><td><code>toggleAtCursor(): self</code></td><td></td></tr>
 <tr><td><code>subscriptions(): ?\SugarCraft\Core\Subscriptions</code></td><td></td></tr>
+</tbody>
+</table>
+<h3 id="sugarcraft-widgets-window">SugarCraft\Widgets\Window</h3>
+<h4 id="api-sugarcraft-widgets-window-window"><code>Window</code> <small>final class</small></h4>
+<p>Pure windowing math for scrolled lists: which rows to paint so the selected row stays visible. It holds no state; menus, pickers and lists call around() on every render instead of keeping their own scroll offset in step with the cursor.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static around(int $count, int $selected, int $size): WindowSlice</code></td><td>The window of <code>$size</code> rows out of <code>$count</code> that shows <code>$selected</code>, centered on it as far as the list bounds allow: near either end the window is pushed against that end and the selection moves off center. For an even size the selection sits just above the middle (one more row below it than above).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-widgets-window-windowslice"><code>WindowSlice</code> <small>final readonly class</small></h4>
+<p>A half-open range <code>[start, end)</code> of row indexes: the rows a scrolled list paints. <code>length()</code> is <code>end - start</code>, so <code>array_slice($rows, $w-&gt;start(), $w-&gt;length())</code> is exactly the visible rows, and an empty slice has <code>start() === end()</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(int $start, int $end)</code></td><td></td></tr>
+<tr><td><code>start(): int</code></td><td>First visible index, inclusive.</td></tr>
+<tr><td><code>end(): int</code></td><td>One past the last visible index (exclusive).</td></tr>
+<tr><td><code>length(): int</code></td><td>Number of visible rows: <code>end() - start()</code>.</td></tr>
 </tbody>
 </table>
 

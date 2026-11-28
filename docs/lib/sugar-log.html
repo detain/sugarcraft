@@ -209,7 +209,7 @@ $child-&gt;info('Batch complete');</code></pre>
     <p><strong>Levels.</strong> <code>Level</code> is an int-backed enum: <code>Debug</code> is -4, <code>Info</code> 0, <code>Warn</code> 4, <code>Error</code> 8 and <code>Fatal</code> 12. The values follow charmbracelet/log's deltas and are not RFC 5424 severities, so compare <code>-&gt;value</code> when filtering. A record is emitted when its level value is at or above the logger's minimum level, which defaults to <code>Info</code>. <code>print()</code> and <code>printf()</code> bypass that filter.</p>
     <p><strong>Pipeline.</strong> <code>Logger</code> builds one record per call, hands it to a <code>Formatter</code> (<code>TextFormatter</code> unless you pass another), and writes the rendered line to the configured stream. Records at or above the error threshold go to the optional error stream instead. Fatal records are written first and then raise <code>FatalLoggedException</code>, a <code>RuntimeException</code> subclass.</p>
     <p><strong>Color is decided twice.</strong> The constructor consults the color-profile probe once, and a per-write gate (<code>ColorGate::allowsColor()</code>) keeps files and pipes free of ANSI bytes. Styles are snapshotted per logger, so changing one logger's styles does not recolor another.</p>
-    <p><strong>Immutable children, mutable setters.</strong> <code>with*()</code> methods such as <code>withPrefix()</code> and <code>with()</code> return a new logger and leave the parent alone. <code>set*()</code> methods such as <code>setMinLevel()</code> change the logger in place.</p>
+    <p><strong>Immutable children, mutable setters.</strong> <code>with*()</code> methods such as <code>withPrefix()</code> and <code>with()</code> return a new logger and leave the parent alone. <code>set*()</code> methods such as <code>setPrefix()</code> change the logger in place. The formatter and the minimum level have one spelling each, <code>withFormatter()</code> and <code>withMinLevel()</code>.</p>
 
     <h2 id="tasks" style="margin-top: 40px;">Tasks and recipes</h2>
     <h3 id="write-json-lines-to-a-file">Write JSON lines to a file</h3>
@@ -270,9 +270,9 @@ $log-&gt;info('where am I');</code></pre>
     <tr><td><code>Logger</code></td><td><code>debugf()</code> … <code>fatalf()</code>, <code>printf()</code></td><td><code>sprintf</code>-style siblings. The level-bound helpers check <code>enabled()</code> before formatting.</td></tr>
     <tr><td><code>Logger</code></td><td><code>log()</code>, <code>print()</code>, <code>enabled()</code>, <code>flush()</code></td><td>Explicit-level write, filter-bypassing write, threshold query, and stream flush.</td></tr>
     <tr><td><code>Logger</code></td><td><code>with()</code>, <code>withError()</code>, <code>withPrefix()</code>, <code>withFormatter()</code>, <code>withMinLevel()</code>, <code>withPartsOrder()</code>, <code>withTimeFormat()</code>, <code>withOutput()</code>, <code>withErrorStream()</code></td><td>Return a child logger with one change applied.</td></tr>
-    <tr><td><code>Logger</code></td><td><code>setFormatter()</code>, <code>setMinLevel()</code>, <code>setReportCaller()</code>, <code>setReportTimestamp()</code>, <code>setTimeFormat()</code>, <code>setPrefix()</code>, <code>setOutput()</code>, <code>setErrorStream()</code>, <code>setStyles()</code>, <code>setPartsOrder()</code></td><td>Change the logger in place.</td></tr>
+    <tr><td><code>Logger</code></td><td><code>setReportCaller()</code>, <code>setReportTimestamp()</code>, <code>setTimeFormat()</code>, <code>setPrefix()</code>, <code>setOutput()</code>, <code>setErrorStream()</code>, <code>setStyles()</code>, <code>setPartsOrder()</code></td><td>Change the logger in place.</td></tr>
     <tr><td><code>Logger</code></td><td><code>formatter()</code>, <code>level()</code>, <code>prefix()</code>, <code>output()</code>, <code>styles()</code></td><td>Bare accessors for current state.</td></tr>
-    <tr><td><code>Log</code></td><td><code>default()</code>, <code>setLogger()</code>, <code>reset()</code></td><td>Process-shared facade over one lazily created default <code>Logger</code>.</td></tr>
+    <tr><td><code>Log</code></td><td><code>logger()</code>, <code>setLogger()</code>, <code>reset()</code></td><td>Process-shared facade over one lazily created default <code>Logger</code>.</td></tr>
     <tr><td><code>Log</code></td><td><code>debug()</code> … <code>fatal()</code>, <code>print()</code>, <code>debugf()</code> … <code>fatalf()</code></td><td>Static forms of the logger methods, forwarding to the default logger.</td></tr>
     <tr><td><code>Log</code></td><td><code>installPanicHandler()</code>, <code>removePanicHandler()</code>, <code>restoreTerminal()</code></td><td>Uncaught-exception and fatal-error reporting, and terminal restoration.</td></tr>
     <tr><td><code>Level</code></td><td><code>fromPsrString()</code>, <code>toPsrString()</code>, <code>label()</code>, <code>shortLabel()</code></td><td>Map between the enum, PSR-3 strings and display labels. <code>fromPsrString()</code> returns <code>null</code> for an unknown string.</td></tr>
@@ -280,8 +280,8 @@ $log-&gt;info('where am I');</code></pre>
     <tr><td><code>TextFormatter</code></td><td><code>__construct()</code>, <code>withStyles()</code>, <code>withPartsOrder()</code>, <code>withReportTimestamp()</code>, <code>withTimeFormat()</code>, <code>withReportCaller()</code>, <code>withUseColors()</code></td><td>Default human-readable renderer.</td></tr>
     <tr><td><code>JsonFormatter</code></td><td><code>__construct(bool $reportTimestamp, ?string $timeFormat)</code></td><td>One JSON object per record.</td></tr>
     <tr><td><code>LogfmtFormatter</code></td><td><code>__construct(bool $reportTimestamp, ?string $timeFormat)</code></td><td>One logfmt line per record.</td></tr>
-    <tr><td><code>Styles</code></td><td><code>default()</code>, <code>snapshot()</code>, <code>copy()</code>, <code>keyStyle()</code>, <code>padLevelText()</code></td><td>Public style slots: <code>levels</code>, <code>keys</code>, <code>values</code>, <code>timestamp</code>, <code>prefix</code>, <code>caller</code>, <code>message</code>, <code>padLevelText</code>.</td></tr>
-    <tr><td><code>PartsOrder</code></td><td><code>default()</code>, <code>syslog()</code>, <code>messageFirst()</code>, <code>has()</code></td><td>Which record parts appear and in what order. The <code>PART_*</code> constants name them.</td></tr>
+    <tr><td><code>Styles</code></td><td><code>shared()</code>, <code>snapshot()</code>, <code>copy()</code>, <code>keyStyle()</code>, <code>padLevelText()</code></td><td>Public style slots: <code>levels</code>, <code>keys</code>, <code>values</code>, <code>timestamp</code>, <code>prefix</code>, <code>caller</code>, <code>message</code>, <code>padLevelText</code>.</td></tr>
+    <tr><td><code>PartsOrder</code></td><td><code>new()</code>, <code>syslog()</code>, <code>messageFirst()</code>, <code>has()</code></td><td>Which record parts appear and in what order. The <code>PART_*</code> constants name them.</td></tr>
     <tr><td><code>PsrBridge</code></td><td><code>__construct(Logger $logger, ?HookRegistry $hooks)</code></td><td>Implements <code>Psr\Log\LoggerInterface</code>. Its <code>log()</code> rejects an unknown level string with <code>InvalidArgumentException</code>.</td></tr>
     <tr><td><code>Hook\HookRegistry</code></td><td><code>onLevel()</code>, <code>addHook()</code>, <code>remove()</code>, <code>fire()</code></td><td>Per-level callbacks, returning an id you can pass to <code>remove()</code>.</td></tr>
     <tr><td><code>Hook\Hook</code></td><td><code>onLevel()</code></td><td>Interface for object hooks, registered with <code>addHook()</code>.</td></tr>
@@ -292,6 +292,9 @@ $log-&gt;info('where am I');</code></pre>
     <tr><td><code>CallerFormatter</code></td><td><code>find()</code></td><td>Finds the nearest caller outside the library, or <code>null</code>.</td></tr>
     <tr><td><code>RecordKeys</code></td><td><code>claim()</code>, <code>isReserved()</code></td><td>Namespaces context keys that collide with reserved record keys under the <code>ctx_</code> prefix.</td></tr>
     <tr><td><code>ValueCoercion</code></td><td><code>stringify()</code>, <code>coerce()</code></td><td>Turns arbitrary context values into printable text.</td></tr>
+    <tr><td><code>LogReader</code></td><td><code>new($path, $format, $partsOrder)</code>, <code>tail($n)</code>, <code>withPath()</code>, <code>withFormat()</code>, <code>withPartsOrder()</code></td><td>Reads the last records of a JSON, logfmt or text log from its end, without loading the whole file.</td></tr>
+    <tr><td><code>LogFilter</code></td><td><code>new()</code>, <code>withMinLevel()</code>, <code>withField()</code>, <code>matches()</code>, <code>apply()</code></td><td>Keeps the <code>LogRecord</code>s that meet a level threshold and field values.</td></tr>
+    <tr><td><code>LogRecord</code></td><td><code>field()</code>, <code>hasField()</code></td><td>One parsed line: <code>line</code>, <code>level</code>, <code>message</code>, <code>time</code>, <code>prefix</code>, <code>caller</code>, <code>fields</code>.</td></tr>
     </table>
 
         <!-- GENERATED by tools/gen-api-reference.php from sugar-log/src. Do not edit by hand. Regenerate with: php tools/gen-api-reference.php sugar-log -->
@@ -326,6 +329,7 @@ $log-&gt;info('where am I');</code></pre>
 <tbody>
 <tr><td><code>static fromPsrString(string $psrLevel): ?self</code></td><td>Map a PSR-3 severity string onto the level ladder.</td></tr>
 <tr><td><code>toPsrString(): string</code></td><td>The canonical PSR-3 string for this level (inverse of the coarse fromPsrString() routing: Fatal → emergency, Info → info).</td></tr>
+<tr><td><code>static fromLabel(string $label): ?self</code></td><td>Parse a rendered level label back onto the ladder: the full label the JSON and logfmt formatters write (<code>INFO</code>) or the short one the text formatter writes (<code>INF</code>), in any case. Surrounding whitespace is ignored so a padded text label (<code>INF </code>) still parses.</td></tr>
 <tr><td><code>label(): string</code></td><td></td></tr>
 <tr><td><code>shortLabel(): string</code></td><td></td></tr>
 </tbody>
@@ -335,7 +339,7 @@ $log-&gt;info('where am I');</code></pre>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static default(): Logger</code></td><td>Get (or lazily create) the process-wide default logger.</td></tr>
+<tr><td><code>static logger(): Logger</code></td><td>Get (or lazily create) the process-wide default logger.</td></tr>
 <tr><td><code>static setLogger(Logger $logger): void</code></td><td>Replace the process-wide default logger.</td></tr>
 <tr><td><code>static reset(): void</code></td><td>Reset the default logger so the next call rebuilds it.</td></tr>
 <tr><td><code>static debug(string $message, array $context = []): void</code></td><td></td></tr>
@@ -352,6 +356,44 @@ $log-&gt;info('where am I');</code></pre>
 <tr><td><code>static installPanicHandler(?PanicFormatter $formatter = null, bool $showLocals = false, array $redactPaths = []): void</code></td><td>Install a panic handler that catches uncaught exceptions and renders them as a styled panic report.</td></tr>
 <tr><td><code>static removePanicHandler(): void</code></td><td>Uninstall the handler registered by self::installPanicHandler(), restoring the exception handling that existed before the FIRST install (PHP&#039;s builtin default when there was none). PHP cannot unregister the companion shutdown hook, so the install epoch is advanced and every registered hook self-retires. Idempotent: with nothing installed this is a no-op — it never pops a handler sugar-log does not own. self::reset() deliberately does NOT uninstall the panic handler; this method is its counterpart (install is process-lifetime state like setOutput, and must be undoable without one).</td></tr>
 <tr><td><code>static restoreTerminal(bool $force = false): void</code></td><td>Restore the terminal to a usable state: exit altscreen and show cursor.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logfilter"><code>LogFilter</code> <small>final readonly class</small></h4>
+<p>Which LogRecords to keep: <code>LogFilter::new()-&gt;withMinLevel(Level::Warn) -&gt;withField(&#039;svc&#039;, &#039;api&#039;)-&gt;apply($records)</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td>A filter that keeps every record.</td></tr>
+<tr><td><code>withMinLevel(?Level $level): self</code></td><td>Keep records at $level or above; null drops the condition. A record whose level could not be read is not known to meet a threshold, so it is dropped while one is set.</td></tr>
+<tr><td><code>withField(string $key, mixed $value): self</code></td><td>Keep records whose context entry $key equals $value. Calling it again for the same key replaces that condition.</td></tr>
+<tr><td><code>matches(LogRecord $record): bool</code></td><td></td></tr>
+<tr><td><code>apply(iterable $records): array</code></td><td>The records that match, in their original order.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logformat"><code>LogFormat</code> <small>enum</small></h4>
+<p>The on-disk shape a LogReader parses, one per writing formatter.</p>
+<p>Cases: <code>Json</code> · <code>Logfmt</code> · <code>Text</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<h4 id="api-sugarcraft-log-logreader"><code>LogReader</code> <small>final readonly class</small></h4>
+<p>Read side of a log file: <code>LogReader::new($path, LogFormat::Json)-&gt;tail(50)</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $path, LogFormat $format = LogFormat::Text, ?PartsOrder $partsOrder = null): self</code></td><td>A reader over $path that parses lines as $format. $partsOrder is the writer&#039;s text layout (TextFormatter::withPartsOrder()); it only steers where a text line&#039;s level is looked for, and defaults to PartsOrder::new(), the layout a TextFormatter writes unless told otherwise.</td></tr>
+<tr><td><code>withPath(string $path): self</code></td><td></td></tr>
+<tr><td><code>withFormat(LogFormat $format): self</code></td><td></td></tr>
+<tr><td><code>withPartsOrder(PartsOrder $partsOrder): self</code></td><td>The PartsOrder the text lines were written with; JSON and logfmt ignore it.</td></tr>
+<tr><td><code>tail(int $n): array</code></td><td>The last $n records of the file, oldest first.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logrecord"><code>LogRecord</code> <small>final readonly class</small></h4>
+<p>One parsed log line, as LogReader hands it back.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $line, public ?Level $level, public string $message, public ?string $time = null, public ?string $prefix = null, public ?string $caller = null, public array $fields = [])</code></td><td></td></tr>
+<tr><td><code>hasField(string $key): bool</code></td><td>True when the record carries a context entry named $key (even a null one).</td></tr>
+<tr><td><code>field(string $key): mixed</code></td><td>The context entry named $key, or null when absent.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logger"><code>Logger</code> <small>final class</small></h4>
@@ -379,11 +421,9 @@ $log-&gt;info('where am I');</code></pre>
 <tr><td><code>with(array $fields): self</code></td><td>Create a child logger with additional persistent fields.</td></tr>
 <tr><td><code>withError(string|\Throwable $err): self</code></td><td>Create a child logger carrying $err under the house-named <code>err</code> field (parity with charm&#039;s WithError).</td></tr>
 <tr><td><code>withPrefix(string $prefix): self</code></td><td></td></tr>
-<tr><td><code>withFormatter(Formatter $formatter): self</code></td><td></td></tr>
-<tr><td><code>withMinLevel(Level $level): self</code></td><td></td></tr>
+<tr><td><code>withFormatter(Formatter $formatter): self</code></td><td>Child logger rendering through $formatter (a plain TextFormatter is re-seeded with this logger&#039;s presentation knobs, see the adopt seam).</td></tr>
+<tr><td><code>withMinLevel(Level $level): self</code></td><td>Child logger whose threshold is $level.</td></tr>
 <tr><td><code>withPartsOrder(PartsOrder $partsOrder): self</code></td><td></td></tr>
-<tr><td><code>setFormatter(Formatter $formatter): void</code></td><td></td></tr>
-<tr><td><code>setMinLevel(Level $level): void</code></td><td></td></tr>
 <tr><td><code>setReportCaller(bool $on): void</code></td><td></td></tr>
 <tr><td><code>setReportTimestamp(bool $on): void</code></td><td></td></tr>
 <tr><td><code>setTimeFormat(?string $timeFormat): void</code></td><td>Change the timestamp format in place (parity with charm&#039;s SetTimeFormat).</td></tr>
@@ -394,7 +434,7 @@ $log-&gt;info('where am I');</code></pre>
 <tr><td><code>setErrorStream(mixed $stream, ?Level $errorStreamAt = null): void</code></td><td>Install (or replace) the secondary error stream in-place.</td></tr>
 <tr><td><code>withErrorStream(mixed $stream, ?Level $errorStreamAt = null): self</code></td><td>Create a child logger routing severe records to a second stream.</td></tr>
 <tr><td><code>styles(): Styles</code></td><td>Styles object for text-formatter styling.</td></tr>
-<tr><td><code>formatter(): Formatter</code></td><td>The formatter currently rendering records. A bare <code>TextFormatter</code> handed to the constructor or setFormatter() comes back re-seeded with this logger&#039;s caller/timestamp/time-format state (SL-14 adopt seam), so the returned object is the one actually on the write path.</td></tr>
+<tr><td><code>formatter(): Formatter</code></td><td>The formatter currently rendering records. A bare <code>TextFormatter</code> handed to the constructor or withFormatter() comes back re-seeded with this logger&#039;s caller/timestamp/time-format state (SL-14 adopt seam), so the returned object is the one actually on the write path.</td></tr>
 <tr><td><code>level(): Level</code></td><td>Minimum level this logger writes. Named for the constructor parameter (<code>level:</code>), not <code>withMinLevel()</code> — the ctor noun is the source of truth.</td></tr>
 <tr><td><code>prefix(): ?string</code></td><td>Prefix string, or null when none is set.</td></tr>
 <tr><td><code>output(): mixed</code></td><td>Main output stream (mixed: resource or sink accepted by the ctor). Errors at/above the setErrorStream() threshold go to that secondary stream instead; this accessor returns the primary one.</td></tr>
@@ -422,7 +462,7 @@ $log-&gt;info('where am I');</code></pre>
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(?array $parts = null)</code></td><td></td></tr>
-<tr><td><code>static default(): self</code></td><td>DefaultPartsOrder: timestamp level prefix caller message fields.</td></tr>
+<tr><td><code>static new(): self</code></td><td>DefaultPartsOrder: timestamp level prefix caller message fields.</td></tr>
 <tr><td><code>static syslog(): self</code></td><td>SyslogOrder: timestamp level message fields (no prefix/caller).</td></tr>
 <tr><td><code>static messageFirst(): self</code></td><td>MessageFirstOrder: message level timestamp fields (prefix/caller omitted).</td></tr>
 <tr><td><code>has(string $part): bool</code></td><td></td></tr>
@@ -468,7 +508,7 @@ $log-&gt;info('where am I');</code></pre>
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct()</code></td><td></td></tr>
-<tr><td><code>static default(): self</code></td><td>The process-wide shared Styles instance, now OPT-IN: Loggers and TextFormatters built without styles land on an independent self::snapshot() ([SL-35]), so this singleton only couples the callers that hand it over explicitly (<code>new TextFormatter(styles: Styles::default())</code>).</td></tr>
+<tr><td><code>static shared(): self</code></td><td>The process-wide shared Styles instance, now OPT-IN: Loggers and TextFormatters built without styles land on an independent self::snapshot() ([SL-35]), so this singleton only couples the callers that hand it over explicitly (<code>new TextFormatter(styles: Styles::shared())</code>).</td></tr>
 <tr><td><code>static snapshot(): self</code></td><td>An INDEPENDENT copy of the shared defaults.</td></tr>
 <tr><td><code>copy(): self</code></td><td>Copy of this instance (fresh arrays, same Style objects).</td></tr>
 <tr><td><code>static padLevelText(string $label): string</code></td><td>Pad a level label to a fixed width for visual alignment. Mirrors charmbracelet/log&#039;s padLevelText.</td></tr>
@@ -569,7 +609,7 @@ $log-&gt;info('where am I');</code></pre>
     <tr><td><code>timeFormat</code></td><td><code>?string</code></td><td><code>null</code>, meaning <code>Y/m/d H:i:s</code></td><td>PHP date format for the timestamp.</td></tr>
     <tr><td><code>reportCaller</code></td><td><code>bool</code></td><td><code>false</code></td><td>Include the <code>basename:line</code> of the nearest caller.</td></tr>
     <tr><td><code>stream</code></td><td><code>mixed</code></td><td>STDOUT</td><td>Resource or openable path that receives records.</td></tr>
-    <tr><td><code>partsOrder</code></td><td><code>?PartsOrder</code></td><td><code>PartsOrder::default()</code></td><td>Which parts appear, and in what order.</td></tr>
+    <tr><td><code>partsOrder</code></td><td><code>?PartsOrder</code></td><td><code>PartsOrder::new()</code></td><td>Which parts appear, and in what order.</td></tr>
     <tr><td><code>errorStream</code></td><td><code>mixed</code></td><td><code>null</code></td><td>Optional second stream for severe records.</td></tr>
     <tr><td><code>errorStreamAt</code></td><td><code>?Level</code></td><td><code>Level::Error</code></td><td>Threshold at which records go to <code>errorStream</code>.</td></tr>
     </table>
@@ -580,7 +620,7 @@ $log-&gt;info('where am I');</code></pre>
     <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
 use SugarCraft\Log\Styles;
 
-$styles = Styles::snapshot();   // an independent copy; default() is the shared instance
+$styles = Styles::snapshot();   // an independent copy; shared() is the shared instance
 $styles-&gt;padLevelText = true;
 $log = Logger::new();
 $log-&gt;setStyles($styles);</code></pre>
@@ -599,7 +639,7 @@ $log-&gt;setStyles($styles);</code></pre>
 
     <h2 id="troubleshooting" style="margin-top: 40px;">Troubleshooting and FAQ</h2>
     <h3 id="debug-lines-never-appear">Debug lines never appear</h3>
-    <p>The default threshold is <code>Level::Info</code>. Pass <code>level: Level::Debug</code> to <code>Logger::new()</code>, or call <code>setMinLevel(Level::Debug)</code> on an existing logger. The shared logger behind the <code>Log</code> facade is changed with <code>Log::default()-&gt;setMinLevel(Level::Debug)</code>.</p>
+    <p>The default threshold is <code>Level::Info</code>. Pass <code>level: Level::Debug</code> to <code>Logger::new()</code>, or derive a child with <code>withMinLevel(Level::Debug)</code>. The shared logger behind the <code>Log</code> facade is changed with <code>Log::setLogger(Log::logger()-&gt;withMinLevel(Level::Debug))</code>.</p>
     <h3 id="colors-appear-in-a-log-file-or-never-appear-in-a-terminal">Colors appear in a log file, or never appear in a terminal</h3>
     <p>Files and pipes receive plain bytes by design. The per-write gate turns color on for a non-terminal destination only when <code>CLICOLOR_FORCE</code> is set to any non-empty value other than <code>0</code>, such as <code>1</code> or <code>true</code>. <code>NO_COLOR</code> is read once, when the logger is constructed. Exporting it later does not change a logger that already exists.</p>
     <h3 id="hooks-never-run-for-a-direct-logger-call">Hooks never run for a direct logger call</h3>

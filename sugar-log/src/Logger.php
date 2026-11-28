@@ -117,7 +117,7 @@ final class Logger
         // [SL-35] Independent snapshot, not the shared singleton.
         $this->styles = Styles::snapshot();
         $this->useColors = $useColors;
-        $this->partsOrder = $partsOrder ?? PartsOrder::default();
+        $this->partsOrder = $partsOrder ?? PartsOrder::new();
 
         $this->reportTimestamp = $reportTimestamp;
         $this->timeFormat = $timeFormat;
@@ -335,7 +335,8 @@ final class Logger
 
     /**
      * Cached useColors:false mirror of $source. Rebuilt only when the Logger's
-     * formatter identity changes (a new setFormatter()/withFormatter() value),
+     * formatter identity changes (a new withFormatter() value or a set*()
+     * rebuild of the TextFormatter),
      * so the gate costs one identity compare per emit.
      */
     private function plainMirrorOf(TextFormatter $source): Formatter
@@ -477,6 +478,15 @@ final class Logger
         return $child;
     }
 
+    /**
+     * Child logger rendering through $formatter (a plain TextFormatter is
+     * re-seeded with this logger's presentation knobs, see the adopt seam).
+     *
+     * The only spelling for this option: the in-place setFormatter() twin was
+     * removed (P3-5, one spelling per option), so swapping the formatter of a
+     * logger already shared by reference means installing the child, e.g.
+     * `Log::setLogger(Log::logger()->withFormatter($f))`.
+     */
     public function withFormatter(Formatter $formatter): self
     {
         $child = clone $this;
@@ -484,6 +494,12 @@ final class Logger
         return $child;
     }
 
+    /**
+     * Child logger whose threshold is $level.
+     *
+     * The only spelling for this option: the in-place setMinLevel() twin was
+     * removed (P3-5, one spelling per option). Read it back with {@see level()}.
+     */
     public function withMinLevel(Level $level): self
     {
         $child = clone $this;
@@ -499,11 +515,6 @@ final class Logger
             $child->formatter = $child->formatter->withPartsOrder($partsOrder);
         }
         return $child;
-    }
-
-    public function setFormatter(Formatter $formatter): void
-    {
-        $this->formatter = self::reseedTextFormatter($formatter);
     }
 
     /**
@@ -528,11 +539,6 @@ final class Logger
             ->withReportCaller($this->reportCaller)
             ->withStyles($this->styles)
             ->withPartsOrder($this->partsOrder);
-    }
-
-    public function setMinLevel(Level $level): void
-    {
-        $this->minLevel = $level;
     }
 
     public function setReportCaller(bool $on): void
@@ -663,7 +669,7 @@ final class Logger
      * A logger built without styles owns an independent snapshot
      * ({@see Styles::snapshot()}), so mutating what logger->styles() returns
      * changes THIS logger only. The process-wide shared instance stays
-     * opt-in: whoever passes {@see Styles::default()} to setStyles() rides
+     * opt-in: whoever passes {@see Styles::shared()} to setStyles() rides
      * (and recolours) the singleton.
      */
     public function styles(): Styles
@@ -673,7 +679,7 @@ final class Logger
 
     /**
      * The formatter currently rendering records. A bare `TextFormatter`
-     * handed to the constructor or setFormatter() comes back re-seeded with
+     * handed to the constructor or withFormatter() comes back re-seeded with
      * this logger's caller/timestamp/time-format state (SL-14 adopt seam),
      * so the returned object is the one actually on the write path.
      */

@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'يجب أن يكون ارتفاع طبقة المساعدة >= 1',
     'key_view.bad_columns' => 'يجب أن تكون أعمدة عرض المفاتيح قائمة من قوائم أسماء الإجراءات',
     'key_view.column_size_nonneg' => 'يجب أن يكون حجم عمود عرض المفاتيح >= 0',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'يجب ألا تكون كلمة التأكيد المكتوبة فارغة',
 ];

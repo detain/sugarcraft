@@ -22,4 +22,6 @@ return [
     'log.fatal_user' => 'Erro de usuário',
     'log.fatal_shutdown' => 'Erro de encerramento',
     'logger.unopenable_stream' => 'não é possível abrir o ficheiro de registo \'{path}\'',
+    'reader.negative_count' => 'o número de linhas deve ser zero ou mais; recebido {count}',
+    'reader.unreadable' => 'não é possível ler o ficheiro de registo \'{path}\'',
 ];

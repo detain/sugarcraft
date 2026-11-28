@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'ヘルプオーバーレイの高さは 1 以上である必要があります',
     'key_view.bad_columns' => 'キービューの列はアクション名のリストのリストである必要があります',
     'key_view.column_size_nonneg' => 'キービューの列サイズは 0 以上である必要があります',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => '入力する確認語は空にできません',
 ];

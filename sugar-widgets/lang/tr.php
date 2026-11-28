@@ -50,4 +50,7 @@ return [
     'help_overlay.height_positive' => 'yardım katmanının yüksekliği >= 1 olmalıdır',
     'key_view.bad_columns' => 'tuş görünümü sütunları eylem adı listelerinden oluşan bir liste olmalıdır',
     'key_view.column_size_nonneg' => 'tuş görünümü sütun boyutu >= 0 olmalıdır',
+
+    // Confirm/Confirm.php
+    'confirm.word_empty' => 'yazılacak onay sözcüğü boş olamaz',
 ];

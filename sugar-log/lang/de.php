@@ -22,4 +22,6 @@ return [
     'log.fatal_user' => 'Benutzerfehler',
     'log.fatal_shutdown' => 'Shutdown-Fehler',
     'logger.unopenable_stream' => 'Protokolldatei \'{path}\' kann nicht geöffnet werden',
+    'reader.negative_count' => 'Zeilenanzahl muss null oder mehr sein; erhalten {count}',
+    'reader.unreadable' => 'Protokolldatei \'{path}\' kann nicht gelesen werden',
 ];
