@@ -81,10 +81,12 @@ final class PacedAsyncRenderer implements AsyncRenderer
     /**
      * Render asynchronously in paced slices, resolving with the full bytes.
      *
-     * The first slice runs inline before this method returns (progress
-     * immediately observable, matching the documented pump shape), later slices
-     * re-arm on futureTick, so the promise needs the loop only when the
-     * encode spans more than one slice.
+     * The first tick runs inline before this method returns (progress
+     * immediately observable, matching the documented pump shape), bounded by
+     * sliceMs: it ends at the slice boundary or the clock, whichever comes
+     * first, so under a finite row cap it may encode fewer rows than one
+     * slice. Later ticks re-arm on futureTick, so the promise needs the loop
+     * whenever the encode spans more than one tick.
      */
     public function renderAsync(ImageSource $image, int $width, ?int $height = null): PromiseInterface
     {
