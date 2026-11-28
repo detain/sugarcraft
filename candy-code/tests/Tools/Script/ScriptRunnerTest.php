@@ -429,6 +429,92 @@ final class ScriptRunnerTest extends TestCase
         self::assertSame(ScriptRun::OUTCOME_OK, $run->calls[0]['outcome'] ?? null);
     }
 
+    /**
+     * The end-to-end 1 MiB answer above reaches the short-write path only on
+     * hosts whose socket send buffer is below about 1 MiB; on a host with a
+     * 16 MiB wmem the whole frame fits one write and a flush() that dropped
+     * the remainder would stay green there. This pins the contract on every
+     * host: the parent end's SO_SNDBUF is lowered to a few KiB (ext-sockets),
+     * so a 2 MiB frame's first write is short, the remainder is exactly the
+     * unwritten suffix, and repeated flushes deliver the frame byte-for-byte
+     * with its newline.
+     */
+    public function testAShortWriteKeepsTheExactRemainderAndRepeatedFlushesDeliverTheWholeFrame(): void
+    {
+        [$parentEnd, $childEnd] = self::bridgePair();
+        try {
+            // Without ext-sockets the buffer cannot be lowered; the delivery
+            // half still runs, but a SKIP would trip the suite's skip roster.
+            $lowered = false;
+            if (function_exists('socket_import_stream')) {
+                $socket = socket_import_stream($parentEnd);
+                self::assertNotFalse($socket);
+                self::assertTrue(socket_set_option($socket, SOL_SOCKET, SO_SNDBUF, 4_096));
+                $lowered = true;
+            }
+            stream_set_blocking($parentEnd, false);
+            stream_set_blocking($childEnd, false);
+
+            $frame = str_repeat('0123456789abcdef', 131_072) . "\n";
+            $flush = new \ReflectionMethod(ScriptRunner::class, 'flush');
+
+            $owed = (string) $flush->invoke(null, $parentEnd, $frame);
+            if ($lowered) {
+                self::assertNotSame('', $owed, 'a 2 MiB frame must not fit a few-KiB send buffer in one non-blocking write');
+                self::assertLessThan(strlen($frame), strlen($owed), 'the first write delivered a prefix');
+            }
+            if ($owed !== '') {
+                self::assertSame(substr($frame, -strlen($owed)), $owed, 'what is owed is exactly the unwritten suffix');
+            }
+
+            $received = '';
+            $deadline = microtime(true) + 30.0;
+            while (strlen($received) < strlen($frame)) {
+                self::assertLessThan($deadline, microtime(true), 'the frame drained within the deadline');
+                $chunk = fread($childEnd, 1_048_576);
+                if (is_string($chunk)) {
+                    $received .= $chunk;
+                }
+                $owed = (string) $flush->invoke(null, $parentEnd, $owed);
+            }
+
+            self::assertSame('', $owed, 'nothing is still owed once the child has read the frame');
+            self::assertSame(strlen($frame), strlen($received));
+            self::assertTrue($received === $frame, 'the child received the frame byte-for-byte, newline included');
+        } finally {
+            fclose($parentEnd);
+            fclose($childEnd);
+        }
+    }
+
+    public function testAFlushToAClosedBridgeDropsWhatWasOwed(): void
+    {
+        [$parentEnd, $childEnd] = self::bridgePair();
+        fclose($childEnd);
+        try {
+            stream_set_blocking($parentEnd, false);
+            $flush = new \ReflectionMethod(ScriptRunner::class, 'flush');
+            self::assertSame('', $flush->invoke(null, $parentEnd, ''), 'an empty outbox writes nothing');
+
+            $owed = "{\"id\":1}\n";
+            for ($attempt = 0; $attempt < 3 && $owed !== ''; $attempt++) {
+                $owed = (string) $flush->invoke(null, $parentEnd, $owed);
+            }
+            self::assertSame('', $owed, 'a write to a closed bridge drops the owed bytes instead of looping on them');
+        } finally {
+            fclose($parentEnd);
+        }
+    }
+
+    /** @return array{0: resource, 1: resource} */
+    private static function bridgePair(): array
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        self::assertIsArray($pair);
+
+        return [$pair[0], $pair[1]];
+    }
+
     public function testTheJailBlocksProjectWritesAndNetworkButTheBridgeStillAnswers(): void
     {
         if (!SuiteSkipRoster::scriptJailRuns()) {
