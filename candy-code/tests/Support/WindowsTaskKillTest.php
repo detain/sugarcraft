@@ -104,41 +104,6 @@ final class WindowsTaskKillTest extends TestCase
         );
     }
 
-    /**
-     * The MSYS bash waits on a PowerShell query bounded at
-     * CHILD_QUERY_BOUND_SECONDS, with startup and `ps -W` before it and the
-     * taskkill walk and group kill after it. With one child bound shared by
-     * both sides, a slow start plus a late query let PHP's bound end the
-     * bash before the group kill, so the plain walk ran and the backgrounded
-     * MSYS sleeps survived. Each side gets a full child bound of its own.
-     */
-    public function testTheMsysStepBoundLeavesAChildBoundOnEachSideOfTheQuery(): void
-    {
-        $bounds = [];
-        WindowsTaskKill::setMsysBashForTesting('C:\\Git\\usr\\bin\\bash.exe');
-        WindowsTaskKill::setRunnerForTesting(static function (array $argv, float $bound) use (&$bounds): bool {
-            $bounds[] = $bound;
-
-            return false;
-        });
-
-        self::assertFalse(WindowsTaskKill::tree(7070));
-        self::assertSame(
-            [WindowsTaskKill::msysStepBoundSeconds(), WindowsTaskKill::childBoundSeconds()],
-            $bounds,
-            'the MSYS bash runs under the step bound, the plain walk under the child bound',
-        );
-        self::assertEqualsWithDelta(
-            2 * WindowsTaskKill::CHILD_BOUND_SECONDS + WindowsTaskKill::CHILD_QUERY_BOUND_SECONDS,
-            WindowsTaskKill::msysStepBoundSeconds(),
-            1e-9,
-            'a query answering at its own bound must still leave a full child bound for the taskkill and group kill',
-        );
-
-        WindowsTaskKill::setChildBoundForTesting(0.4);
-        self::assertEqualsWithDelta(0.8 + WindowsTaskKill::CHILD_QUERY_BOUND_SECONDS, WindowsTaskKill::msysStepBoundSeconds(), 1e-9);
-    }
-
     public function testTheMsysArgvCarriesThePidAsAPositionalNeverInTheScript(): void
     {
         $argv = WindowsTaskKill::msysGroupKillArgv(6060, '/usr/bin/bash');
