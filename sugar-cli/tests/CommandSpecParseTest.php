@@ -230,6 +230,23 @@ final class CommandSpecParseTest extends TestCase
         }
     }
 
+    public function testFalsyFlagEnvSwitchesOffATrueDefault(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('color')->withDefault(true)->withEnv('APP_COLOR'))
+            ->withOption(Option::flag('verbose')->withRepeatable()->withDefault(2)->withEnv('APP_VERBOSE'));
+
+        foreach (['0', 'off'] as $word) {
+            $parsed = $this->ok($spec, [], ['APP_COLOR' => $word, 'APP_VERBOSE' => $word]);
+            self::assertFalse($parsed->value('color'), $word);
+            self::assertFalse($parsed->has('color'), $word);
+            self::assertNull($parsed->source('color'), $word);
+            self::assertSame(0, $parsed->value('verbose'), $word);
+        }
+        self::assertTrue($this->ok($spec, [])->value('color'));
+        self::assertSame(ValueSource::Default, $this->ok($spec, [])->source('color'));
+    }
+
     public function testEnvDefaultsToProcessEnvironment(): void
     {
         $name = 'SUGAR_CLI_SPEC_TEST_' . getmypid();
@@ -323,6 +340,22 @@ final class CommandSpecParseTest extends TestCase
         $spec = CommandSpec::new('app')->withOption(Option::value('model')->withRequired()->withEnv('APP_MODEL'));
 
         self::assertSame('m', $this->ok($spec, [], ['APP_MODEL' => 'm'])->value('model'));
+    }
+
+    public function testRequiredSilencedEnvOmitsTheSetEnvHint(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('json'))
+            ->withOption(Option::value('token')->withEnv('APP_TOKEN')->withRequired())
+            ->conflicts('json', 'token');
+
+        $error = $this->usageError($spec, ['--json'], ['APP_TOKEN' => 'abc']);
+        self::assertSame(UsageErrorKind::MissingOption, $error->kind());
+        self::assertNull($error->params()['env']);
+        self::assertStringNotContainsString('APP_TOKEN', $error->message());
+
+        $unset = $this->usageError($spec, ['--json'], []);
+        self::assertSame('APP_TOKEN', $unset->params()['env']);
     }
 
     // ---- subcommands ----

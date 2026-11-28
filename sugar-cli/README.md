@@ -246,10 +246,12 @@ Parse rules:
   flag counts (`-vvv` is 3); otherwise the last occurrence wins.
 - **Environment fallback.** `withEnv()` is read only when argv lacks the
   option; an empty variable counts as unset, and a flag accepts
-  `1/true/yes/on` and `0/false/no/off`. `withDefault()` applies after both.
+  `1/true/yes/on` and `0/false/no/off`. `withDefault()` applies after both,
+  except that a falsy flag variable switches the flag off over its default.
 - **Requires and conflicts.** `requires('key', 'cert')` and `conflicts('json',
   'plain')` count argv and env, never a default. An option given on argv
-  silences the env fallback of the others in its conflict set.
+  silences the env fallback of the others in its conflict set, and a
+  silenced variable does not satisfy `withRequired()`.
 - **Subcommands.** The first positional selects a subcommand. A command
   with subcommands takes no positionals unless `withMaxArguments()` says
   so, which is what turns a typo into `unknown command "rnu" for

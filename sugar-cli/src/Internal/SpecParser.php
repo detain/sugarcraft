@@ -202,11 +202,15 @@ final class SpecParser
                 if ($value instanceof UsageError) {
                     return $value;
                 }
-                if ($value !== null) {
-                    $values[$name] = $value;
-                    $sources[$name] = ValueSource::Env;
+                if ($value === null) {
+                    // A falsy flag variable switches the flag off over its
+                    // default; it reports no source, so the rules ignore it.
+                    $values[$name] = $option->repeatable() ? 0 : false;
                     continue;
                 }
+                $values[$name] = $value;
+                $sources[$name] = ValueSource::Env;
+                continue;
             }
 
             if ($option->default() !== null) {
@@ -241,9 +245,13 @@ final class SpecParser
 
         foreach ($options as $option) {
             if ($option->required() && !$present($option->name())) {
+                // A conflict set silenced this env variable: telling the user
+                // to set it would be wrong, since it already is.
+                $envName = $option->env();
+                $silenced = $envName !== null && isset($suppressed[$option->name()]) && ($env[$envName] ?? '') !== '';
                 return self::error(UsageErrorKind::MissingOption, [
                     'option' => $option->display(),
-                    'env' => $option->env(),
+                    'env' => $silenced ? null : $envName,
                 ], $names);
             }
         }
@@ -442,7 +450,7 @@ final class SpecParser
 
     /**
      * Environment value of an option; null when a flag's variable is falsy,
-     * so the flag stays off and is not counted as given.
+     * which the caller resolves to the flag being off, even over a default.
      *
      * @param list<string> $names
      */
