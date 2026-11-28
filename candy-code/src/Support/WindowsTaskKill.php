@@ -45,6 +45,19 @@ use SugarCraft\Async\Clock;
  * plain walk follows. These are walls the killer children get, not a
  * blanket timeout on anything user-facing.
  *
+ * That sum is about 25 s (5 + 15 + 5) at worst, against about 10 s before
+ * the PowerShell child query existed, and it reaches every synchronous
+ * caller, not only killTreeAsync(): the deadline kills of
+ * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput} and
+ * {@see \SugarCraft\Code\Hooks\ScriptHook} call tree() from ChildRun's kill
+ * seam, before its 0.5 s ladder, so a timed-out command can be reported up
+ * to about 25 s past its declared deadline. The extra 15 s is spent only
+ * when the pid is (or cannot be ruled out as) Git's native `bash.exe`
+ * launcher and the cold powershell.exe query is that slow. The trade-off is
+ * accepted: a shorter bound fails silently into the plain walk, which
+ * leaves the backgrounded MSYS children alive, and an overrun that kills is
+ * preferred to a prompt return that does not.
+ *
  * The class is seam-testable as data on any host — {@see self::tree()}
  * routes through {@see self::setRunnerForTesting()} — so the argv table and
  * the refusal edges EXEC on Linux, and the real-child path is exercised
@@ -217,14 +230,23 @@ final class WindowsTaskKill
      * runs only when the pid is a native `bash.exe`: MSYS `ps -W` lists every
      * Windows process with its image path, and a native kill whose image is
      * anything else (an MCP server, a php engine child) exits 1 after that
-     * one cheap MSYS spawn, never starting powershell.exe. The image may be
-     * printed in Windows form (`C:\...\bin\bash.exe`) or POSIX form
-     * (`/c/.../bin/bash.exe`), so both separators are accepted; a gate that
-     * knew only the backslash form would skip the query and bring the
-     * surviving-sleeps bug back. The pid is matched
+     * one cheap MSYS spawn, never starting powershell.exe. The pid is matched
      * in the WINPID column only (the fourth number, after an optional status
      * letter), so a non-bash pid that appears as the PPID of a native
-     * bash.exe child does not start the query either. The query also
+     * bash.exe child does not start the query either.
+     *
+     * UNVERIFIED on Windows: no `ps -W` output from a Git for Windows host is
+     * recorded in this repo or the CI log, so the column layout and the
+     * COMMAND spelling are assumptions taken from Cygwin's ps (a `PID PPID
+     * PGID WINPID ...` header, the image path last). A gate that silently
+     * missed would skip the query and bring the surviving-sleeps bug back, so
+     * it fails open. The image test is case-insensitive and takes `bash` or
+     * `bash.exe` after a backslash, a slash or a space (Windows form, POSIX
+     * form, bare name). And the column test is trusted only when the header
+     * names WINPID as the fourth column: a missing or different header, or no
+     * `ps -W` output at all, runs the query for every pid, trading the cheap
+     * skip for the kill. Only a recognized header with the pid listed under a
+     * non-bash image, or not listed at all (already gone), skips it. The query also
      * runs under `timeout -s KILL` at {@see CHILD_QUERY_BOUND_SECONDS}: when
      * PHP's bound fires, proc_terminate() reaches only this bash on Windows,
      * never its powershell.exe grandchild, so the grandchild carries its own
@@ -239,13 +261,15 @@ final class WindowsTaskKill
         . '[ "$x" = "$1" ] || continue; '
         . 'read -r g < "$d/pgid" 2>/dev/null; return; done; }; '
         . 'lookup "$w"; '
-        . 'if [ -z "$g" ]; then n=; '
+        . 'if [ -z "$g" ]; then n=; h=; '
         . 'while IFS= read -r l; do l=${l%$\'\r\'}; '
         . 'read -r -a f <<< "$l"; '
+        . 'if [ "${f[0]}" = PID ]; then [ "${f[3]}" = WINPID ] && h=1; continue; fi; '
         . 'case ${f[0]} in *[!0-9]*) f=("${f[@]:1}");; esac; '
         . '[ "${f[3]}" = "$w" ] || continue; '
-        . 'case $l in *\'\\bash.exe\'|*/bash.exe) n=1;; esac; break; '
+        . 'case ${l,,} in *\'\\bash.exe\'|*\'\\bash\'|*/bash.exe|*/bash|*\' bash.exe\'|*\' bash\') n=1;; esac; break; '
         . 'done <<< "$(ps -W 2>/dev/null)"; '
+        . '[ -n "$h" ] || n=1; '
         . 'if [ -n "$n" ]; then '
         . 'for c in $(MSYS_NO_PATHCONV=1 timeout -s KILL ' . self::CHILD_QUERY_BOUND_SECONDS . ' '
         . 'powershell.exe -NoLogo -NoProfile -NonInteractive -Command '

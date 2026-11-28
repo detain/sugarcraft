@@ -194,7 +194,11 @@ trait CapturesProcessOutput
      * which kills only the direct child. There the kill seam walks the child's tree
      * with {@see WindowsTaskKill::tree()} before the ladder's first signal, while
      * the child still roots the tree, and `groupKilled` is taskkill's own verdict.
-     * The deadline kill runs on 0.5 s graces, not ChildRun's 1 s defaults.
+     * The deadline kill runs on 0.5 s graces, not ChildRun's 1 s defaults, but
+     * those graces start only after tree() returns, and tree() may block for up
+     * to about 25 s on a native Git `bash.exe` pid (the accepted trade-off
+     * stated on {@see WindowsTaskKill}), so a Windows timeout can be reported
+     * that far past the declared deadline.
      *
      * A pipe failure (ChildRun's PIPE_FAILED: stream_select() kept failing) ends
      * the read early and kills the child. The result then carries a note on stderr
