@@ -59,6 +59,15 @@ final class WindowsTaskKill
     public const CHILD_BOUND_SECONDS = 5.0;
 
     /**
+     * Bound on the MSYS step's PowerShell child query, enforced inside the
+     * script by MSYS timeout(1) because PHP's own bound cannot reach that
+     * grandchild on Windows (see {@see MSYS_GROUP_KILL_SCRIPT}). Kept under
+     * {@see CHILD_BOUND_SECONDS} so the query ends before the bash it runs
+     * under is judged wedged.
+     */
+    public const CHILD_QUERY_BOUND_SECONDS = 3;
+
+    /**
      * Test-only argv runner; null runs the real short-lived child. The seam
      * receives the {@see self::treeArgv()} list and answers bool — "did the
      * tree die" — which is exactly what the production runner derives from
@@ -171,8 +180,19 @@ final class WindowsTaskKill
      * windows-smoke timeout leg survived (CI run 45110506050). The 2026-11-13
      * measurement passed because that host's PATH found `usr\bin\bash.exe`
      * directly. MSYS /proc carries no Windows parent pid, so the launcher's
-     * children are asked of Windows once, and only when the pid itself is
-     * not an MSYS process.
+     * children are asked of Windows (PowerShell CIM query) once.
+     *
+     * That query is a cold powershell.exe and WMI start, and the
+     * killTreeAsync() Windows arm waits on this script synchronously, so it
+     * runs only when the pid is a native `bash.exe`: MSYS `ps -W` lists every
+     * Windows process with its image path, and a native kill whose image is
+     * anything else (an MCP server, a php engine child) exits 1 after that
+     * one cheap MSYS spawn, never starting powershell.exe. The query also
+     * runs under `timeout -s KILL` at {@see CHILD_QUERY_BOUND_SECONDS}, below
+     * {@see CHILD_BOUND_SECONDS}: when the bound fires, PHP's proc_terminate()
+     * reaches only this bash on Windows, never its powershell.exe grandchild,
+     * so the grandchild carries its own bound, enforced by MSYS timeout(1),
+     * which outlives a terminated bash.
      */
     private const MSYS_GROUP_KILL_SCRIPT = 'w=$1; g=; '
         . 'lookup() { for d in /proc/[0-9]*; do '
@@ -180,11 +200,16 @@ final class WindowsTaskKill
         . '[ "$x" = "$1" ] || continue; '
         . 'read -r g < "$d/pgid" 2>/dev/null; return; done; }; '
         . 'lookup "$w"; '
-        . 'if [ -z "$g" ]; then '
-        . 'for c in $(MSYS_NO_PATHCONV=1 powershell.exe -NoLogo -NoProfile -NonInteractive -Command '
+        . 'if [ -z "$g" ]; then n=; '
+        . 'while IFS= read -r l; do l=${l%$\'\r\'}; '
+        . 'case $l in *" $w "*\'\\bash.exe\') n=1; break;; esac; '
+        . 'done <<< "$(ps -W 2>/dev/null)"; '
+        . 'if [ -n "$n" ]; then '
+        . 'for c in $(MSYS_NO_PATHCONV=1 timeout -s KILL ' . self::CHILD_QUERY_BOUND_SECONDS . ' '
+        . 'powershell.exe -NoLogo -NoProfile -NonInteractive -Command '
         . '"Get-CimInstance Win32_Process -Filter \'ParentProcessId=$w\' | ForEach-Object ProcessId" '
         . '</dev/null 2>/dev/null); do '
-        . 'lookup "${c%$\'\r\'}"; [ -n "$g" ] && break; done; fi; '
+        . 'lookup "${c%$\'\r\'}"; [ -n "$g" ] && break; done; fi; fi; '
         . '[ -n "$g" ] || exit 1; '
         . 'MSYS_NO_PATHCONV=1 taskkill /T /F /PID "$w" >/dev/null 2>&1; '
         . 'kill -9 -- "-$g" 2>/dev/null; '

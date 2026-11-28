@@ -120,6 +120,112 @@ final class WindowsTaskKillTest extends TestCase
         self::assertStringContainsString('kill -9 -- "-$g"', $script);
     }
 
+    /**
+     * The PowerShell child query is a cold powershell.exe and WMI start that
+     * the killTreeAsync() Windows arm waits on synchronously, so a native pid
+     * whose image is not bash.exe must exit 1 without ever starting it. EXEC
+     * under this host's bash with stub `ps`/`timeout`/`powershell.exe` on
+     * PATH: /proc carries no winpid here, so the lookup always misses, which
+     * is exactly the no-MSYS-process-at-the-pid leg.
+     */
+    public function testANativePidThatIsNotBashNeverStartsThePowershellQuery(): void
+    {
+        $run = $this->runMsysScriptWithStubs(7070);
+
+        self::assertSame(1, $run['exit'], 'no MSYS process at or under the pid: the step reports a miss');
+        self::assertSame('-W', $run['psArgs'], 'the image check is one MSYS ps -W listing');
+        self::assertNull($run['timeoutArgs'], 'a native kill must not start the bounded query at all');
+        self::assertFalse($run['powershellRan'], 'a native non-bash pid must never start powershell.exe');
+    }
+
+    /**
+     * When the pid IS a native bash.exe (Git's bin\bash.exe launcher), the
+     * query runs, and it runs under MSYS timeout(1): on Windows PHP's
+     * proc_terminate() at CHILD_BOUND_SECONDS reaches only the bash, so the
+     * powershell.exe grandchild needs a bound of its own, shorter than the
+     * bash's, or a timed-out kill leaves it running.
+     */
+    public function testTheLauncherPidRunsThePowershellQueryUnderItsOwnShorterBound(): void
+    {
+        $run = $this->runMsysScriptWithStubs(7071);
+
+        self::assertSame(1, $run['exit'], 'the stub child 9999 is no MSYS process here, so the step still misses');
+        self::assertTrue($run['powershellRan'], 'a native bash.exe pid is the launcher case the query exists for');
+        self::assertSame(
+            '-s KILL ' . WindowsTaskKill::CHILD_QUERY_BOUND_SECONDS . ' powershell.exe',
+            $run['timeoutArgs'],
+            'powershell.exe is started only through timeout -s KILL at the declared query bound',
+        );
+        self::assertLessThan(
+            WindowsTaskKill::CHILD_BOUND_SECONDS,
+            (float) WindowsTaskKill::CHILD_QUERY_BOUND_SECONDS,
+            'the grandchild bound must fire before PHP judges the bash wedged',
+        );
+    }
+
+    /**
+     * Run the real MSYS group-kill script for $pid under this host's bash
+     * with stubs first on PATH, and report what each stub saw.
+     *
+     * @return array{exit: int, psArgs: ?string, timeoutArgs: ?string, powershellRan: bool}
+     */
+    private function runMsysScriptWithStubs(int $pid): array
+    {
+        if (\PHP_OS_FAMILY === 'Windows' || !\is_executable('/bin/bash')) {
+            self::markTestSkipped('Drives the MSYS script under a POSIX bash with stub binaries on PATH.');
+        }
+
+        $dir = \sys_get_temp_dir() . '/wtk-msys-' . \bin2hex(\random_bytes(6));
+        \mkdir($dir, 0700);
+        $stubs = [
+            'ps' => "#!/bin/sh\necho \"\$*\" > \"\$MARK/ps.args\"\ncat <<'EOF'\n"
+                . "      PID    PPID    PGID     WINPID   TTY         UID    STIME COMMAND\n"
+                . "     7070       0       0       7070    ?              0 10:00:00 C:\\Windows\\System32\\notepad.exe\r\n"
+                . "     7071       0       0       7071    ?              0 10:00:00 C:\\Program Files\\Git\\bin\\bash.exe\r\n"
+                . "EOF\n",
+            'timeout' => "#!/bin/sh\necho \"\$1 \$2 \$3 \$4\" > \"\$MARK/timeout.args\"\nshift 3\nexec \"\$@\"\n",
+            'powershell.exe' => "#!/bin/sh\necho ran > \"\$MARK/powershell.ran\"\nprintf '9999\\r\\n'\n",
+        ];
+        try {
+            foreach ($stubs as $name => $body) {
+                \file_put_contents("$dir/$name", $body);
+                \chmod("$dir/$name", 0700);
+            }
+            $env = ['PATH' => $dir . ':' . (\getenv('PATH') ?: '/usr/bin:/bin'), 'MARK' => $dir];
+            $process = \proc_open(
+                WindowsTaskKill::msysGroupKillArgv($pid, '/bin/bash'),
+                // stderr is drained to EOF and dropped: on Linux no /proc
+                // entry has a winpid, and `read < "$d/winpid" 2>/dev/null`
+                // reports the failed open before its own 2>/dev/null applies,
+                // so it carries one line per process here. stdout goes to a
+                // file so draining one stream can never block the other.
+                [0 => ['pipe', 'r'], 1 => ['file', "$dir/stdout", 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                null,
+                $env,
+            );
+            self::assertIsResource($process);
+            \fclose($pipes[0]);
+            \stream_get_contents($pipes[2]);
+            \fclose($pipes[2]);
+            $exit = \proc_close($process);
+
+            $read = static fn (string $file): ?string => \is_file("$dir/$file") ? \trim((string) \file_get_contents("$dir/$file")) : null;
+
+            return [
+                'exit' => $exit,
+                'psArgs' => $read('ps.args'),
+                'timeoutArgs' => $read('timeout.args'),
+                'powershellRan' => \is_file("$dir/powershell.ran"),
+            ];
+        } finally {
+            foreach (\glob("$dir/*") ?: [] as $file) {
+                \unlink($file);
+            }
+            \rmdir($dir);
+        }
+    }
+
     public function testANonPositivePidIsRefusedBeforeTheRunnerIsEvenTouched(): void
     {
         // kill(0) means "signal everything the caller may" — vast, and never

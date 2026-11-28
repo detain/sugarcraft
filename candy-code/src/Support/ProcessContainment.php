@@ -1056,10 +1056,13 @@ final class ProcessContainment
      * Windows kill is {@see WindowsTaskKill::tree()}: under Git bash, an MSYS
      * group-kill step that finds the MSYS bash at the pid or one Windows
      * level under it (Git's native `bin\bash.exe` launcher has no /proc
-     * entry, so it may start powershell.exe once to list the launcher's
-     * children), then, unless that step confirmed the kill, a
-     * `taskkill /T /F` walk. It runs synchronously, each child under
-     * {@see WindowsTaskKill::CHILD_BOUND_SECONDS}. Every rung is already a
+     * entry, so when the pid is a native `bash.exe` it starts powershell.exe
+     * once to list the launcher's children), then, unless that step
+     * confirmed the kill, a `taskkill /T /F` walk. It runs synchronously:
+     * each direct child under {@see WindowsTaskKill::CHILD_BOUND_SECONDS},
+     * and the powershell.exe grandchild, which PHP's bound cannot reach on
+     * Windows, under {@see WindowsTaskKill::CHILD_QUERY_BOUND_SECONDS}
+     * through MSYS timeout(1). Every rung is already a
      * force kill (no soft signal to escalate from), which is why
      * $termGraceSeconds is not consulted on that host (C-TUI-6.a).
      */
