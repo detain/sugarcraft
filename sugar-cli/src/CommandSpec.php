@@ -11,8 +11,9 @@ use SugarCraft\Core\Concerns\Mutable;
  * Declarative description of a command: its options, subcommands, the
  * rules between options (requires, conflicts) and how many positional
  * arguments it takes. {@see parse()} turns an argv list into
- * {@see ParsedArgs} or a {@see UsageError}; help, completions and man pages
- * are generated from the same object.
+ * {@see ParsedArgs} or a {@see UsageError}. It is meant to be the single
+ * input that help, completions and man pages are generated from once those
+ * generators land; today only parse() reads it.
  *
  *     $spec = CommandSpec::new('candy-code')
  *         ->withOption(Option::value('model')->withShort('m')->withEnv('CANDY_CODE_MODEL'))
@@ -187,9 +188,11 @@ final class CommandSpec
     }
 
     /**
-     * Declared options, keyed by long name, in declaration order.
+     * Declared options, keyed by long name, in declaration order. PHP turns
+     * an all-digit name such as `5` into an int key; read the name from
+     * {@see Option::name()} when a string is needed.
      *
-     * @return array<string, Option>
+     * @return array<array-key, Option>
      */
     public function options(): array
     {
@@ -203,9 +206,11 @@ final class CommandSpec
     }
 
     /**
-     * Declared subcommands, keyed by name, in declaration order.
+     * Declared subcommands, keyed by name, in declaration order. An
+     * all-digit name comes back as an int key; read the name from
+     * {@see CommandSpec::name()} when a string is needed.
      *
-     * @return array<string, CommandSpec>
+     * @return array<array-key, CommandSpec>
      */
     public function subcommands(): array
     {
@@ -239,7 +244,7 @@ final class CommandSpec
         return $this->conflictSets;
     }
 
-    /** @return array<string, list<string>> option => options it requires */
+    /** @return array<array-key, list<string>> option => options it requires (an all-digit name is an int key) */
     public function requirements(): array
     {
         return $this->requirements;
@@ -278,7 +283,8 @@ final class CommandSpec
      * @param array<string, string>|null $env
      * @throws \LogicException when the spec itself is inconsistent (a rule
      *         names an undeclared option, an option name repeats along the
-     *         command path, or the minimum exceeds the maximum)
+     *         command path, or the minimum exceeds the effective maximum,
+     *         including the implicit 0 of a command with subcommands)
      */
     public function parse(array $argv, ?array $env = null): ParsedArgs|UsageError
     {

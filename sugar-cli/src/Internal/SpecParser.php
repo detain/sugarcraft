@@ -376,7 +376,9 @@ final class SpecParser
                     throw new \LogicException(sprintf('Rule on "%s" names undeclared option "--%s".', $spec->name(), $name));
                 }
             }
-            $max = $spec->maxArguments();
+            // The effective maximum: a command with subcommands and no
+            // withMaxArguments() takes none, so any minimum is unsatisfiable.
+            $max = $spec->effectiveMaxArguments();
             if ($max !== null && $spec->minArguments() > $max) {
                 throw new \LogicException(sprintf(
                     '"%s" requires at least %d arguments but accepts at most %d.',

@@ -201,8 +201,9 @@ echo StatusLine::error('connection refused'), "\n";
 
 `CommandSpec` declares a command once — options, subcommands and the rules
 between them — and `parse()` turns argv into a `ParsedArgs` or a
-`UsageError`. The same object is what help, completions and man pages are
-generated from. Every builder call returns a new instance.
+`UsageError`. Help, completions and man pages are planned to be generated
+from the same object; those generators have not landed yet, so today the
+spec drives `parse()` only. Every builder call returns a new instance.
 
 ```php
 use SugarCraft\Cli\{CommandSpec, Option, ParsedArgs, UsageError, ValueType};

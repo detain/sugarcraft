@@ -224,6 +224,43 @@ final class CommandSpecTest extends TestCase
         CommandSpec::new('app')->withMinArguments(3)->withMaxArguments(1)->parse([], []);
     }
 
+    public function testParseRejectsMinAboveImplicitMaxOfACommandWithSubcommands(): void
+    {
+        // No withMaxArguments(): the subcommands make the effective max 0,
+        // so a minimum of 1 can never be met and is a spec error.
+        $spec = CommandSpec::new('tool')->withMinArguments(1)->withSubcommand(CommandSpec::new('run'));
+
+        $this->expectException(\LogicException::class);
+        $spec->parse([], []);
+    }
+
+    public function testExplicitUnboundedMaxKeepsAMinimumOnACommandWithSubcommandsValid(): void
+    {
+        $spec = CommandSpec::new('tool')
+            ->withMinArguments(1)
+            ->withMaxArguments(null)
+            ->withSubcommand(CommandSpec::new('run'));
+
+        self::assertSame(['x'], $spec->parse(['--', 'x'], [])->arguments());
+    }
+
+    public function testAllDigitNamesComeBackAsIntKeysAndStringNames(): void
+    {
+        $spec = CommandSpec::new('t')
+            ->withOption(Option::flag('5'))
+            ->withSubcommand(CommandSpec::new('42'));
+
+        // PHP casts all-digit keys to int; the documented contract is
+        // array-key, and the string name lives on the value object.
+        self::assertSame([5], array_keys($spec->options()));
+        self::assertSame('5', $spec->options()[5]->name());
+        self::assertSame([42], array_keys($spec->subcommands()));
+        self::assertSame('42', $spec->subcommands()[42]->name());
+        $parsed = CommandSpec::new('t')->withOption(Option::flag('5'))->parse(['--5'], []);
+        self::assertSame([5 => true], $parsed->values());
+        self::assertTrue($parsed->value('5'));
+    }
+
     public function testParseRejectsPersistentNameRepeatedInSubcommand(): void
     {
         $spec = CommandSpec::new('app')

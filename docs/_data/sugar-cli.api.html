@@ -14,7 +14,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-cli-commandspec"><code>CommandSpec</code> <small>final class</small></h4>
-<p>Declarative description of a command: its options, subcommands, the rules between options (requires, conflicts) and how many positional arguments it takes. parse() turns an argv list into ParsedArgs or a UsageError; help, completions and man pages are generated from the same object.</p>
+<p>Declarative description of a command: its options, subcommands, the rules between options (requires, conflicts) and how many positional arguments it takes. parse() turns an argv list into ParsedArgs or a UsageError. It is meant to be the single input that help, completions and man pages are generated from once those generators land; today only parse() reads it.</p>
 <p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
@@ -29,9 +29,9 @@
 <tr><td><code>withMaxArguments(?int $max): self</code></td><td>Most positional arguments accepted; null is unbounded. When never called, a command with subcommands accepts none, so a mistyped subcommand is reported as one instead of being taken as an argument; an explicit null keeps such a command unbounded.</td></tr>
 <tr><td><code>name(): string</code></td><td></td></tr>
 <tr><td><code>description(): string</code></td><td></td></tr>
-<tr><td><code>options(): array</code></td><td>Declared options, keyed by long name, in declaration order.</td></tr>
+<tr><td><code>options(): array</code></td><td>Declared options, keyed by long name, in declaration order. PHP turns an all-digit name such as <code>5</code> into an int key; read the name from Option::name() when a string is needed.</td></tr>
 <tr><td><code>option(string $name): ?Option</code></td><td>The option with this long name, or null.</td></tr>
-<tr><td><code>subcommands(): array</code></td><td>Declared subcommands, keyed by name, in declaration order.</td></tr>
+<tr><td><code>subcommands(): array</code></td><td>Declared subcommands, keyed by name, in declaration order. An all-digit name comes back as an int key; read the name from CommandSpec::name() when a string is needed.</td></tr>
 <tr><td><code>subcommand(string $name): ?CommandSpec</code></td><td>The subcommand with this name, or null.</td></tr>
 <tr><td><code>groups(): array</code></td><td>Options grouped for help output: group name =&gt; options, groups in order of first appearance; the ungrouped options sit under <code>&#039;&#039;</code>.</td></tr>
 <tr><td><code>conflictSets(): array</code></td><td></td></tr>
@@ -134,7 +134,7 @@
 <tr><td><code>has(string $name): bool</code></td><td>True when the option came from argv or its env variable (a default does not count).</td></tr>
 <tr><td><code>value(string $name): mixed</code></td><td>Resolved value of an option by long name.</td></tr>
 <tr><td><code>source(string $name): ?ValueSource</code></td><td>Where the value came from, or null when nothing (not even a default) supplied one.</td></tr>
-<tr><td><code>values(): array</code></td><td>Every declared option&#039;s resolved value, keyed by long name.</td></tr>
+<tr><td><code>values(): array</code></td><td>Every declared option&#039;s resolved value, keyed by long name. PHP turns an all-digit name such as <code>5</code> into an int key; cast it with <code>(string)</code> before passing it on as a name.</td></tr>
 <tr><td><code>arguments(): array</code></td><td>Positional arguments in order, including everything after <code>--</code>.</td></tr>
 </tbody>
 </table>

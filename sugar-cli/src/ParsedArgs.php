@@ -79,9 +79,11 @@ final class ParsedArgs
     }
 
     /**
-     * Every declared option's resolved value, keyed by long name.
+     * Every declared option's resolved value, keyed by long name. PHP turns
+     * an all-digit name such as `5` into an int key; cast it with
+     * `(string)` before passing it on as a name.
      *
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
      */
     public function values(): array
     {
