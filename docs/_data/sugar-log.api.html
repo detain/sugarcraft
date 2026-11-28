@@ -123,6 +123,17 @@
 <tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null, public bool $chained = false, public ?LogCursor $from = null, public ?LogCursor $cursor = null, public bool $fresh = true)</code></td><td></td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-log-logtailwindow"><code>LogTailWindow</code> <small>final readonly class</small></h4>
+<p>Raw line tail of a file through a fixed byte window: <code>[$lines, $offset] = LogTailWindow::new($path)-&gt;lines(100)</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $path): self</code></td><td>A tail of $path through the default WINDOW_BYTES window.</td></tr>
+<tr><td><code>withPath(string $path): self</code></td><td></td></tr>
+<tr><td><code>withWindowBytes(int $bytes): self</code></td><td>The most bytes lines() reads from the end of the file.</td></tr>
+<tr><td><code>lines(int $n): array</code></td><td>The last $n lines inside the window, oldest first, and the byte offset the read stopped at (the file&#039;s size). $n = 0 answers no lines but still the offset.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-log-logtickmsg"><code>LogTickMsg</code> <small>final readonly class</small></h4>
 <p>One beat of a LogViewer&#039;s follow chain: the LogViewer::tick() timer fired. It carries no records; the viewer decides on taking it whether to read, so the read always uses the viewer&#039;s current reader and follow setting instead of the ones the timer was armed with.</p>
 <table class="api-table">

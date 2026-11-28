@@ -519,6 +519,30 @@ unlink($path);
 
 Reading across rotation is not part of the reader yet.
 
+`LogTailWindow::new($path)->lines($n)` is the raw-line tail for a surface
+that hands lines on unparsed: it returns `[$lines, $offset]`, the last `$n`
+lines as written and the file's size, read through the same handle. It never
+reads more than the last `LogTailWindow::WINDOW_BYTES` (256 KiB; change it
+with `withWindowBytes()`), and when the file is longer than the window, the
+window's first line is dropped, since it may start before the window. Blank
+and whitespace-only lines are lines and count toward `$n` (only the newlines
+at the very end of the file are trimmed), a carriage return before a newline
+stays on its line, and a path that is missing, unreadable or not a regular
+file answers `[[], 0]` rather than throwing. It is immutable like the reader.
+
+```php
+use SugarCraft\Log\LogTailWindow;
+
+$path = tempnam(sys_get_temp_dir(), 'sugar-log-');
+file_put_contents($path, "boot\n\nready\r\n");
+
+[$lines, $offset] = LogTailWindow::new($path)->lines(2);
+
+assert($lines === ['', "ready\r"] && $offset === filesize($path));
+assert(LogTailWindow::new($path . '.absent')->lines(2) === [[], 0]);
+unlink($path);
+```
+
 ## Viewing logs
 
 `LogViewer::new($reader, $filter)` is a sugar-core `Model` that shows the
