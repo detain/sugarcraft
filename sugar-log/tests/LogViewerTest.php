@@ -409,6 +409,30 @@ final class LogViewerTest extends TestCase
         self::assertSame(['new'], self::messages($fresh->records));
     }
 
+    public function testWithReaderOnAPausedViewerKeepsTheOldRecordsUntilResumeOrRefresh(): void
+    {
+        $old = $this->file('old.log', self::json('INFO', 'old'));
+        $new = $this->file('new.log', self::json('INFO', 'new'));
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($old, LogFormat::Json))->withFollow(false));
+        self::assertInstanceOf(\Closure::class, $tick);
+
+        $switched = $viewer->withReader(LogReader::new($new, LogFormat::Json));
+        [$idle, $wait] = $switched->update(self::fire($tick));
+        self::assertSame($switched, $idle, 'a paused tick reads nothing, not even the new file');
+        self::assertSame(['old'], self::messages($idle->records));
+        self::assertInstanceOf(\Closure::class, $wait);
+        self::assertInstanceOf(TickRequest::class, $wait());
+
+        $msg = $switched->refresh()();
+        self::assertInstanceOf(LogTailMsg::class, $msg);
+        [$fresh] = $switched->update($msg);
+        self::assertSame(['new'], self::messages($fresh->records), 'refresh() reads the new file while paused');
+
+        $resumed = $switched->withFollow(true);
+        [$after] = $resumed->update(self::chainRead($resumed, $wait));
+        self::assertSame(['new'], self::messages($after->records), 'a resumed viewer reads the new file at the next tick');
+    }
+
     // ─── Filter ─────────────────────────────────────────────────────
 
     public function testAFilterChangeReRendersTheHeldRecords(): void

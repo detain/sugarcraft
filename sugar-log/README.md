@@ -529,9 +529,11 @@ without reading the file.
 
 `f` toggles follow; `withFollow()` does the same in code. Either one drops
 the reads already in flight, so a paused viewer takes no late read. The chain
-keeps running while paused, so after `withFollow(true)` or `withReader()` the
-viewer reads again at the next tick with no Cmd from you; issue `refresh()` to
-read at once instead (the `f` key does this itself). A failed read keeps the
+keeps running while paused, so after `withFollow(true)`, or `withReader()` on a
+following viewer, it reads again at the next tick with no Cmd from you; issue
+`refresh()` to read at once instead (the `f` key does this itself). A paused
+viewer reads nothing on a tick, so after `withReader()` it keeps the old file's
+records until it resumes or you issue `refresh()`. A failed read keeps the
 records, sets `$viewer->error` and keeps following. `view()` renders exactly
 `withHeight()` rows: when the records overflow it, the newest
 (`withScrollToBottom(false)`: the oldest held), and when they do not, all of

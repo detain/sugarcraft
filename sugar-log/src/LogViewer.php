@@ -31,8 +31,9 @@ use SugarCraft\Style\Style;
  * {@see tick()} interval it reads the tail if the viewer follows and only
  * waits if it does not, so a viewer resumed or pointed at another file with
  * a setter picks the change up at the next tick without any Cmd from the
- * caller. {@see refresh()} is a one-off read beside the chain, never a second
- * chain. {@see update()} only folds the result in, and {@see view()} only
+ * caller, as long as it follows: a paused viewer keeps the records it holds
+ * until it resumes or a {@see refresh()} reads. {@see refresh()} is a
+ * one-off read beside the chain, never a second chain. {@see update()} only folds the result in, and {@see view()} only
  * renders the records it already holds.
  *
  * Each read replaces the held records with the file's last
@@ -237,9 +238,11 @@ final class LogViewer implements Model
     }
 
     /**
-     * Read another file. Reads of the old one in flight are dropped; the
-     * follow chain reads the new one at its next tick, or issue
-     * {@see refresh()} to read it at once.
+     * Read another file. Reads of the old one in flight are dropped; a
+     * following viewer's chain reads the new one at its next tick, or issue
+     * {@see refresh()} to read it at once. A paused viewer reads nothing on a
+     * tick, so it keeps showing the old file's records until it resumes or a
+     * {@see refresh()} reads the new one.
      */
     public function withReader(LogReader $reader): self
     {
