@@ -63,7 +63,8 @@ final class ParsedArgs
     /**
      * Resolved value of an option by long name.
      *
-     * @throws \InvalidArgumentException when no option of that name is declared on the command path
+     * @throws \InvalidArgumentException when no option of that name is part of this command's parse
+     *         (its own options, persistent ancestors, and an ancestor option typed before the subcommand)
      */
     public function value(string $name): mixed
     {

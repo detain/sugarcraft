@@ -200,8 +200,10 @@ final class SpecParser
                 continue;
             }
 
+            // Not part of the subcommand's parse unless argv typed it at its
+            // own command's level: no value key, so ParsedArgs rejects the
+            // name like any other undeclared one.
             if (!isset($leafOptions[$name])) {
-                $values[$name] = self::emptyValue($option);
                 continue;
             }
 

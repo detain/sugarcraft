@@ -451,8 +451,7 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame(UsageErrorKind::MissingOption, $this->usageError($spec, [])->kind());
         $parsed = $this->ok($spec, ['run']);
         self::assertSame(['app', 'run'], $parsed->command());
-        self::assertNull($parsed->value('token'));
-        self::assertNull($parsed->source('token'));
+        $this->assertNotInParse($parsed, 'token');
     }
 
     public function testNonPersistentParentEnvDoesNotReachTheSubcommand(): void
@@ -468,10 +467,8 @@ final class CommandSpecParseTest extends TestCase
         self::assertTrue($root->value('json'));
 
         $parsed = $this->ok($spec, ['run'], $env);
-        self::assertNull($parsed->value('model'));
-        self::assertNull($parsed->source('model'));
-        self::assertFalse($parsed->value('json'));
-        self::assertFalse($parsed->has('json'));
+        $this->assertNotInParse($parsed, 'model');
+        $this->assertNotInParse($parsed, 'json');
     }
 
     public function testNonPersistentParentEnvDoesNotFailTheSubcommandWhenInvalid(): void
@@ -481,7 +478,7 @@ final class CommandSpecParseTest extends TestCase
             ->withSubcommand(CommandSpec::new('run'));
 
         self::assertSame(UsageErrorKind::InvalidValue, $this->usageError($spec, [], ['APP_COUNT' => 'x'])->kind());
-        self::assertNull($this->ok($spec, ['run'], ['APP_COUNT' => 'x'])->value('count'));
+        $this->assertNotInParse($this->ok($spec, ['run'], ['APP_COUNT' => 'x']), 'count');
     }
 
     public function testNonPersistentParentDefaultDoesNotReachTheSubcommand(): void
@@ -494,10 +491,24 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame('low', $this->ok($spec, [])->value('effort'));
 
         $parsed = $this->ok($spec, ['run']);
-        self::assertNull($parsed->value('effort'));
-        self::assertNull($parsed->source('effort'));
-        self::assertFalse($parsed->value('color'));
-        self::assertNull($parsed->source('color'));
+        $this->assertNotInParse($parsed, 'effort');
+        $this->assertNotInParse($parsed, 'color');
+        self::assertSame([], $parsed->values());
+    }
+
+    public function testNonPersistentParentOptionTypedBeforeTheSubcommandStaysInItsParse(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('effort')->withDefault('low'))
+            ->withOption(Option::flag('json'))
+            ->withSubcommand(CommandSpec::new('run')->withOption(Option::flag('dry')));
+
+        $parsed = $this->ok($spec, ['--effort', 'high', 'run']);
+        self::assertSame('high', $parsed->value('effort'));
+        self::assertSame(ValueSource::Argv, $parsed->source('effort'));
+        self::assertTrue($parsed->has('effort'));
+        $this->assertNotInParse($parsed, 'json');
+        self::assertSame(['effort' => 'high', 'dry' => false], $parsed->values());
     }
 
     public function testNonPersistentParentEnvDoesNotSatisfyAParentRequirementAtTheSubcommand(): void
@@ -560,6 +571,20 @@ final class CommandSpecParseTest extends TestCase
 
         self::assertSame(['a'], $this->ok($spec, ['a'])->arguments());
         self::assertSame(['a', 'b'], $this->ok($spec, ['a', 'b'])->arguments());
+    }
+
+    /** A name outside the command's parse is rejected by every accessor, like an undeclared one. */
+    private function assertNotInParse(ParsedArgs $parsed, string $name): void
+    {
+        self::assertArrayNotHasKey($name, $parsed->values());
+        foreach (['value', 'source', 'has'] as $accessor) {
+            try {
+                $parsed->{$accessor}($name);
+                self::fail(sprintf('%s("%s") did not throw.', $accessor, $name));
+            } catch (\InvalidArgumentException $e) {
+                self::assertSame(sprintf('No option "--%s" is declared on this command.', $name), $e->getMessage());
+            }
+        }
     }
 
     /**
