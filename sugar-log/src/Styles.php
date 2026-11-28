@@ -100,15 +100,20 @@ final class Styles
      * TextFormatters built without styles land on an independent
      * {@see self::snapshot()} ([SL-35]), so this singleton only couples the
      * callers that hand it over explicitly (`new TextFormatter(styles:
-     * Styles::default())`).
+     * Styles::shared())`).
+     *
+     * Named `shared()` rather than `default()` (banned by the fleet factory
+     * rule) or `new()`: it hands back the one process-wide object, and a
+     * `new()` that did not build a fresh instance would invite exactly the
+     * edit-one-recolor-all mistake the warning below describes.
      *
      * WARNING — whatever rides it shares one MUTABLE object: tinting
-     * `$logger->setStyles(Styles::default())->styles()->keys['time'] = ...`
+     * `$logger->setStyles(Styles::shared())->styles()->keys['time'] = ...`
      * recolors time for every logger and formatter deliberately riding the
-     * default. For a private palette take {@see self::snapshot()} or a fresh
-     * `new Styles()`.
+     * shared instance. For a private palette take {@see self::snapshot()} or
+     * a fresh `new Styles()`.
      */
-    public static function default(): self
+    public static function shared(): self
     {
         return self::$defaultInstance ??= new self();
     }
@@ -116,7 +121,7 @@ final class Styles
     /**
      * An INDEPENDENT copy of the shared defaults.
      *
-     * {@see self::default()} is a process-wide mutable singleton — editing
+     * {@see self::shared()} is a process-wide mutable singleton — editing
      * it recolors every logger and formatter explicitly riding it. snapshot()
      * hands back a copy
      * whose public arrays (and scalar knobs) can be mutated freely:
@@ -126,7 +131,7 @@ final class Styles
      */
     public static function snapshot(): self
     {
-        return self::default()->copy();
+        return self::shared()->copy();
     }
 
     /** Copy of this instance (fresh arrays, same Style objects). */

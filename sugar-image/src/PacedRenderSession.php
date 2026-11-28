@@ -8,11 +8,26 @@ namespace SugarCraft\Image;
  * One paced, resumable pump over an incremental encode.
  *
  * The session is the unit of fairness: {@see advanceSlice()} consumes rows
- * from the generator until the slice budget runs out — a fresh
- * {@see Deadline} per slice, capped additionally by a whole-rows budget so
- * the pump is deterministic under test. It then returns, keeping every byte
- * and the generator's cursor, and the next call resumes exactly where the
- * last stopped.
+ * from the generator until the slice budget runs out, then returns, keeping
+ * every byte and the generator's cursor, and the next call resumes exactly
+ * where the last stopped. The budget is ONE of two kinds, never both:
+ *
+ * - a finite whole-rows cap: the slice plan is a pure function of the row
+ *   stream and the cap (max(1, ceil(rows / cap)) slices of exactly cap rows
+ *   each, bar the last — an empty stream still takes the one slice that
+ *   discovers it is empty). The clock is never read, so a slow host — a coverage
+ *   run, a loaded CI box — lands the identical plan as a fast one;
+ * - the unbounded cap (PHP_INT_MAX): a fresh {@see Deadline} per slice paces
+ *   the pump on the wall clock.
+ *
+ * Mixing the two (a row cap that a deadline could still cut short) made
+ * the "deterministic" plan depend on how fast each row encoded, so the same
+ * input split into different slices from one run to the next.
+ *
+ * The clock still paces a capped pump, just never through the plan:
+ * {@see advanceUntil()} stops mid-slice once its pause expires and the next
+ * call resumes the same slice, so {@see PacedAsyncRenderer} yields the loop
+ * on time while every slice keeps exactly cap rows.
  *
  * The deadline bounds EACH SLICE, never the whole render — it is a fairness
  * device, not a request timeout, and cannot truncate a slow-but-legitimate
@@ -23,8 +38,9 @@ namespace SugarCraft\Image;
  * next slice resumes after it).
  *
  * Zero timers: nothing here arms anything on an event loop. The pump advances
- * only when someone calls advanceSlice(); {@see PacedAsyncRenderer} drives
- * it from futureTick callbacks (loop queue, not clock), and tests drive it
+ * only when someone calls advanceSlice() or advanceUntil();
+ * {@see PacedAsyncRenderer} drives it through advanceUntil() (the pause
+ * seam) from futureTick callbacks (loop queue, not clock), and tests drive it
  * directly and count slices instead of watching walls.
  *
  * Mirrors no upstream — SugarCraft addition. The resumable session object
@@ -41,13 +57,26 @@ final class PacedRenderSession
 
     private int $rowsConsumed = 0;
 
+    /** Rows still owed to the open slice; 0 = no slice open. */
+    private int $sliceLeft = 0;
+
+    /** Output offset where the open slice began. */
+    private int $sliceMark = 0;
+
+    /** The open slice's clock budget — armed only under the unbounded cap. */
+    private ?Deadline $sliceDeadline = null;
+
     /**
      * @param \Generator<int,string> $rows         Byte chunks from an
      *                                             {@see Renderer\IncrementalRenderer::renderRows()}.
-     * @param int                    $sliceMs      Whole-millisecond budget per slice.
-     * @param int                    $rowsPerSlice Upper bound on rows consumed per
-     *                                             slice — the determinism cap that lets
-     *                                             tests pin slice counts exactly.
+     * @param int                    $sliceMs      Whole-millisecond budget per slice;
+     *                                             closes a slice only when $rowsPerSlice
+     *                                             is unbounded (PHP_INT_MAX).
+     * @param int                    $rowsPerSlice Rows consumed per slice. A finite
+     *                                             value is the determinism cap: it alone
+     *                                             decides the slice plan and the clock is
+     *                                             never consulted. PHP_INT_MAX hands the
+     *                                             slice boundary to the clock.
      */
     public function __construct(
         private readonly \Generator $rows,
@@ -58,7 +87,14 @@ final class PacedRenderSession
     /**
      * Run one slice: pull rows while budget remains, appending their bytes.
      *
-     * @return string The bytes appended by THIS slice (may be '' once done).
+     * The return covers only the slice this call closes, from where that
+     * slice opened: rows an earlier {@see advanceUntil()} pulled into it are
+     * included, but a slice that advanceUntil() itself closed is returned
+     * by no call. Concatenated returns equal the stream only for a caller
+     * that steps with advanceSlice() alone; a caller that mixes in
+     * advanceUntil() reads the stream from {@see output()}.
+     *
+     * @return string The bytes of the slice this call closed (may be '' once done).
      */
     public function advanceSlice(): string
     {
@@ -66,16 +102,59 @@ final class PacedRenderSession
             return '';
         }
 
-        $mark = strlen($this->out);
-        $deadline = Deadline::in($this->sliceMs);
-        $budget = $this->rowsPerSlice;
+        $this->run(null);
 
-        while ($this->rows->valid() && $budget > 0) {
+        return substr($this->out, $this->sliceMark);
+    }
+
+    /**
+     * Run rows of the open slice until it closes or $pause expires.
+     *
+     * The loop-yield seam for {@see PacedAsyncRenderer}: under a finite row
+     * cap the pause may stop the pump mid-slice, and the next call (or
+     * {@see advanceSlice()}) resumes the SAME slice, so the clock decides
+     * only when the caller yields, never where a slice boundary falls. At
+     * least one row is consumed per call whenever rows remain.
+     *
+     * Returns no bytes: a slice this call closes is never handed out by a
+     * later {@see advanceSlice()}, which returns only the slice IT closes.
+     * Read the stream from {@see output()} whenever this method drives the
+     * pump, as {@see PacedAsyncRenderer} does.
+     *
+     * @return bool True when the slice closed (and was counted), false when
+     *              the pause expired first.
+     */
+    public function advanceUntil(Deadline $pause): bool
+    {
+        if ($this->done) {
+            return true;
+        }
+
+        return $this->run($pause);
+    }
+
+    private function run(?Deadline $pause): bool
+    {
+        if ($this->sliceLeft === 0) {
+            $this->sliceLeft = $this->rowsPerSlice;
+            $this->sliceMark = strlen($this->out);
+            // A finite row cap is the whole plan; a slice deadline beside it
+            // would let encode speed move slice boundaries between otherwise
+            // identical runs. Only the unbounded cap closes slices on the clock.
+            $this->sliceDeadline = $this->rowsPerSlice === PHP_INT_MAX ? Deadline::in($this->sliceMs) : null;
+        }
+
+        $closed = false;
+        while ($this->rows->valid()) {
             $this->out .= (string) $this->rows->current();
             $this->rows->next();
-            --$budget;
+            --$this->sliceLeft;
             ++$this->rowsConsumed;
-            if ($deadline->isExpired()) {
+            if ($this->sliceLeft === 0 || $this->sliceDeadline?->isExpired()) {
+                $closed = true;
+                break;
+            }
+            if ($pause?->isExpired()) {
                 break;
             }
         }
@@ -85,11 +164,16 @@ final class PacedRenderSession
             // wrapped push stream, its suspended fiber's frame stack) rather
             // than waiting on GC.
             $this->done = true;
+            $closed = true;
         }
 
-        ++$this->sliceCount;
+        if ($closed) {
+            ++$this->sliceCount;
+            $this->sliceLeft = 0;
+            $this->sliceDeadline = null;
+        }
 
-        return substr($this->out, $mark);
+        return $closed;
     }
 
     /** All bytes accumulated so far — the full stream once {@see isDone()}. */

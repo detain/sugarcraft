@@ -56,6 +56,27 @@ enum Level: int
         };
     }
 
+    /**
+     * Parse a rendered level label back onto the ladder: the full label the
+     * JSON and logfmt formatters write (`INFO`) or the short one the text
+     * formatter writes (`INF`), in any case. Surrounding whitespace is
+     * ignored so a padded text label (`INF  `) still parses.
+     *
+     * @return ?self null for anything that is not a label (the read side
+     *               keeps such a record with no level rather than guessing).
+     */
+    public static function fromLabel(string $label): ?self
+    {
+        $needle = \strtoupper(\trim($label));
+        foreach (self::cases() as $level) {
+            if ($needle === $level->label() || $needle === $level->shortLabel()) {
+                return $level;
+            }
+        }
+
+        return null;
+    }
+
     public function label(): string
     {
         return match ($this) {

@@ -90,7 +90,11 @@ final class ScheduleFireThroughSupervisorTest extends TestCase
             });
         self::assertNull($verdicts, 'the fire is still waiting on its daemon');
 
-        $outcome = $this->stop($supervisor, $running->id);
+        // The stop alone, not the whole tick: tick() also advances spawns, and
+        // the fire's daemon authenticating while the unrelated daemon is still
+        // exiting would settle the fire through the SPAWN half, which says
+        // nothing about the stop and made this arm order-dependent under load.
+        $outcome = $this->stopWithoutAdvancingSpawns($supervisor, $running->id);
 
         self::assertSame(BackgroundStopOutcome::StoppedViaIpc, $outcome, 'the stop of the running session is driven to its outcome');
         self::assertNull($verdicts, 'the stop does not settle the pending fire');
@@ -120,6 +124,33 @@ final class ScheduleFireThroughSupervisorTest extends TestCase
         self::assertTrue(SupervisorPump::until($supervisor, static function () use (&$outcome): bool {
             return $outcome !== null;
         }), 'the stop was never driven to its outcome');
+
+        return $outcome;
+    }
+
+    /**
+     * Drives {@see BackgroundSupervisor::stopSessionAsync()} to its outcome
+     * through {@see BackgroundSupervisor::advanceStops()} only — the stop's
+     * own state machine, the same one the synchronous stopSession() pumps —
+     * so no pending spawn's handshake is accepted while the stop runs. A
+     * queued handshake is still accepted on the next tick() even past its
+     * spawn deadline, because advanceSpawns() reads a ready handshake before
+     * it judges the deadline.
+     */
+    private function stopWithoutAdvancingSpawns(BackgroundSupervisor $supervisor, string $id): BackgroundStopOutcome
+    {
+        $outcome = null;
+        $supervisor->stopSessionAsync($id)->then(static function (BackgroundStopOutcome $settled) use (&$outcome): void {
+            $outcome = $settled;
+        });
+        $deadline = \microtime(true) + 20.0;
+        while ($outcome === null && \microtime(true) < $deadline) {
+            $supervisor->advanceStops();
+            if ($outcome === null) {
+                SupervisorPump::pace();
+            }
+        }
+        self::assertNotNull($outcome, 'the stop was never driven to its outcome');
 
         return $outcome;
     }

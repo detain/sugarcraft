@@ -22,4 +22,7 @@ return [
     'log.fatal_user' => 'Kullanıcı hatası',
     'log.fatal_shutdown' => 'Kapatma hatası',
     'logger.unopenable_stream' => 'günlük dosyası \'{path}\' açılamıyor',
+    'reader.negative_count' => 'satır sayısı sıfır veya daha fazla olmalı; alınan {count}',
+    'reader.unreadable' => 'günlük dosyası \'{path}\' okunamıyor',
+    'viewer.not_positive' => '{name} sıfırdan büyük olmalı; alınan {value}',
 ];

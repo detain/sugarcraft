@@ -22,4 +22,7 @@ return [
     'log.fatal_user' => 'Gebruikersfout',
     'log.fatal_shutdown' => 'Stopfout',
     'logger.unopenable_stream' => 'logbestand \'{path}\' kan niet geopend worden',
+    'reader.negative_count' => 'aantal regels moet nul of meer zijn; ontvangen {count}',
+    'reader.unreadable' => 'logbestand \'{path}\' kan niet gelezen worden',
+    'viewer.not_positive' => '{name} moet groter dan nul zijn; ontvangen {value}',
 ];

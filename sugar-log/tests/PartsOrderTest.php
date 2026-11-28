@@ -11,7 +11,7 @@ final class PartsOrderTest extends TestCase
 {
     public function testDefaultPartsOrder(): void
     {
-        $order = PartsOrder::default();
+        $order = PartsOrder::new();
 
         $this->assertSame([
             PartsOrder::PART_TIMESTAMP,
@@ -45,7 +45,7 @@ final class PartsOrderTest extends TestCase
 
     public function testHasReturnsTrueForContainedPart(): void
     {
-        $order = PartsOrder::default();
+        $order = PartsOrder::new();
 
         $this->assertTrue($order->has(PartsOrder::PART_TIMESTAMP));
         $this->assertTrue($order->has(PartsOrder::PART_LEVEL));

@@ -77,8 +77,13 @@ final class PartsOrder
         $this->parts = \array_values($given);
     }
 
-    /** DefaultPartsOrder: timestamp level prefix caller message fields. */
-    public static function default(): self
+    /**
+     * DefaultPartsOrder: timestamp level prefix caller message fields.
+     *
+     * Mirrors charmbracelet/log.DefaultPartsOrder under the fleet's `::new()`
+     * default-root name (`default()` is banned by the factory rule).
+     */
+    public static function new(): self
     {
         return new self();
     }

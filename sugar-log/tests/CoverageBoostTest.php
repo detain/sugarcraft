@@ -110,16 +110,16 @@ final class CoverageBoostTest extends TestCase
     public function testInPlaceSettersMutateInstance(): void
     {
         [$l, $read] = $this->newLogger(Level::Info);
-        $l->setMinLevel(Level::Debug);
+        $l = $l->withMinLevel(Level::Debug); // the one spelling (P3-5)
         $l->setPrefix('[svc]');
         $l->setReportCaller(false);
         $l->setReportTimestamp(false);
-        $l->setStyles(Styles::default());
+        $l->setStyles(Styles::shared());
         // [M10 flip] useColors pinned explicitly true: the standalone default
         // is now a Probe reference. The C2 destination gate may still deliver
         // plain bytes on this file stream — every assertion here is a text
         // substring, which survives either styling.
-        $l->setFormatter(new TextFormatter(false, null, false, true));
+        $l = $l->withFormatter(new TextFormatter(false, null, false, true));
         $l->debug('x');
         $this->assertStringContainsString('[svc]', $read());
         $this->assertSame(Level::Debug, $l->styles() instanceof Styles ? Level::Debug : Level::Debug);
@@ -176,6 +176,6 @@ final class CoverageBoostTest extends TestCase
     public function testLogResetReinitializesDefault(): void
     {
         Log::reset();
-        $this->assertInstanceOf(Logger::class, Log::default());
+        $this->assertInstanceOf(Logger::class, Log::logger());
     }
 }

@@ -22,4 +22,7 @@ return [
     'log.fatal_user' => 'خطأ المستخدم',
     'log.fatal_shutdown' => 'خطأ الإيقاف',
     'logger.unopenable_stream' => 'لا يمكن فتح ملف السجل \'{path}\'',
+    'reader.negative_count' => 'يجب أن يكون عدد الأسطر صفرًا أو أكثر؛ القيمة {count}',
+    'reader.unreadable' => 'لا يمكن قراءة ملف السجل \'{path}\'',
+    'viewer.not_positive' => 'يجب أن تكون قيمة {name} أكبر من صفر؛ القيمة {value}',
 ];

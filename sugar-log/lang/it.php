@@ -22,4 +22,7 @@ return [
     'log.fatal_user' => 'Errore utente',
     'log.fatal_shutdown' => 'Errore di spegnimento',
     'logger.unopenable_stream' => 'impossibile aprire il file di log \'{path}\'',
+    'reader.negative_count' => 'il numero di righe deve essere zero o più; ricevuto {count}',
+    'reader.unreadable' => 'impossibile leggere il file di log \'{path}\'',
+    'viewer.not_positive' => '{name} deve essere maggiore di zero; ricevuto {value}',
 ];

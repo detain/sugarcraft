@@ -33,12 +33,12 @@ final class StylesTest extends TestCase
         // [SL-35] DISCLOSED FLIP: before this row, two default-built
         // TextFormatters rode the same mutable singleton, so tinting one
         // recoloured the other. Defaults now land on independent
-        // snapshots; explicit Styles::default() passers stay coupled.
+        // snapshots; explicit Styles::shared() passers stay coupled.
         $a = new TextFormatter(reportTimestamp: false, useColors: true);
         $b = new TextFormatter(reportTimestamp: false, useColors: true);
         $prop = new \ReflectionProperty(TextFormatter::class, 'styles');
         $this->assertNotSame($prop->getValue($a), $prop->getValue($b));
-        $this->assertNotSame(Styles::default(), $prop->getValue($a));
+        $this->assertNotSame(Styles::shared(), $prop->getValue($a));
 
         $time = new \DateTimeImmutable('2026-01-01 00:00:00');
         $before = $b->format(Level::Warn, 'x', [], $time, null, null);
@@ -47,7 +47,7 @@ final class StylesTest extends TestCase
 
         // The explicit ride-the-singleton path still couples (BC for
         // deliberate sharers):
-        $shared = Styles::default();
+        $shared = Styles::shared();
         $c = new TextFormatter(reportTimestamp: false, useColors: true, styles: $shared);
         $d = new TextFormatter(reportTimestamp: false, useColors: true, styles: $shared);
         $shared->levels[Level::Warn->value] = Style::new()->foreground(Color::ansi(3));
@@ -63,16 +63,16 @@ final class StylesTest extends TestCase
         // (README Style ownership band pins this prose).
         $stream = \fopen('php://memory', 'r+');
         $log = Logger::new(stream: $stream);
-        $this->assertNotSame(Styles::default(), $log->styles());
+        $this->assertNotSame(Styles::shared(), $log->styles());
         $log->styles()->padLevelText = true;
-        $this->assertFalse(Styles::default()->padLevelText, 'snapshot mutation must not leak to the singleton');
+        $this->assertFalse(Styles::shared()->padLevelText, 'snapshot mutation must not leak to the singleton');
         $log->styles()->padLevelText = false;
         \fclose($stream);
     }
 
     public function testKeyStyleReturnsStyleForKnownField(): void
     {
-        $styles = Styles::default();
+        $styles = Styles::shared();
 
         $this->assertInstanceOf(Style::class, $styles->keyStyle('time'));
         $this->assertInstanceOf(Style::class, $styles->keyStyle('level'));
@@ -85,13 +85,13 @@ final class StylesTest extends TestCase
 
     public function testKeyStyleReturnsDefaultStyleForUnknownField(): void
     {
-        $styles = Styles::default();
+        $styles = Styles::shared();
         $this->assertInstanceOf(Style::class, $styles->keyStyle('unknown'));
     }
 
     public function testKeysMapIsPopulated(): void
     {
-        $styles = Styles::default();
+        $styles = Styles::shared();
         $this->assertArrayHasKey('time', $styles->keys);
         $this->assertArrayHasKey('level', $styles->keys);
         $this->assertArrayHasKey('prefix', $styles->keys);
@@ -103,8 +103,8 @@ final class StylesTest extends TestCase
 
     public function testDefaultReturnsNewInstance(): void
     {
-        $a = Styles::default();
-        $b = Styles::default();
+        $a = Styles::shared();
+        $b = Styles::shared();
         $this->assertInstanceOf(Styles::class, $a);
         $this->assertInstanceOf(Styles::class, $b);
     }
@@ -115,18 +115,18 @@ final class StylesTest extends TestCase
         // every TextFormatter built without an explicit Styles object share
         // this one MUTABLE object. Style mutations made through it are global
         // for the process; the README documents the per-logger escape hatch.
-        $this->assertSame(Styles::default(), Styles::default());
+        $this->assertSame(Styles::shared(), Styles::shared());
     }
 
     public function testFreshInstanceIsolatesPerLoggerStyling(): void
     {
         $mine = new Styles();
-        $this->assertNotSame($mine, Styles::default());
+        $this->assertNotSame($mine, Styles::shared());
 
         $mine->keys['time'] = Style::new()->foreground(Color::ansi(6));
 
         // The shared default keeps its identity (raw) time style untouched.
-        $this->assertSame('x', Styles::default()->keys['time']->render('x'));
+        $this->assertSame('x', Styles::shared()->keys['time']->render('x'));
         $this->assertNotSame('x', $mine->keys['time']->render('x'));
     }
 
@@ -136,17 +136,17 @@ final class StylesTest extends TestCase
         // byte-identity (raw output) so wiring them live changes nothing for
         // consumers that never configured them.
         foreach (['time', 'level', 'prefix', 'caller', 'message', 'value'] as $field) {
-            $this->assertSame('x', Styles::default()->keys[$field]->render('x'), "keys[{$field}] must default to identity");
+            $this->assertSame('x', Styles::shared()->keys[$field]->render('x'), "keys[{$field}] must default to identity");
         }
         // Context pairs ARE styled by default (whole-pair gray) — that knob
         // was live before M7 and must stay so.
-        $this->assertNotSame('x', Styles::default()->keys['key']->render('x'));
+        $this->assertNotSame('x', Styles::shared()->keys['key']->render('x'));
     }
 
     public function testPadLevelTextDefaultsOff(): void
     {
         $this->assertFalse((new Styles())->padLevelText);
-        $this->assertFalse(Styles::default()->padLevelText);
+        $this->assertFalse(Styles::shared()->padLevelText);
     }
 
     // [m1] snapshot() hands back an INDEPENDENT copy: mutating it must not
@@ -158,8 +158,8 @@ final class StylesTest extends TestCase
         $snapshot->padLevelText = true;
         $snapshot->keys['time'] = Style::new()->foreground(Color::ansi(1));
 
-        $this->assertFalse(Styles::default()->padLevelText);
-        $this->assertSame('x', Styles::default()->keys['time']->render('x'));
+        $this->assertFalse(Styles::shared()->padLevelText);
+        $this->assertSame('x', Styles::shared()->keys['time']->render('x'));
         $this->assertNotSame('x', $snapshot->keys['time']->render('x'));
 
         $snapshot->padLevelText = false;

@@ -30,6 +30,7 @@
 <tbody>
 <tr><td><code>static fromPsrString(string $psrLevel): ?self</code></td><td>Map a PSR-3 severity string onto the level ladder.</td></tr>
 <tr><td><code>toPsrString(): string</code></td><td>The canonical PSR-3 string for this level (inverse of the coarse fromPsrString() routing: Fatal → emergency, Info → info).</td></tr>
+<tr><td><code>static fromLabel(string $label): ?self</code></td><td>Parse a rendered level label back onto the ladder: the full label the JSON and logfmt formatters write (<code>INFO</code>) or the short one the text formatter writes (<code>INF</code>), in any case. Surrounding whitespace is ignored so a padded text label (<code>INF </code>) still parses.</td></tr>
 <tr><td><code>label(): string</code></td><td></td></tr>
 <tr><td><code>shortLabel(): string</code></td><td></td></tr>
 </tbody>
@@ -39,7 +40,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>static default(): Logger</code></td><td>Get (or lazily create) the process-wide default logger.</td></tr>
+<tr><td><code>static logger(): Logger</code></td><td>Get (or lazily create) the process-wide default logger.</td></tr>
 <tr><td><code>static setLogger(Logger $logger): void</code></td><td>Replace the process-wide default logger.</td></tr>
 <tr><td><code>static reset(): void</code></td><td>Reset the default logger so the next call rebuilds it.</td></tr>
 <tr><td><code>static debug(string $message, array $context = []): void</code></td><td></td></tr>
@@ -56,6 +57,107 @@
 <tr><td><code>static installPanicHandler(?PanicFormatter $formatter = null, bool $showLocals = false, array $redactPaths = []): void</code></td><td>Install a panic handler that catches uncaught exceptions and renders them as a styled panic report.</td></tr>
 <tr><td><code>static removePanicHandler(): void</code></td><td>Uninstall the handler registered by self::installPanicHandler(), restoring the exception handling that existed before the FIRST install (PHP&#039;s builtin default when there was none). PHP cannot unregister the companion shutdown hook, so the install epoch is advanced and every registered hook self-retires. Idempotent: with nothing installed this is a no-op — it never pops a handler sugar-log does not own. self::reset() deliberately does NOT uninstall the panic handler; this method is its counterpart (install is process-lifetime state like setOutput, and must be undoable without one).</td></tr>
 <tr><td><code>static restoreTerminal(bool $force = false): void</code></td><td>Restore the terminal to a usable state: exit altscreen and show cursor.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logchunk"><code>LogChunk</code> <small>final readonly class</small></h4>
+<p>What one LogReader::follow() read found.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public array $records, public ?LogCursor $cursor, public bool $fresh)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logcursor"><code>LogCursor</code> <small>final readonly class</small></h4>
+<p>Where a LogReader::follow() read stopped: the byte just past the last complete line it took, in the file it took it from.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $offset, public int $inode, public string $fingerprint)</code></td><td></td></tr>
+<tr><td><code>equals(?self $other): bool</code></td><td>True when $other points at the same byte of the same file.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logfilter"><code>LogFilter</code> <small>final readonly class</small></h4>
+<p>Which LogRecords to keep: <code>LogFilter::new()-&gt;withMinLevel(Level::Warn) -&gt;withField(&#039;svc&#039;, &#039;api&#039;)-&gt;apply($records)</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(): self</code></td><td>A filter that keeps every record.</td></tr>
+<tr><td><code>withMinLevel(?Level $level): self</code></td><td>Keep records at $level or above; null drops the condition. A record whose level could not be read is not known to meet a threshold, so it is dropped while one is set.</td></tr>
+<tr><td><code>withField(string $key, mixed $value): self</code></td><td>Keep records whose context entry $key equals $value. Calling it again for the same key replaces that condition.</td></tr>
+<tr><td><code>matches(LogRecord $record): bool</code></td><td></td></tr>
+<tr><td><code>apply(iterable $records): array</code></td><td>The records that match, in their original order.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logformat"><code>LogFormat</code> <small>enum</small></h4>
+<p>The on-disk shape a LogReader parses, one per writing formatter.</p>
+<p>Cases: <code>Json</code> · <code>Logfmt</code> · <code>Text</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
+<h4 id="api-sugarcraft-log-logreader"><code>LogReader</code> <small>final readonly class</small></h4>
+<p>Read side of a log file: <code>LogReader::new($path, LogFormat::Json)-&gt;tail(50)</code>.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(string $path, LogFormat $format = LogFormat::Text, ?PartsOrder $partsOrder = null): self</code></td><td>A reader over $path that parses lines as $format. $partsOrder is the writer&#039;s text layout (TextFormatter::withPartsOrder()); it only steers where a text line&#039;s level is looked for, and defaults to PartsOrder::new(), the layout a TextFormatter writes unless told otherwise.</td></tr>
+<tr><td><code>withPath(string $path): self</code></td><td></td></tr>
+<tr><td><code>withFormat(LogFormat $format): self</code></td><td></td></tr>
+<tr><td><code>withPartsOrder(PartsOrder $partsOrder): self</code></td><td>The PartsOrder the text lines were written with; JSON and logfmt ignore it.</td></tr>
+<tr><td><code>tail(int $n, ?LogFilter $filter = null): array</code></td><td>The last $n records of the file, oldest first. With a $filter, the last $n records the filter keeps: the scan goes on back through the file until it has them, so matches far from the end are found too, at the cost of reading back to them.</td></tr>
+<tr><td><code>follow(?LogCursor $from, int $n, ?LogFilter $filter = null, ?int $limit = null): LogChunk</code></td><td>Follow the file from $from: the records written since that cursor, or, with no cursor or when the file was truncated or replaced since it was taken, the last $n records as tail() finds them ($fresh then says to replace rather than extend). Either way only records $filter keeps come back, and the returned cursor resumes the next read. A file truncated in place and regrown past the cursor before this read is caught by the cursor&#039;s fingerprint (LogCursor).</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logrecord"><code>LogRecord</code> <small>final readonly class</small></h4>
+<p>One parsed log line, as LogReader hands it back.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public string $line, public ?Level $level, public string $message, public ?string $time = null, public ?string $prefix = null, public ?string $caller = null, public array $fields = [])</code></td><td></td></tr>
+<tr><td><code>hasField(string $key): bool</code></td><td>True when the record carries a context entry named $key (even a null one).</td></tr>
+<tr><td><code>field(string $key): mixed</code></td><td>The context entry named $key, or null when absent.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logtailmsg"><code>LogTailMsg</code> <small>final readonly class</small></h4>
+<p>The result of one LogViewer read, as the viewer&#039;s read Cmd found it when it ran: the records the filter keeps that were written since $from ($fresh false: the viewer appends them), or the file&#039;s last matching records ($fresh true: they replace what the viewer holds).</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null, public bool $chained = false, public ?LogCursor $from = null, public ?LogCursor $cursor = null, public bool $fresh = true)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logtickmsg"><code>LogTickMsg</code> <small>final readonly class</small></h4>
+<p>One beat of a LogViewer&#039;s follow chain: the LogViewer::tick() timer fired. It carries no records; the viewer decides on taking it whether to read, so the read always uses the viewer&#039;s current reader and follow setting instead of the ones the timer was armed with.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $viewerId)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logviewer"><code>LogViewer</code> <small>final class</small></h4>
+<p>A TEA log viewer: the records of a log file a LogFilter keeps, following the file as it grows.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(LogReader $reader, ?LogFilter $filter = null): self</code></td><td>A following viewer over $reader. With no $filter every record shows. Nothing is read until the Cmd from init() runs.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td>The first read, whether or not the viewer follows (a viewer that never read has nothing to show), which also starts the follow chain.</td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td>The filtered records that fit, one row each, exactly $height rows. Blank rows fill the space the records leave, after them: a view holding fewer records than its height shows them from the top row, so the newest sits on the bottom row only once the records fill the view.</td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>refresh(): \Closure</code></td><td>A Cmd that reads now and hands the result back as a LogTailMsg, without waiting for the next tick: after withReader() or withFollow() it catches up at once instead of an interval later. It is a one-off read and never starts a second follow chain.</td></tr>
+<tr><td><code>tick(): \Closure</code></td><td>A Cmd that hands back a LogTickMsg after $interval seconds: one beat of the follow chain init() starts. The viewer decides on taking the tick whether to read, so nothing is read here. The chain reschedules itself; issuing this yourself starts a second one.</td></tr>
+<tr><td><code>visibleRecords(): array</code></td><td>The held records the filter keeps, oldest first — every record the viewer could show, before the height cut.</td></tr>
+<tr><td><code>withReader(LogReader $reader): self</code></td><td>Read another file, from its tail. Reads of the old one in flight are dropped; a following viewer&#039;s chain reads the new one at its next tick, or issue refresh() to read it at once. A paused viewer reads nothing on a tick, so it keeps showing the old file&#039;s records until it resumes or a refresh() reads the new one.</td></tr>
+<tr><td><code>withFilter(LogFilter $filter): self</code></td><td>Keep only the records $filter matches. The held records are narrowed at once; reads in flight are dropped, and the next read starts over from the tail through $filter, so a looser filter brings back the records the old one left out. A paused viewer reads nothing on a tick, so issue refresh() for that read while paused.</td></tr>
+<tr><td><code>withFollow(bool $follow): self</code></td><td>Follow the file or freeze on what is held. A change drops the reads in flight, so a paused viewer takes no late read. The follow chain keeps running while paused without reading, so a resumed viewer reads again at the next tick; issue refresh() to read at once (the <code>f</code> key does). Setting the current value changes nothing.</td></tr>
+<tr><td><code>withInterval(float $seconds): self</code></td><td></td></tr>
+<tr><td><code>withTailSize(int $records): self</code></td><td>How many matching records a read from the tail takes: the first read, and the one after a reader or filter change, a failed read or a truncated file. Later reads append every matching record written since, however many.</td></tr>
+<tr><td><code>withMaxRecords(int $records): self</code></td><td>The most records the viewer holds; past it the oldest are dropped.</td></tr>
+<tr><td><code>withHeight(int $rows): self</code></td><td></td></tr>
+<tr><td><code>withWidth(?int $columns): self</code></td><td>Pad and clip every row to $columns cells; null renders rows at their own width. A clipped row ends in <code>…</code>.</td></tr>
+<tr><td><code>withShowTimestamps(bool $show): self</code></td><td>Show a structured record&#039;s time as <code>[time]</code>. A text line shows as written either way.</td></tr>
+<tr><td><code>withShowLevel(bool $show): self</code></td><td>Show a structured record&#039;s level as <code>[INF]</code>. A text line shows as written either way.</td></tr>
+<tr><td><code>withScrollToBottom(bool $bottom): self</code></td><td>Show the newest records (true) or the oldest of those held (false) when they overflow the height.</td></tr>
+<tr><td><code>withColor(bool $color): self</code></td><td>Color each row by its level; false renders plain text.</td></tr>
+<tr><td><code>withStyles(Styles $styles): self</code></td><td>Take the level palette from $styles. The styles are read once here, so editing $styles afterwards does not reach this viewer.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logger"><code>Logger</code> <small>final class</small></h4>
@@ -83,11 +185,9 @@
 <tr><td><code>with(array $fields): self</code></td><td>Create a child logger with additional persistent fields.</td></tr>
 <tr><td><code>withError(string|\Throwable $err): self</code></td><td>Create a child logger carrying $err under the house-named <code>err</code> field (parity with charm&#039;s WithError).</td></tr>
 <tr><td><code>withPrefix(string $prefix): self</code></td><td></td></tr>
-<tr><td><code>withFormatter(Formatter $formatter): self</code></td><td></td></tr>
-<tr><td><code>withMinLevel(Level $level): self</code></td><td></td></tr>
+<tr><td><code>withFormatter(Formatter $formatter): self</code></td><td>Child logger rendering through $formatter (a plain TextFormatter is re-seeded with this logger&#039;s presentation knobs, see the adopt seam).</td></tr>
+<tr><td><code>withMinLevel(Level $level): self</code></td><td>Child logger whose threshold is $level.</td></tr>
 <tr><td><code>withPartsOrder(PartsOrder $partsOrder): self</code></td><td></td></tr>
-<tr><td><code>setFormatter(Formatter $formatter): void</code></td><td></td></tr>
-<tr><td><code>setMinLevel(Level $level): void</code></td><td></td></tr>
 <tr><td><code>setReportCaller(bool $on): void</code></td><td></td></tr>
 <tr><td><code>setReportTimestamp(bool $on): void</code></td><td></td></tr>
 <tr><td><code>setTimeFormat(?string $timeFormat): void</code></td><td>Change the timestamp format in place (parity with charm&#039;s SetTimeFormat).</td></tr>
@@ -98,7 +198,7 @@
 <tr><td><code>setErrorStream(mixed $stream, ?Level $errorStreamAt = null): void</code></td><td>Install (or replace) the secondary error stream in-place.</td></tr>
 <tr><td><code>withErrorStream(mixed $stream, ?Level $errorStreamAt = null): self</code></td><td>Create a child logger routing severe records to a second stream.</td></tr>
 <tr><td><code>styles(): Styles</code></td><td>Styles object for text-formatter styling.</td></tr>
-<tr><td><code>formatter(): Formatter</code></td><td>The formatter currently rendering records. A bare <code>TextFormatter</code> handed to the constructor or setFormatter() comes back re-seeded with this logger&#039;s caller/timestamp/time-format state (SL-14 adopt seam), so the returned object is the one actually on the write path.</td></tr>
+<tr><td><code>formatter(): Formatter</code></td><td>The formatter currently rendering records. A bare <code>TextFormatter</code> handed to the constructor or withFormatter() comes back re-seeded with this logger&#039;s caller/timestamp/time-format state (SL-14 adopt seam), so the returned object is the one actually on the write path.</td></tr>
 <tr><td><code>level(): Level</code></td><td>Minimum level this logger writes. Named for the constructor parameter (<code>level:</code>), not <code>withMinLevel()</code> — the ctor noun is the source of truth.</td></tr>
 <tr><td><code>prefix(): ?string</code></td><td>Prefix string, or null when none is set.</td></tr>
 <tr><td><code>output(): mixed</code></td><td>Main output stream (mixed: resource or sink accepted by the ctor). Errors at/above the setErrorStream() threshold go to that secondary stream instead; this accessor returns the primary one.</td></tr>
@@ -126,7 +226,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct(?array $parts = null)</code></td><td></td></tr>
-<tr><td><code>static default(): self</code></td><td>DefaultPartsOrder: timestamp level prefix caller message fields.</td></tr>
+<tr><td><code>static new(): self</code></td><td>DefaultPartsOrder: timestamp level prefix caller message fields.</td></tr>
 <tr><td><code>static syslog(): self</code></td><td>SyslogOrder: timestamp level message fields (no prefix/caller).</td></tr>
 <tr><td><code>static messageFirst(): self</code></td><td>MessageFirstOrder: message level timestamp fields (prefix/caller omitted).</td></tr>
 <tr><td><code>has(string $part): bool</code></td><td></td></tr>
@@ -172,7 +272,7 @@
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
 <tr><td><code>__construct()</code></td><td></td></tr>
-<tr><td><code>static default(): self</code></td><td>The process-wide shared Styles instance, now OPT-IN: Loggers and TextFormatters built without styles land on an independent self::snapshot() ([SL-35]), so this singleton only couples the callers that hand it over explicitly (<code>new TextFormatter(styles: Styles::default())</code>).</td></tr>
+<tr><td><code>static shared(): self</code></td><td>The process-wide shared Styles instance, now OPT-IN: Loggers and TextFormatters built without styles land on an independent self::snapshot() ([SL-35]), so this singleton only couples the callers that hand it over explicitly (<code>new TextFormatter(styles: Styles::shared())</code>).</td></tr>
 <tr><td><code>static snapshot(): self</code></td><td>An INDEPENDENT copy of the shared defaults.</td></tr>
 <tr><td><code>copy(): self</code></td><td>Copy of this instance (fresh arrays, same Style objects).</td></tr>
 <tr><td><code>static padLevelText(string $label): string</code></td><td>Pad a level label to a fixed width for visual alignment. Mirrors charmbracelet/log&#039;s padLevelText.</td></tr>

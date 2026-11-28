@@ -121,6 +121,7 @@ final class LangTest extends TestCase
             'log.fatal_compile'        => 'Compile error',
             'log.fatal_user'           => 'User error',
             'log.fatal_shutdown'       => 'Shutdown error',
+            'viewer.not_positive'      => '{name} must be greater than zero; got {value}',
         ];
 
         foreach ($roster as $key => $template) {

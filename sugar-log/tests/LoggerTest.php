@@ -251,17 +251,44 @@ final class LoggerTest extends TestCase
         $this->assertStringContainsString('n=42', $content);
     }
 
-    public function testSetMinLevelFiltersSubsequentLogs(): void
+    public function testWithMinLevelFiltersTheChildAndLeavesTheParent(): void
     {
         $log = $this->logger(Level::Debug);
         $log->debug('visible');
-        $log->setMinLevel(Level::Error);
-        $log->debug('hidden');
+        $child = $log->withMinLevel(Level::Error);
+        $child->debug('hidden');
+        $log->debug('parent still debug');
         \fclose($this->tempFile);
 
         $content = \file_get_contents($this->tempPath);
         $this->assertStringContainsString('visible', $content);
         $this->assertStringNotContainsString('hidden', $content);
+        $this->assertStringContainsString('parent still debug', $content);
+        $this->assertSame(Level::Error, $child->level());
+        $this->assertSame(Level::Debug, $log->level());
+    }
+
+    public function testMinLevelAndFormatterHaveOneSpellingEach(): void
+    {
+        // P3-5 naming cleanup: withMinLevel()/withFormatter() are the only
+        // spellings; the in-place setMinLevel()/setFormatter() twins are gone.
+        $this->assertTrue(\method_exists(Logger::class, 'withMinLevel'));
+        $this->assertTrue(\method_exists(Logger::class, 'withFormatter'));
+        $this->assertFalse(\method_exists(Logger::class, 'setMinLevel'));
+        $this->assertFalse(\method_exists(Logger::class, 'setFormatter'));
+    }
+
+    public function testBannedDefaultFactoriesAreRenamed(): void
+    {
+        // CLAUDE.md bans ::default(); P3-5 renamed the three sugar-log ones
+        // with no deprecated alias.
+        foreach ([Log::class, \SugarCraft\Log\PartsOrder::class, \SugarCraft\Log\Styles::class] as $class) {
+            $this->assertFalse(\method_exists($class, 'default'), $class . '::default() must be gone');
+        }
+        $this->assertSame(Log::logger(), Log::logger());
+        $this->assertSame(\SugarCraft\Log\Styles::shared(), \SugarCraft\Log\Styles::shared());
+        $this->assertNotSame(\SugarCraft\Log\PartsOrder::new(), \SugarCraft\Log\PartsOrder::new());
+        $this->assertSame((new \SugarCraft\Log\PartsOrder())->parts, \SugarCraft\Log\PartsOrder::new()->parts);
     }
 
     public function testPrintfStyleFormattedMessage(): void
@@ -298,7 +325,7 @@ final class LoggerTest extends TestCase
         // the handle must not outlive the resource, not even for the run of
         // the next test file.
         Log::reset();
-        $this->assertNotSame($log, Log::default(), 'reset returns a fresh default');
+        $this->assertNotSame($log, Log::logger(), 'reset returns a fresh default');
 
         \fclose($stream);
 
@@ -370,7 +397,7 @@ final class LoggerTest extends TestCase
 
     public function testAdoptedTextFormatterKeepsCallerAndTimeFormat(): void
     {
-        // [PHP-02] setFormatter() used to adopt a bare TextFormatter verbatim:
+        // [PHP-02] The adopt seam used to take a bare TextFormatter verbatim:
         // the logger's caller reporting and custom time format silently
         // vanished (the inverse of setStyles/setPartsOrder rewiring the live
         // formatter). Adoption now re-seeds presentation state from the logger.
@@ -384,7 +411,7 @@ final class LoggerTest extends TestCase
             stream: $stream,
         );
 
-        $log->setFormatter(new TextFormatter()); // bare defaults pre-fix
+        $log = $log->withFormatter(new TextFormatter()); // bare defaults pre-fix
         $log->info('adopt');
         \fclose($stream);
 
@@ -396,7 +423,7 @@ final class LoggerTest extends TestCase
 
     public function testConstructorSeamAloneKeepsLoggerStateOnBareTextFormatter(): void
     {
-        // [PHP-02] The ctor adoption must not depend on a later setFormatter()
+        // [PHP-02] The ctor adoption must not depend on a later withFormatter()
         // to fix its state: writing straight after Logger::new(formatter: bare)
         // still carries caller and time format.
         $stream = \fopen($this->tempPath, 'w');
@@ -420,7 +447,7 @@ final class LoggerTest extends TestCase
 
     public function testWithFormatterAdoptsTheSameSeam(): void
     {
-        // [PHP-02] The immutable path must behave like setFormatter(): the
+        // [PHP-02] The immutable path must behave like the ctor seam: the
         // child logger's caller + timestamp state rides into the new formatter.
         $stream = \fopen($this->tempPath, 'w');
         $log = Logger::new(level: Level::Debug, reportTimestamp: true, reportCaller: true, stream: $stream);
@@ -620,7 +647,7 @@ final class LoggerTest extends TestCase
     public function testSetStylesUpdatesTextFormatter(): void
     {
         $log = $this->logger();
-        // A fresh instance — Styles::default() is the process-wide singleton the
+        // A fresh instance — Styles::shared() is the process-wide singleton the
         // logger already rides, so identity would prove nothing, and mutating it
         // would repaint every other logger in the suite.
         $newStyles = new \SugarCraft\Log\Styles();
@@ -679,7 +706,7 @@ final class LoggerTest extends TestCase
             stream: $stream,
         );
 
-        $log->setPartsOrder(\SugarCraft\Log\PartsOrder::default());
+        $log->setPartsOrder(\SugarCraft\Log\PartsOrder::new());
         $log->info('test');
         \fclose($stream);
 
@@ -910,7 +937,7 @@ final class LoggerTest extends TestCase
         $stream = \fopen('php://memory', 'w+');
         $logger = Logger::new(stream: $stream, prefix: 'svc', level: Level::Warn);
         $formatter = new TextFormatter();
-        $logger->setFormatter($formatter);
+        $logger = $logger->withFormatter($formatter);
 
         $this->assertSame(Level::Warn, $logger->level());
         $this->assertSame('svc', $logger->prefix());
@@ -1048,7 +1075,7 @@ final class LoggerTest extends TestCase
         // A Json formatter adopted after this point is untouched: it keeps the
         // ATOM shape it resolved at construction.
         $json = new JsonFormatter();
-        $logger->setFormatter($json);
+        $logger = $logger->withFormatter($json);
         $logger->setTimeFormat(\DateTimeInterface::ATOM);
         $this->assertSame($json, $logger->formatter());
 
@@ -1057,7 +1084,7 @@ final class LoggerTest extends TestCase
         $stream2 = \fopen('php://memory', 'w+');
         $pick = Logger::new(stream: $stream2, reportCaller: false);
         $pick->setTimeFormat('H:i:s');
-        $pick->setFormatter(new TextFormatter());
+        $pick = $pick->withFormatter(new TextFormatter());
         $pick->info('adopted');
         \rewind($stream2);
         $this->assertMatchesRegularExpression('/^\d{2}:\d{2}:\d{2} INF adopted$/m', \stream_get_contents($stream2));

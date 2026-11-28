@@ -22,4 +22,7 @@ return [
     'log.fatal_user' => '用户错误',
     'log.fatal_shutdown' => '关闭错误',
     'logger.unopenable_stream' => '无法打开日志文件 \'{path}\'',
+    'reader.negative_count' => '行数必须为零或更大；收到 {count}',
+    'reader.unreadable' => '无法读取日志文件 \'{path}\'',
+    'viewer.not_positive' => '{name} 必须大于零；收到 {value}',
 ];

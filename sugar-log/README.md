@@ -29,6 +29,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 - **Error-stream routing** — optional second stream for severe records (threshold defaults to `Error`) while keeping all other output on `STDOUT`
 - **Hook system** — register callbacks per log level via `HookRegistry::onLevel()` — fired via `PsrBridge` (direct `Logger` calls never dispatch hooks)
 - **Configurable log-part ordering** — `PartsOrder` DTO controls which parts appear and in what sequence
+- **Read side** — `LogReader` tails a JSON, logfmt or text log from its end without loading the file, and `LogFilter` keeps records by level and field (see [Reading logs](#reading-logs)); `LogViewer` is a TEA model that shows them and follows the file through Cmd ticks (see [Viewing logs](#viewing-logs))
 
 ## Install
 
@@ -131,7 +132,8 @@ Log::info('baking started', ['temp' => 375]);
 Log::warn('timer almost up');
 Log::error('power cut');
 // The shared logger's threshold is Info, so Log::debug('...') is dropped
-// until it is lowered: Log::default()->setMinLevel(Level::Debug);
+// until it is lowered by installing a child with the new threshold:
+// Log::setLogger(Log::logger()->withMinLevel(Level::Debug));
 
 try {
     Log::fatal('out of flour'); // writes, then throws RuntimeException
@@ -140,11 +142,11 @@ try {
 }
 
 $fh = fopen('php://stderr', 'w');
-Log::default()->setOutput($fh); // reach the shared logger itself
+Log::logger()->setOutput($fh); // reach the shared logger itself
 // setOutput is process-lifetime state — the shared logger keeps $fh until it
 // is re-pointed, so closing the handle here would leave every later Log::
 // call that writes to a dead resource. Tear down by re-pointing first, then close:
-// Log::default()->setOutput(STDERR);
+// Log::logger()->setOutput(STDERR);
 // fclose($fh);
 ```
 
@@ -177,16 +179,17 @@ $baker->info('Batch started'); // also has user + session
 
 ## Configuration mutators
 
-Every mutable knob comes in two forms: `with*()` returns a modified **clone**
+Knobs come in up to two forms: `with*()` returns a modified **clone**
 (the original is untouched — safe to derive shared loggers from it), while
-`set*()` mutates the instance in place. Both apply identical validation.
+`set*()` mutates the instance in place. Where both exist they apply identical
+validation.
 
 | Knob | Clone | In place |
 |---|---|---|
 | Persistent fields | `with(array $fields)` | — |
 | Prefix | `withPrefix(string)` | `setPrefix(?string)` |
-| Formatter | `withFormatter(Formatter)` | `setFormatter(Formatter)` |
-| Minimum level | `withMinLevel(Level)` | `setMinLevel(Level)` |
+| Formatter | `withFormatter(Formatter)` | — |
+| Minimum level | `withMinLevel(Level)` | — |
 | Parts order | `withPartsOrder(PartsOrder)` | `setPartsOrder(PartsOrder)` |
 | Output stream | `withOutput(mixed)` | `setOutput(mixed)` |
 | Error stream | `withErrorStream(mixed, ?Level)` | `setErrorStream(mixed, ?Level)` |
@@ -194,7 +197,12 @@ Every mutable knob comes in two forms: `with*()` returns a modified **clone**
 | Caller info | — | `setReportCaller(bool)` |
 | Styles | — | `setStyles(Styles)` |
 
-When `withFormatter()`/`setFormatter()` receives a plain `TextFormatter`, the
+The formatter and the minimum level have one spelling each, the clone form:
+there is no `setFormatter()` or `setMinLevel()`. To change either on a logger
+that is already shared, install the child — for the facade,
+`Log::setLogger(Log::logger()->withMinLevel(Level::Debug))`.
+
+When `withFormatter()` receives a plain `TextFormatter`, the
 logger's timestamp/caller settings are preserved into the adopted formatter
 (other formatter types are taken as-is).
 
@@ -278,8 +286,8 @@ Override level styles via `Logger::styles()`:
 
 > **Style ownership:** a logger built without styles owns an independent
 > snapshot, so mutating `Logger::styles()` changes that logger only. The
-> process-wide `Styles::default()` singleton is opt-in: explicitly installed
-> via `setStyles(Styles::default())`, it couples every rider. To stay private
+> process-wide `Styles::shared()` singleton is opt-in: explicitly installed
+> via `setStyles(Styles::shared())`, it couples every rider. To stay private
 > anyway, pick one of three sources and install it with `setStyles()`:
 >
 > 1. Build a fresh `Styles`.
@@ -462,6 +470,121 @@ Untrusted data can never forge or reshape a record:
   encode fails anyway the JSON fallback drops only the offending field — the
   envelope and every other entry survive, flagged by `_encode_error`.
 
+## Reading logs
+
+`LogReader::new($path, $format)->tail($n)` returns the last `$n` records as
+`LogRecord` values, oldest first. It reads backwards from the end of the file
+in fixed chunks, so tailing a large log costs the lines asked for, not the
+file size; `tail($n, $filter)` returns the last `$n` records a `LogFilter`
+keeps, reading back as far as it takes to find them. `follow($cursor, $n,
+$filter, $limit)` reads on from a `LogCursor`: the matching records written
+since it (at most the newest `$limit`), or, with no cursor or when the file
+was truncated or replaced, the last `$n` from the tail (`$chunk->fresh` says
+which). It takes complete lines only, so a line still being written is left
+for the next read, and the `LogChunk` it returns carries the next cursor. `LogFormat::Json` and `LogFormat::Logfmt` recover the level,
+message, time, prefix, caller and context fields; `LogFormat::Text` keeps the
+line as the message and lifts only the level: the short label the text
+formatter writes (`WRN`), with any color stripped first, looked for where the
+writer's `PartsOrder` puts it (pass the same order as the third argument, or
+`withPartsOrder()`, when the logger used a non-default one such as
+`PartsOrder::messageFirst()`). Blank lines are not records, a
+file nobody has written yet has none, and a line the format cannot parse comes
+back with a null level and the raw line as its message.
+
+`LogFilter::new()->withMinLevel($level)->withField($key, $value)` keeps the
+records meeting every condition. Field values compare by their written form,
+so `withField('n', 42)` matches the JSON `42` and the logfmt `"42"` alike.
+Reader and filter are immutable: every `with*()` returns a new instance.
+
+```php
+use SugarCraft\Log\Formatter\JsonFormatter;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\LogFilter;
+use SugarCraft\Log\LogFormat;
+use SugarCraft\Log\Logger;
+use SugarCraft\Log\LogReader;
+
+$path = tempnam(sys_get_temp_dir(), 'sugar-log-');
+$log = Logger::new(formatter: new JsonFormatter(), stream: $path);
+$log->info('oven on', ['svc' => 'oven']);
+$log->warn('oven hot', ['svc' => 'oven', 'temp' => 260]);
+$log->error('timer lost', ['svc' => 'timer']);
+
+$records = LogReader::new($path, LogFormat::Json)->tail(50);
+$hot = LogFilter::new()->withMinLevel(Level::Warn)->withField('svc', 'oven')->apply($records);
+
+assert(count($hot) === 1 && $hot[0]->message === 'oven hot');
+unlink($path);
+```
+
+Reading across rotation is not part of the reader yet.
+
+## Viewing logs
+
+`LogViewer::new($reader, $filter)` is a sugar-core `Model` that shows the
+newest records of a log through a `LogFilter` and follows the file as it
+grows. The file is only read inside Cmds: `init()` reads at once and
+starts the viewer's one follow chain, a `Cmd::tick` every `withInterval()`
+seconds (`tick()`) that reads when the viewer follows and only waits
+when it does not. `refresh()` is a one-off read beside the chain and never
+starts a second one. Reads go through the filter: the first takes the last
+`withTailSize()` records the filter keeps, scanning back through the file as
+far as it takes, so a filter for rare errors finds them far from the end.
+Every later read resumes where the one before stopped and appends every
+matching record written since, so a burst within one interval and the lines
+written while the viewer was paused all show, repeated identical lines
+included. The viewer holds at most `withMaxRecords()` records (10,000 by
+default), dropping the oldest. A line still missing its newline waits for it;
+a truncated or replaced file, `withReader()`, `withFilter()` and a failed read
+all start over from the tail. The filter also applies at render time, so a
+stricter `withFilter()` narrows the records already held at once, and the next
+read brings back what a looser one keeps.
+
+`f` toggles follow; `withFollow()` does the same in code. Either one drops
+the reads already in flight, so a paused viewer takes no late read. The chain
+keeps running while paused, so after `withFollow(true)`, or `withReader()` on a
+following viewer, it reads again at the next tick with no Cmd from you; issue
+`refresh()` to read at once instead (the `f` key does this itself). A paused
+viewer reads nothing on a tick, so after `withReader()` it keeps the old file's
+records until it resumes or you issue `refresh()`. A failed read keeps the
+records, sets `$viewer->error` and keeps following; until a read succeeds,
+`view()` gives its bottom row to that error so the frozen records do not pass
+for live ones. `view()` renders exactly
+`withHeight()` rows: when the records overflow it, the newest
+(`withScrollToBottom(false)`: the oldest held), and when they do not, all of
+them from the top row with blank rows after. Rows are colored by level
+(`withColor()`, `withStyles()`), padded and clipped to `withWidth()` when one
+is set. JSON and logfmt records render as `[INF] message key=value`, with
+`withShowTimestamps()` and `withShowLevel()` controlling the time and level;
+text lines render as written, with escapes and control bytes removed.
+
+```php
+use SugarCraft\Log\Formatter\JsonFormatter;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\LogFilter;
+use SugarCraft\Log\LogFormat;
+use SugarCraft\Log\Logger;
+use SugarCraft\Log\LogReader;
+use SugarCraft\Log\LogViewer;
+
+$path = tempnam(sys_get_temp_dir(), 'sugar-log-');
+$log = Logger::new(formatter: new JsonFormatter(), stream: $path);
+$log->info('oven on');
+$log->warn('oven hot', ['temp' => 260]);
+
+$viewer = LogViewer::new(LogReader::new($path, LogFormat::Json))
+    ->withFilter(LogFilter::new()->withMinLevel(Level::Warn))
+    ->withHeight(1)
+    ->withColor(false);
+
+// What a Program does: run the init Cmd and feed its Msg to update().
+[$viewer, $tick] = $viewer->update(($viewer->init())());
+
+assert($viewer->view() === '[WRN] oven hot temp=260');
+assert($tick !== null); // following: the next read is scheduled
+unlink($path);
+```
+
 ## Panic handlers
 
 ```php
@@ -581,7 +704,7 @@ Structured implementations register through `HookRegistry::addHook(Level, Hook):
 use SugarCraft\Log\PartsOrder;
 
 // Default: all six parts in canonical order
-PartsOrder::default();   // [timestamp, level, prefix, caller, message, fields]
+PartsOrder::new();       // [timestamp, level, prefix, caller, message, fields]
 
 // Syslog-friendly: omits prefix and caller
 PartsOrder::syslog();     // [timestamp, level, message, fields]
@@ -593,7 +716,7 @@ PartsOrder::messageFirst(); // [message, level, timestamp, fields]
 $order = new PartsOrder([PartsOrder::PART_MESSAGE, PartsOrder::PART_LEVEL, PartsOrder::PART_FIELDS]);
 
 // Query whether a part is included
-$order->has(PartsOrder::PART_CALLER); // false for syslog(), true for default()
+$order->has(PartsOrder::PART_CALLER); // false for syslog(), true for new()
 ```
 
 Named part constants: `PART_TIMESTAMP`, `PART_LEVEL`, `PART_PREFIX`, `PART_CALLER`, `PART_MESSAGE`, `PART_FIELDS`.
