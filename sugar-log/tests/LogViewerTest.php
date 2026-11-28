@@ -234,6 +234,25 @@ final class LogViewerTest extends TestCase
         self::assertSame(['same', 'same', 'same'], self::messages($after->records));
     }
 
+    public function testATruncatedOrRotatedFileReadsExactlyAsTheFileReads(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'a') . self::json('INFO', 'b') . self::json('INFO', 'c'));
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json)));
+        self::assertSame(['a', 'b', 'c'], self::messages($viewer->records));
+
+        // Truncated in place and rewritten shorter: nothing of the old tail stays.
+        \file_put_contents($path, self::json('WARN', 'x'));
+        [$truncated, $next] = $viewer->update(self::chainRead($viewer, $tick));
+        self::assertSame(['x'], self::messages($truncated->records));
+        self::assertInstanceOf(\Closure::class, $next);
+
+        // Rotated: a new file under the same name, as long as the old one.
+        $rotated = $this->file('app.log.1', self::json('INFO', 'p') . self::json('INFO', 'q'));
+        \rename($rotated, $path);
+        [$after] = $truncated->update(self::chainRead($truncated, $next));
+        self::assertSame(['p', 'q'], self::messages($after->records));
+    }
+
     public function testEachReadTakesAtMostTheTailSize(): void
     {
         $path = $this->file('app.log', self::json('INFO', 'a') . self::json('INFO', 'b') . self::json('INFO', 'c'));
@@ -385,6 +404,30 @@ final class LogViewerTest extends TestCase
         [$recovered] = $failed->update(self::chainRead($failed, $retry));
         self::assertNull($recovered->error);
         self::assertSame(['back'], self::messages($recovered->records));
+    }
+
+    public function testViewShowsTheReadErrorOnTheBottomRowUntilAReadSucceeds(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'one') . self::json('INFO', 'two'));
+        $viewer = LogViewer::new(LogReader::new($path, LogFormat::Json))->withHeight(2)->withColor(false);
+        [$viewer, $tick] = self::started($viewer);
+        self::assertSame("[INF] one\n[INF] two", $viewer->view());
+
+        \unlink($path);
+        \mkdir($path);
+        [$failed, $retry] = $viewer->update(self::chainRead($viewer, $tick));
+        self::assertNotNull($failed->error);
+        self::assertSame("[INF] two\n" . $failed->error, $failed->view(), 'the error takes the bottom row');
+        self::assertSame(
+            "\e[1m\e[31m" . $failed->error . "\e[0m",
+            \explode("\n", $failed->withColor(true)->view())[1],
+            'the error row is styled as an error',
+        );
+
+        \rmdir($path);
+        \file_put_contents($path, self::json('INFO', 'back'));
+        [$recovered] = $failed->update(self::chainRead($failed, $retry));
+        self::assertSame("[INF] back\n", $recovered->view(), 'a good read gives the row back');
     }
 
     public function testWithReaderDropsReadsOfTheOldFileAndTheChainReadsTheNewOne(): void
@@ -574,6 +617,24 @@ final class LogViewerTest extends TestCase
         );
 
         self::assertSame('db msg q="a b" ok=true n=null e="" list=[1,2]', $viewer->view());
+    }
+
+    public function testArrayAndObjectFieldsWithSpacesAreQuotedAsOneValue(): void
+    {
+        $record = new LogRecord('{}', Level::Info, 'msg', null, null, null, [
+            'tags' => ['a', 'b c'],
+            'obj' => ['k' => 'v w'],
+            'plain' => ['a', 'b'],
+        ]);
+        $viewer = self::holding(
+            LogViewer::new(LogReader::new($this->dir . '/none.log'))->withColor(false)->withHeight(1),
+            [$record],
+        );
+
+        self::assertSame(
+            '[INF] msg tags="[\\"a\\",\\"b c\\"]" obj="{\\"k\\":\\"v w\\"}" plain=["a","b"]',
+            $viewer->view(),
+        );
     }
 
     public function testWithStylesTakesTheLevelPalette(): void

@@ -534,7 +534,9 @@ following viewer, it reads again at the next tick with no Cmd from you; issue
 `refresh()` to read at once instead (the `f` key does this itself). A paused
 viewer reads nothing on a tick, so after `withReader()` it keeps the old file's
 records until it resumes or you issue `refresh()`. A failed read keeps the
-records, sets `$viewer->error` and keeps following. `view()` renders exactly
+records, sets `$viewer->error` and keeps following; until a read succeeds,
+`view()` gives its bottom row to that error so the frozen records do not pass
+for live ones. `view()` renders exactly
 `withHeight()` rows: when the records overflow it, the newest
 (`withScrollToBottom(false)`: the oldest held), and when they do not, all of
 them from the top row with blank rows after. Rows are colored by level

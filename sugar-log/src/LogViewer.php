@@ -34,7 +34,8 @@ use SugarCraft\Style\Style;
  * caller, as long as it follows: a paused viewer keeps the records it holds
  * until it resumes or a {@see refresh()} reads. {@see refresh()} is a
  * one-off read beside the chain, never a second chain. {@see update()} only folds the result in, and {@see view()} only
- * renders the records it already holds.
+ * renders the records it already holds, with the last read's error, if
+ * any, on its bottom row.
  *
  * Each read replaces the held records with the file's last
  * {@see withTailSize()} records rather than appending a diff. On screen it
@@ -180,18 +181,27 @@ final class LogViewer implements Model
      * rows. Blank rows fill the space the records leave, after them: a view
      * holding fewer records than its height shows them from the top row, so
      * the newest sits on the bottom row only once the records fill the view.
+     *
+     * After a failed read the bottom row is {@see $error}, styled as an
+     * error, and the records take the rows above it: the records it shows
+     * are no longer live, and a view that looked the same would hide that.
+     * The next good read clears it.
      */
     public function view(): string
     {
+        $space = $this->error === null ? $this->height : $this->height - 1;
         $visible = $this->visibleRecords();
         $shown = $this->scrollToBottom
-            ? \array_slice($visible, \max(0, \count($visible) - $this->height))
-            : \array_slice($visible, 0, $this->height);
+            ? \array_slice($visible, \max(0, \count($visible) - $space))
+            : \array_slice($visible, 0, $space);
 
         $rows = \array_map($this->row(...), $shown);
         $blank = \str_repeat(' ', $this->width ?? 0);
-        while (\count($rows) < $this->height) {
+        while (\count($rows) < $space) {
             $rows[] = $blank;
+        }
+        if ($this->error !== null) {
+            $rows[] = $this->styled($this->error, Level::Error);
         }
 
         return \implode("\n", $rows);
@@ -372,13 +382,18 @@ final class LogViewer implements Model
 
     private function row(LogRecord $record): string
     {
+        return $this->styled($this->rowText($record), $record->level);
+    }
+
+    private function styled(string $text, ?Level $level): string
+    {
         // Log bytes come from outside the process: one row each, no escapes.
-        $text = \str_replace(["\n", "\t"], ' ', Sanitize::untrustedForDisplay($this->rowText($record)));
+        $text = \str_replace(["\n", "\t"], ' ', Sanitize::untrustedForDisplay($text));
         if ($this->width !== null) {
             $text = Width::padRight(Width::clipCells($text, $this->width), $this->width);
         }
 
-        $style = $record->level === null ? null : ($this->levelStyles[$record->level->value] ?? null);
+        $style = $level === null ? null : ($this->levelStyles[$level->value] ?? null);
         if (!$this->color || $style === null) {
             return $text;
         }
@@ -424,8 +439,11 @@ final class LogViewer implements Model
         };
 
         // Quote what would not read back as one value, the way logfmt does.
-        if (\is_string($value) && ($value === '' || \preg_match('/[\s"=]/', $value) === 1)) {
-            return \json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE) ?: '""';
+        // An array or object is judged by its JSON text: a space inside one
+        // of its strings would split the row there just the same.
+        if ((\is_string($value) && ($value === '' || \preg_match('/[\s"=]/', $value) === 1))
+            || (!\is_scalar($value) && $value !== null && \preg_match('/\s/', $written) === 1)) {
+            return \json_encode(\is_string($value) ? $value : $written, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE) ?: '""';
         }
 
         return $written;
