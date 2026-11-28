@@ -1061,7 +1061,8 @@ final class ProcessContainment
      * confirmed the kill, a `taskkill /T /F` walk. It runs synchronously:
      * the taskkill child under {@see WindowsTaskKill::CHILD_BOUND_SECONDS},
      * the MSYS bash under {@see WindowsTaskKill::msysStepBoundSeconds()}
-     * (that bound plus the query's), and the powershell.exe grandchild,
+     * (the query's bound plus a child bound on each side of it), and the
+     * powershell.exe grandchild,
      * which PHP's bound cannot reach on Windows, under
      * {@see WindowsTaskKill::CHILD_QUERY_BOUND_SECONDS} through MSYS
      * timeout(1). Every rung is already a

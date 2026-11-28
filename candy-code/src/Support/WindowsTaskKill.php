@@ -45,13 +45,13 @@ use SugarCraft\Async\Clock;
  * plain walk follows. These are walls the killer children get, not a
  * blanket timeout on anything user-facing.
  *
- * That sum is about 25 s (5 + 15 + 5) at worst, against about 10 s before
- * the PowerShell child query existed, and it reaches every synchronous
- * caller, not only killTreeAsync(): the deadline kills of
+ * That sum is about 30 s (5 + 15 + 5 for the MSYS step, then 5 for the
+ * walk) at worst, against about 10 s before the PowerShell child query
+ * existed, and it reaches every synchronous caller, not only killTreeAsync(): the deadline kills of
  * {@see \SugarCraft\Code\Tools\Concerns\CapturesProcessOutput} and
  * {@see \SugarCraft\Code\Hooks\ScriptHook} call tree() from ChildRun's kill
  * seam, before its 0.5 s ladder, so a timed-out command can be reported up
- * to about 25 s past its declared deadline. The extra 15 s is spent only
+ * to about 30 s past its declared deadline. The extra 20 s is spent only
  * when the pid is (or cannot be ruled out as) Git's native `bash.exe`
  * launcher and the cold powershell.exe query is that slow. The trade-off is
  * accepted: a shorter bound fails silently into the plain walk, which
@@ -86,9 +86,10 @@ final class WindowsTaskKill
      * bound is generous: it costs time only when the query is actually that
      * slow, and only for a native `bash.exe` pid. The bash it runs under is
      * bounded by
-     * {@see msysStepBoundSeconds()}, which adds this bound on top of
-     * {@see CHILD_BOUND_SECONDS} so bash startup, `ps -W`, the query, the
-     * taskkill and the group kill all fit before the bash is judged wedged.
+     * {@see msysStepBoundSeconds()}, which puts this bound between two
+     * {@see CHILD_BOUND_SECONDS} allowances: one for bash startup and
+     * `ps -W` before the query, one for the taskkill and the group kill
+     * after it, so the bash is judged wedged only when one of those overruns.
      */
     public const CHILD_QUERY_BOUND_SECONDS = 15;
 
@@ -131,16 +132,18 @@ final class WindowsTaskKill
     }
 
     /**
-     * The bound the default runner enforces on the MSYS group-kill bash: the
-     * child bound for the script's own work plus
+     * The bound the default runner enforces on the MSYS group-kill bash:
      * {@see CHILD_QUERY_BOUND_SECONDS} for the PowerShell query it may wait
-     * on. A bound of the child bound alone let a slow bash start plus a
-     * query run to its own timeout end the bash before its taskkill and
-     * group-kill lines, which silently fell back to the plain walk.
+     * on, plus one child bound for the work before the query (bash startup,
+     * `ps -W`) and one for the work after it (the taskkill walk, the group
+     * kill). With a single child bound shared by both sides, a slow start
+     * plus a query that answered late (or ran to its own timeout) ended the
+     * bash before its taskkill and group-kill lines, which silently fell
+     * back to the plain walk and left the backgrounded MSYS children alive.
      */
     public static function msysStepBoundSeconds(): float
     {
-        return self::childBoundSeconds() + self::CHILD_QUERY_BOUND_SECONDS;
+        return 2 * self::childBoundSeconds() + self::CHILD_QUERY_BOUND_SECONDS;
     }
 
     /**
@@ -252,8 +255,10 @@ final class WindowsTaskKill
      * never its powershell.exe grandchild, so the grandchild carries its own
      * bound, enforced by MSYS timeout(1), which outlives a terminated bash.
      * PHP bounds this bash at {@see msysStepBoundSeconds()}, the query bound
-     * plus {@see CHILD_BOUND_SECONDS}, so a query that runs to its timeout
-     * still leaves the script time to reach its taskkill and group kill.
+     * plus {@see CHILD_BOUND_SECONDS} on each side of it, so a query that
+     * answers late or runs to its timeout still leaves the script a full
+     * child bound for its taskkill and group kill, provided bash startup and
+     * `ps -W` fit in the child bound before the query.
      */
     private const MSYS_GROUP_KILL_SCRIPT = 'w=$1; g=; '
         . 'lookup() { for d in /proc/[0-9]*; do '
