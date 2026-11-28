@@ -6,13 +6,16 @@ namespace SugarCraft\Cli;
 
 /**
  * The successful result of {@see CommandSpec::parse()}: the selected command
- * path, every declared option's resolved value with its source, and the
- * positional arguments.
+ * path, the resolved value and source of every option in that command's
+ * parse, and the positional arguments.
  *
- * Every option declared on the command path has an entry, so {@see value()}
- * never needs a fallback at the call site: an option nobody supplied reports
- * its default, or the kind's empty value (`false` or `0` for a flag, `null`
- * or `[]` for a value option).
+ * The parse holds the selected command's own options and its ancestors'
+ * persistent ones; a non-persistent ancestor option joins it only when argv
+ * typed it at its own command's level, before the subcommand. Every option in
+ * the parse has an entry, so {@see value()} needs no fallback at the call
+ * site: one nobody supplied reports its default, or the kind's empty value
+ * (`false` or `0` for a flag, `null` or `[]` for a value option). Any other
+ * name, a non-persistent ancestor option argv did not type included, throws.
  *
  * Original work: no charmbracelet upstream parses argv.
  */
@@ -33,7 +36,7 @@ final class ParsedArgs
 
     /**
      * @param list<string> $command  command path, root first
-     * @param array<string, mixed> $values  long name => resolved value, for every declared option
+     * @param array<string, mixed> $values  long name => resolved value, for every option in the command's parse
      * @param array<string, ValueSource> $sources  long name => source, for options that resolved one
      * @param list<string> $arguments  positionals in order
      */
@@ -80,7 +83,8 @@ final class ParsedArgs
     }
 
     /**
-     * Every declared option's resolved value, keyed by long name. PHP turns
+     * Resolved value of every option in this command's parse (see the class
+     * docblock), keyed by long name. PHP turns
      * an all-digit name such as `5` into an int key; cast it with
      * `(string)` before passing it on as a name.
      *

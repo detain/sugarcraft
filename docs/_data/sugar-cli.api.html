@@ -125,7 +125,7 @@
 <p>Cases: <code>Flag</code> · <code>Value</code></p>
 <p>PHP also provides <code>cases()</code>.</p>
 <h4 id="api-sugarcraft-cli-parsedargs"><code>ParsedArgs</code> <small>final class</small></h4>
-<p>The successful result of CommandSpec::parse(): the selected command path, every declared option&#039;s resolved value with its source, and the positional arguments.</p>
+<p>The successful result of CommandSpec::parse(): the selected command path, the resolved value and source of every option in that command&#039;s parse, and the positional arguments.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
@@ -134,7 +134,7 @@
 <tr><td><code>has(string $name): bool</code></td><td>True when the option came from argv or its env variable (a default does not count).</td></tr>
 <tr><td><code>value(string $name): mixed</code></td><td>Resolved value of an option by long name.</td></tr>
 <tr><td><code>source(string $name): ?ValueSource</code></td><td>Where the value came from, or null when nothing (not even a default) supplied one.</td></tr>
-<tr><td><code>values(): array</code></td><td>Every declared option&#039;s resolved value, keyed by long name. PHP turns an all-digit name such as <code>5</code> into an int key; cast it with <code>(string)</code> before passing it on as a name.</td></tr>
+<tr><td><code>values(): array</code></td><td>Resolved value of every option in this command&#039;s parse (see the class docblock), keyed by long name. PHP turns an all-digit name such as <code>5</code> into an int key; cast it with <code>(string)</code> before passing it on as a name.</td></tr>
 <tr><td><code>arguments(): array</code></td><td>Positional arguments in order, including everything after <code>--</code>.</td></tr>
 </tbody>
 </table>
