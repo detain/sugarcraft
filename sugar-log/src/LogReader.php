@@ -28,6 +28,9 @@ final readonly class LogReader
     /** Bytes read per backwards step; one line longer than this still parses (the steps join). */
     public const CHUNK_BYTES = 8192;
 
+    /** Bytes of the file's head, and of the bytes before a cursor, that a {@see LogCursor} fingerprints. */
+    public const FINGERPRINT_BYTES = 256;
+
     private function __construct(
         public string $path,
         public LogFormat $format,
@@ -103,7 +106,9 @@ final readonly class LogReader
      * with no cursor or when the file was truncated or replaced since it was
      * taken, the last $n records as {@see tail()} finds them ($fresh then
      * says to replace rather than extend). Either way only records $filter
-     * keeps come back, and the returned cursor resumes the next read.
+     * keeps come back, and the returned cursor resumes the next read. A file
+     * truncated in place and regrown past the cursor before this read is
+     * caught by the cursor's fingerprint ({@see LogCursor}).
      *
      * Only complete lines are read: a final line still missing its newline
      * is left for the read after it lands, so it is never taken twice or
@@ -130,13 +135,16 @@ final readonly class LogReader
             $stat = \fstat($handle);
             $inode = (int) ($stat['ino'] ?? 0);
             $end = self::lineEnd($handle, (int) ($stat['size'] ?? 0));
-            $cursor = new LogCursor($end, $inode);
+            $cursor = new LogCursor($end, $inode, self::fingerprint($handle, $end));
 
             // A cursor holds only while the bytes before it are still the
-            // ones it was taken past: same file, not shorter, and a line
-            // still ending there. Anything else starts over from the tail.
+            // ones it was taken past: same file, not shorter, and the same
+            // head and line ending there. A file truncated in place and
+            // regrown past the offset keeps its inode and length, so only
+            // the fingerprint catches it. Anything else starts over from
+            // the tail.
             if ($from !== null && $from->inode === $inode && $from->offset <= $end
-                && self::endsALine($handle, $from->offset)) {
+                && $from->fingerprint === self::fingerprint($handle, $from->offset)) {
                 return new LogChunk($this->forwards($handle, $from->offset, $end, $filter, $limit), $cursor, false);
             }
 
@@ -278,18 +286,23 @@ final readonly class LogReader
     }
 
     /**
-     * True when $offset is the start of the file or follows a newline.
+     * A digest of the file's first bytes and of the bytes just before
+     * $offset, {@see FINGERPRINT_BYTES} of each (fewer when $offset is
+     * nearer the start): what a cursor at $offset was taken past.
      *
      * @param resource $handle
      */
-    private static function endsALine(mixed $handle, int $offset): bool
+    private static function fingerprint(mixed $handle, int $offset): string
     {
-        if ($offset === 0) {
-            return true;
+        $span = \min(self::FINGERPRINT_BYTES, $offset);
+        if ($span === 0) {
+            return '';
         }
-        \fseek($handle, $offset - 1);
+        \fseek($handle, 0);
+        $head = self::readExactly($handle, $span);
+        \fseek($handle, $offset - $span);
 
-        return \fread($handle, 1) === "\n";
+        return \hash('xxh128', $head . "\0" . self::readExactly($handle, $span));
     }
 
     /**

@@ -72,7 +72,7 @@
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(public int $offset, public int $inode)</code></td><td></td></tr>
+<tr><td><code>__construct(public int $offset, public int $inode, public string $fingerprint)</code></td><td></td></tr>
 <tr><td><code>equals(?self $other): bool</code></td><td>True when $other points at the same byte of the same file.</td></tr>
 </tbody>
 </table>
@@ -102,7 +102,7 @@
 <tr><td><code>withFormat(LogFormat $format): self</code></td><td></td></tr>
 <tr><td><code>withPartsOrder(PartsOrder $partsOrder): self</code></td><td>The PartsOrder the text lines were written with; JSON and logfmt ignore it.</td></tr>
 <tr><td><code>tail(int $n, ?LogFilter $filter = null): array</code></td><td>The last $n records of the file, oldest first. With a $filter, the last $n records the filter keeps: the scan goes on back through the file until it has them, so matches far from the end are found too, at the cost of reading back to them.</td></tr>
-<tr><td><code>follow(?LogCursor $from, int $n, ?LogFilter $filter = null, ?int $limit = null): LogChunk</code></td><td>Follow the file from $from: the records written since that cursor, or, with no cursor or when the file was truncated or replaced since it was taken, the last $n records as tail() finds them ($fresh then says to replace rather than extend). Either way only records $filter keeps come back, and the returned cursor resumes the next read.</td></tr>
+<tr><td><code>follow(?LogCursor $from, int $n, ?LogFilter $filter = null, ?int $limit = null): LogChunk</code></td><td>Follow the file from $from: the records written since that cursor, or, with no cursor or when the file was truncated or replaced since it was taken, the last $n records as tail() finds them ($fresh then says to replace rather than extend). Either way only records $filter keeps come back, and the returned cursor resumes the next read. A file truncated in place and regrown past the cursor before this read is caught by the cursor&#039;s fingerprint (LogCursor).</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logrecord"><code>LogRecord</code> <small>final readonly class</small></h4>

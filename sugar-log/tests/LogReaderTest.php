@@ -346,7 +346,7 @@ final class LogReaderTest extends TestCase
 
         // Same length again, but the line no longer ends at the cursor.
         \file_put_contents($path, "INF longer line\n");
-        $shifted = $reader->follow(new LogCursor(6, $truncated->cursor?->inode ?? 0), 5);
+        $shifted = $reader->follow($truncated->cursor, 5);
         $this->assertTrue($shifted->fresh);
         $this->assertSame(['INF longer line'], self::lines($shifted->records));
 
@@ -360,16 +360,63 @@ final class LogReaderTest extends TestCase
         $this->assertSame(['INF p1234567890', 'INF s'], self::lines($rotated->records));
     }
 
+    public function testFollowStartsOverWhenTheFileIsTruncatedInPlaceAndRegrownPastTheCursor(): void
+    {
+        // copytruncate: same inode, and by the next read the file is longer
+        // than the cursor with a newline just before it again.
+        $old = '';
+        for ($i = 0; $i < 5; ++$i) {
+            $old .= \sprintf("INF old%02d\n", $i);
+        }
+        $path = $this->file('app.log', $old);
+        $reader = LogReader::new($path);
+        $cursor = $reader->follow(null, 20)->cursor;
+        $this->assertSame(50, $cursor?->offset);
+
+        $new = [];
+        for ($i = 0; $i < 10; ++$i) {
+            $new[] = \sprintf('INF new%02d', $i);
+        }
+        $handle = \fopen($path, 'r+');
+        $this->assertNotFalse($handle);
+        \ftruncate($handle, 0);
+        \fwrite($handle, \implode("\n", $new) . "\n");
+        \fclose($handle);
+        \clearstatcache();
+        $this->assertSame($cursor?->inode, \fileinode($path), 'truncated in place, not replaced');
+
+        $regrown = $reader->follow($cursor, 20);
+        $this->assertTrue($regrown->fresh, 'a file truncated and regrown past the cursor is read from its tail');
+        $this->assertSame($new, self::lines($regrown->records), 'the lines before the old offset are not lost');
+
+        // The same head, rewritten after it, is still caught by the bytes
+        // just before the cursor.
+        $head = \str_repeat("INF same-head-line\n", 20);
+        \file_put_contents($path, $head . "INF old-a\nINF old-b\n");
+        $past = $reader->follow(null, 1)->cursor;
+        \file_put_contents($path, $head . "INF new-a\nINF new-b\nINF new-c\n");
+        $rewritten = $reader->follow($past, 3);
+        $this->assertTrue($rewritten->fresh);
+        $this->assertSame(['INF new-a', 'INF new-b', 'INF new-c'], self::lines($rewritten->records));
+
+        // A plain append past that cursor still resumes.
+        \file_put_contents($path, "INF new-d\n", \FILE_APPEND);
+        $resumed = $reader->follow($rewritten->cursor, 3);
+        $this->assertFalse($resumed->fresh);
+        $this->assertSame(['INF new-d'], self::lines($resumed->records));
+    }
+
     public function testFollowOfAMissingFileHasNoCursorAndBadCountsAreRefused(): void
     {
-        $missing = LogReader::new($this->dir . '/none.log')->follow(new LogCursor(10, 1), 5);
+        $missing = LogReader::new($this->dir . '/none.log')->follow(new LogCursor(10, 1, 'f'), 5);
         $this->assertSame([], $missing->records);
         $this->assertNull($missing->cursor);
         $this->assertTrue($missing->fresh);
 
-        $this->assertFalse((new LogCursor(1, 2))->equals(null));
-        $this->assertTrue((new LogCursor(1, 2))->equals(new LogCursor(1, 2)));
-        $this->assertFalse((new LogCursor(1, 2))->equals(new LogCursor(1, 3)));
+        $this->assertFalse((new LogCursor(1, 2, 'f'))->equals(null));
+        $this->assertTrue((new LogCursor(1, 2, 'f'))->equals(new LogCursor(1, 2, 'f')));
+        $this->assertFalse((new LogCursor(1, 2, 'f'))->equals(new LogCursor(1, 3, 'f')));
+        $this->assertFalse((new LogCursor(1, 2, 'f'))->equals(new LogCursor(1, 2, 'g')));
 
         foreach ([[-1, null], [1, -1]] as [$n, $limit]) {
             try {
