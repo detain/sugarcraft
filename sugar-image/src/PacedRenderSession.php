@@ -87,7 +87,14 @@ final class PacedRenderSession
     /**
      * Run one slice: pull rows while budget remains, appending their bytes.
      *
-     * @return string The bytes appended by THIS slice (may be '' once done).
+     * The return covers only the slice this call closes, from where that
+     * slice opened: rows an earlier {@see advanceUntil()} pulled into it are
+     * included, but a slice that advanceUntil() itself closed is returned
+     * by no call. Concatenated returns equal the stream only for a caller
+     * that steps with advanceSlice() alone; a caller that mixes in
+     * advanceUntil() reads the stream from {@see output()}.
+     *
+     * @return string The bytes of the slice this call closed (may be '' once done).
      */
     public function advanceSlice(): string
     {
@@ -108,6 +115,11 @@ final class PacedRenderSession
      * {@see advanceSlice()}) resumes the SAME slice, so the clock decides
      * only when the caller yields, never where a slice boundary falls. At
      * least one row is consumed per call whenever rows remain.
+     *
+     * Returns no bytes: a slice this call closes is never handed out by a
+     * later {@see advanceSlice()}, which returns only the slice IT closes.
+     * Read the stream from {@see output()} whenever this method drives the
+     * pump, as {@see PacedAsyncRenderer} does.
      *
      * @return bool True when the slice closed (and was counted), false when
      *              the pause expired first.
