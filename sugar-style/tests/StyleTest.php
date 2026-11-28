@@ -1958,8 +1958,9 @@ final class StyleTest extends TestCase
      * A tab is a UAX#29 Control, so the cluster after it stands alone; the
      * spaces that replace it are not. Where the following text would join a
      * space, the expansion carries a zero-width U+200B Control after the
-     * spaces so the boundary, and so the measured width, is unchanged. Text
-     * that cannot join a space gets no extra byte.
+     * spaces, and where the preceding text ends in a Prepend codepoint, one
+     * before them, so the boundary, and so the measured width, is unchanged
+     * on both sides. Text that cannot join a space gets no extra byte.
      */
     public function testExpandTabsKeepsTheTabsClusterBoundary(): void
     {
@@ -1971,8 +1972,12 @@ final class StyleTest extends TestCase
         $this->assertSame('   日', Style::expandTabs("\t日", 3), 'a base character starts its own cluster: no break needed');
         $this->assertSame("   \e[31mx", Style::expandTabs("\t\e[31mx", 3), 'ASCII after an SGR: no break needed');
         $this->assertSame('a   ', Style::expandTabs("a\t", 3), 'trailing tab: nothing follows');
+        $this->assertSame("\u{0600}{$zwsp}   ", Style::expandTabs("\u{0600}\t", 3), 'Prepend before the tab (GB9b) would take the first space');
+        $this->assertSame("x\u{0600}\e[31m{$zwsp}   b", Style::expandTabs("x\u{0600}\e[31m\tb", 3), 'Prepend behind an SGR still joins once ANSI is stripped');
+        $this->assertSame("\u{0600}{$zwsp}   {$zwsp}\u{0301}", Style::expandTabs("\u{0600}\t\u{0301}", 3), 'both sides of one tab');
+        $this->assertSame('日   ', Style::expandTabs("日\t", 3), 'a non-Prepend codepoint before the tab: no break needed');
 
-        foreach (["\t\u{1F3FD}", "\t\u{0301}", "\t\u{0903}", "\t\e[31m\u{1F3FD}", "x\t\t\u{0301}\t", "\t\u{200D}x"] as $input) {
+        foreach (["\t\u{1F3FD}", "\t\u{0301}", "\t\u{0903}", "\t\e[31m\u{1F3FD}", "x\t\t\u{0301}\t", "\t\u{200D}x", "\u{0600}\t", "x\u{0600}\tb", "\u{0600}\e[31m\t\u{0301}", "\u{0600}\t\u{0600}\t"] as $input) {
             $this->assertSame(
                 Width::string($input),
                 Width::string(Style::expandTabs($input)),
