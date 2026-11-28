@@ -1413,10 +1413,10 @@ final readonly class ScriptHook implements BoundedHookInterface
      * - THE GROUP: a `setsid -w` wrapper leads its own process group, so the
      *   deadline kill reaches whatever the hook backgrounded. On Windows the
      *   kill seam walks the tree with taskkill first, as the captured tool
-     *   runs do. That walk is synchronous and may block for up to about
-     *   25 s on a native Git `bash.exe` pid before the ladder starts (the
-     *   accepted trade-off stated on {@see WindowsTaskKill}), so a timed-out
-     *   hook can be denied that far past its budget there.
+     *   runs do. That walk is synchronous and, on a native Git `bash.exe`
+     *   pid, may block before the ladder starts for the worst case stated on
+     *   {@see WindowsTaskKill} (its accepted trade-off), so a timed-out hook
+     *   can be denied that far past its budget there.
      * - THE QUIT REGISTRY: the pid is registered with
      *   {@see HookProcessGroups} as soon as the child starts, so a quit can
      *   SIGTERM this hook's group (see `Chat::abandonActiveHookGroups()`), and
