@@ -71,7 +71,7 @@ final class Option
      */
     public function withShort(string $short): self
     {
-        if (preg_match('/^[A-Za-z0-9]$/', $short) !== 1) {
+        if (preg_match('/^[A-Za-z0-9]\z/', $short) !== 1) {
             throw new \InvalidArgumentException(sprintf('Short option must be one letter or digit, got "%s".', $short));
         }
         return $this->mutate(['short' => $short]);
@@ -85,7 +85,7 @@ final class Option
      */
     public function withEnv(string $env): self
     {
-        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $env) !== 1) {
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*\z/', $env) !== 1) {
             throw new \InvalidArgumentException(sprintf('Invalid environment variable name "%s".', $env));
         }
         return $this->mutate(['env' => $env]);
@@ -286,7 +286,7 @@ final class Option
 
     private static function build(string $name, OptionKind $kind): self
     {
-        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]*$/', $name) !== 1) {
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]*\z/', $name) !== 1) {
             throw new \InvalidArgumentException(sprintf(
                 'Option name must start with a letter or digit and contain only letters, digits, "-" and "_", got "%s".',
                 $name,

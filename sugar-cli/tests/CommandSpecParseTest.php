@@ -113,6 +113,17 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame(1000.0, $parsed->value('ratio'));
     }
 
+    public function testIntAcceptsTheFullIntegerRange(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('hi')->withType(ValueType::Int))
+            ->withOption(Option::value('lo')->withType(ValueType::Int));
+
+        $parsed = $this->ok($spec, ['--hi', (string) PHP_INT_MAX, '--lo', (string) PHP_INT_MIN]);
+        self::assertSame(PHP_INT_MAX, $parsed->value('hi'));
+        self::assertSame(PHP_INT_MIN, $parsed->value('lo'));
+    }
+
     public function testChoicesAcceptListedValue(): void
     {
         $spec = CommandSpec::new('app')->withOption(Option::value('mode')->withChoices(['fast', 'slow']));

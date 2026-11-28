@@ -30,6 +30,10 @@ final class SpecParser
      */
     public static function parse(CommandSpec $root, array $argv, array $env): ParsedArgs|UsageError
     {
+        // Validate every command path up front, so a malformed spec throws
+        // whatever argv says instead of only once argv parses cleanly.
+        self::assertTree([$root]);
+
         /** @var list<CommandSpec> $path */
         $path = [$root];
         $names = [$root->name()];
@@ -282,6 +286,21 @@ final class SpecParser
     }
 
     /**
+     * Run the spec checks of {@see resolve()} and {@see visible()} for every
+     * path in the command tree rooted at the end of `$path`.
+     *
+     * @param list<CommandSpec> $path
+     */
+    private static function assertTree(array $path): void
+    {
+        self::visible($path);
+        self::assertRules($path, self::pathOptions($path));
+        foreach ($path[count($path) - 1]->subcommands() as $sub) {
+            self::assertTree([...$path, $sub]);
+        }
+    }
+
+    /**
      * Options recognized at the end of `$path`: the leaf's own, plus the
      * persistent options of every ancestor.
      *
@@ -407,8 +426,10 @@ final class SpecParser
 
         return match ($option->type()) {
             ValueType::String => $raw,
-            ValueType::Int => preg_match('/^[+-]?\d+$/', $raw) === 1
-                ? (int) $raw
+            // `0 + $raw` turns an out-of-range digit string into a float, so
+            // overflow is rejected instead of saturating like `(int)` does.
+            ValueType::Int => preg_match('/^[+-]?\d+\z/', $raw) === 1 && is_int(0 + $raw)
+                ? 0 + $raw
                 : self::invalid($option, $raw, 'an integer', $env, $names),
             ValueType::Float => is_numeric($raw)
                 ? (float) $raw

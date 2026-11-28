@@ -58,7 +58,7 @@ final class CommandSpec
      */
     public static function new(string $name): self
     {
-        if (preg_match('/^[^\s-]\S*$/u', $name) !== 1) {
+        if (preg_match('/^[^\s-]\S*\z/u', $name) !== 1) {
             throw new \InvalidArgumentException(sprintf(
                 'Command name must be non-empty, must not start with "-" and must not contain whitespace, got "%s".',
                 $name,

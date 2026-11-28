@@ -120,6 +120,7 @@ final class OptionTest extends TestCase
         yield 'leading dash' => ['-model'];
         yield 'space' => ['my model'];
         yield 'equals' => ['a=b'];
+        yield 'trailing newline' => ["model\n"];
     }
 
     #[DataProvider('badNames')]
@@ -135,6 +136,7 @@ final class OptionTest extends TestCase
         yield 'empty' => [''];
         yield 'two chars' => ['ab'];
         yield 'dash' => ['-'];
+        yield 'trailing newline' => ["m\n"];
     }
 
     #[DataProvider('badShorts')]
@@ -144,10 +146,18 @@ final class OptionTest extends TestCase
         Option::flag('x')->withShort($short);
     }
 
-    public function testInvalidEnvNameThrows(): void
+    /** @return iterable<string, array{string}> */
+    public static function badEnvNames(): iterable
+    {
+        yield 'leading digit' => ['1BAD'];
+        yield 'trailing newline' => ["APP_MODEL\n"];
+    }
+
+    #[DataProvider('badEnvNames')]
+    public function testInvalidEnvNameThrows(string $env): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        Option::value('x')->withEnv('1BAD');
+        Option::value('x')->withEnv($env);
     }
 
     public function testEmptyChoicesThrow(): void

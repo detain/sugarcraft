@@ -134,6 +134,7 @@ final class CommandSpecTest extends TestCase
         yield 'empty' => [''];
         yield 'leading dash' => ['-app'];
         yield 'space' => ['my app'];
+        yield 'trailing newline' => ["app\n"];
     }
 
     #[DataProvider('badNames')]
@@ -192,6 +193,23 @@ final class CommandSpecTest extends TestCase
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage('undeclared option "--b"');
         CommandSpec::new('app')->withOption(Option::flag('a'))->conflicts('a', 'b')->parse([], []);
+    }
+
+    public function testMalformedSpecThrowsEvenWhenArgvIsAlsoBad(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('undeclared option "--ghost"');
+        CommandSpec::new('x')->withOption(Option::flag('a'))->conflicts('a', 'ghost')->parse(['--a', '--nope'], []);
+    }
+
+    public function testMalformedSubcommandThrowsEvenWhenItIsNotSelected(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::flag('force'))
+            ->withSubcommand(CommandSpec::new('run')->withOption(Option::flag('force')));
+
+        $this->expectException(\LogicException::class);
+        $spec->parse([], []);
     }
 
     public function testParseRejectsRequirementNamingUndeclaredOption(): void

@@ -89,6 +89,18 @@ final class UsageErrorTest extends TestCase
             ['--count', '1.5'], [], UsageErrorKind::InvalidValue,
             'invalid value "1.5" for option "--count": expected an integer',
         ];
+        yield 'integer above the int range' => [
+            ['--count', '99999999999999999999'], [], UsageErrorKind::InvalidValue,
+            'invalid value "99999999999999999999" for option "--count": expected an integer',
+        ];
+        yield 'integer below the int range' => [
+            ['--count=-9223372036854775809'], [], UsageErrorKind::InvalidValue,
+            'invalid value "-9223372036854775809" for option "--count": expected an integer',
+        ];
+        yield 'integer with a trailing newline' => [
+            ['--count', "5\n"], [], UsageErrorKind::InvalidValue,
+            "invalid value \"5\n\" for option \"--count\": expected an integer",
+        ];
         yield 'invalid float' => [
             ['--ratio=abc'], [], UsageErrorKind::InvalidValue,
             'invalid value "abc" for option "--ratio": expected a number',
