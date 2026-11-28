@@ -286,7 +286,7 @@ echo $logo->render(ColorProfile::detectTerminal(null, STDOUT));</code></pre>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-cli-commandspec"><code>CommandSpec</code> <small>final class</small></h4>
-<p>Declarative description of a command: its options, subcommands, the rules between options (requires, conflicts) and how many positional arguments it takes. parse() turns an argv list into ParsedArgs or a UsageError. It is meant to be the single input that help, completions and man pages are generated from once those generators land; today only parse() reads it.</p>
+<p>Declarative description of a command: its options, subcommands, the rules between options (requires, conflicts) and how many positional arguments it takes. parse() turns an argv list into ParsedArgs or a UsageError. It is the single input the generators read too: HelpText::fromSpec() for the help page, Completion::script() for bash, zsh and fish completions, and Manpage::render() for the man page.</p>
 <p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
@@ -314,6 +314,14 @@ echo $logo->render(ColorProfile::detectTerminal(null, STDOUT));</code></pre>
 <tr><td><code>parse(array $argv, ?array $env = null): ParsedArgs|UsageError</code></td><td>Parse an argument list against this spec.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-cli-completion"><code>Completion</code> <small>final class</small></h4>
+<p>Shell completion scripts generated from a CommandSpec.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static script(CommandSpec $spec, Shell $shell): string</code></td><td>The completion script for <code>$spec</code>&#039;s command in <code>$shell</code>.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-cli-frame"><code>Frame</code> <small>final class</small></h4>
 <p>Full-screen application chrome: a double-line box that fills the terminal exactly, with a centred title bar, top/bottom dividers, and a status bar.</p>
 <p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
@@ -330,11 +338,29 @@ echo $logo->render(ColorProfile::detectTerminal(null, STDOUT));</code></pre>
 <tr><td><code>render(string $body, int $cols, int $rows): string</code></td><td>Render the framed body at exactly $cols × $rows cells.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-cli-helppage"><code>HelpPage</code> <small>final class</small></h4>
+<p>The help page of one command in a CommandSpec, built by HelpText::fromSpec() and laid out by HelpText::render(), so spec-driven help and hand-written help share one renderer.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(CommandSpec $root, string ...$names): self</code></td><td>The page of <code>$root</code>, or of the subcommand that <code>$names</code> walks down to. HelpText::fromSpec() is the same call.</td></tr>
+<tr><td><code>withTheme(?Theme $theme): self</code></td><td>Theme for the headings and option keys; null (the default) detects one.</td></tr>
+<tr><td><code>withWidth(int|AutoWidth|null $width): self</code></td><td>Cell width to wrap to, as HelpText::render() takes it: an int, <code>AutoWidth::Auto</code> (the default, the terminal width) or null (never wrap).</td></tr>
+<tr><td><code>withLabels(array $labels): self</code></td><td>Replace some of the page&#039;s own words, keyed as in DEFAULT_LABELS. Keys not given keep their current text.</td></tr>
+<tr><td><code>withTitleCase(bool|\Closure $titleCase): self</code></td><td>Title styling of the headings, as HelpText::render() takes it: true uppercases (the default), false prints them as given, a closure maps each one.</td></tr>
+<tr><td><code>command(): CommandSpec</code></td><td>The documented command.</td></tr>
+<tr><td><code>usage(): string</code></td><td>The full usage synopsis, e.g. <code>candy-code run [options] &lt;arg&gt;</code>.</td></tr>
+<tr><td><code>sections(): array</code></td><td>The page&#039;s sections as HelpText::render() takes them: title =&gt; row key =&gt; description. Sections with no rows are left out.</td></tr>
+<tr><td><code>render(): string</code></td><td>Render the page through HelpText::render().</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-cli-helptext"><code>HelpText</code> <small>final class</small></h4>
 <p>Build a fang-style <code>--help</code> page from structured input. Each supplied section becomes a labelled block of two-column <code>KEY description</code> rows (like git&#039;s <code>--help</code> output).</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
+<tr><td><code>static fromSpec(CommandSpec $spec, string ...$names): HelpPage</code></td><td>The help page of a CommandSpec: of the root command, or of the subcommand that <code>$names</code> walks down to (<code>fromSpec($spec, &#039;run&#039;)</code>). Call <code>-&gt;render()</code> on the result; the page is laid out by render(), so spec-driven and hand-written help look the same.</td></tr>
 <tr><td><code>static render(string $usage, array $sections, string $description = &#039;&#039;, ?Theme $theme = null, int|AutoWidth|null $width = AutoWidth::Auto, string $usageLabel = &#039;USAGE&#039;, bool|callable $titleCase = true): string</code></td><td>Render the full help screen.</td></tr>
 <tr><td><code>static renderPage(string $page, int|AutoWidth|null $width = null): string</code></td><td>Sanitize — and optionally re-wrap — an already-laid-out multi-line page.</td></tr>
 <tr><td><code>static renderRows(array $rows, ?Theme $theme = null, int|AutoWidth|null $width = AutoWidth::Auto): string</code></td><td>Render a single two-column block.</td></tr>
@@ -352,6 +378,14 @@ echo $logo->render(ColorProfile::detectTerminal(null, STDOUT));</code></pre>
 <tr><td><code>fits(int $cols): bool</code></td><td>True when every art line fits within <code>$cols</code> display cells.</td></tr>
 <tr><td><code>withColor(string|Color $color): self</code></td><td>Render the logo with a foreground color.</td></tr>
 <tr><td><code>render(?ColorProfile $profile = null): string</code></td><td>Render the logo as a string, applying the chosen color (if any) once.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cli-manpage"><code>Manpage</code> <small>final class</small></h4>
+<p>A man page in roff (man(7) macros) generated from a CommandSpec.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static render(CommandSpec $spec, int $section = 1, string $date = &#039;&#039;): string</code></td><td></td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-cli-option"><code>Option</code> <small>final class</small></h4>
@@ -420,6 +454,10 @@ echo $logo->render(ColorProfile::detectTerminal(null, STDOUT));</code></pre>
 <tr><td><code>static subHeader(string $label, ?Theme $theme = null, int $indent = 4, int|AutoWidth|null $width = AutoWidth::Auto, string $rune = &#039;·&#039;): string</code></td><td>Render an indented section divider for sub-sections.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-cli-shell"><code>Shell</code> <small>enum</small></h4>
+<p>A shell Completion::script() can write a completion script for. The backing value is the shell&#039;s usual name, so <code>Shell::tryFrom($argv[2])</code> maps a <code>completion &lt;shell&gt;</code> argument.</p>
+<p>Cases: <code>Bash</code> · <code>Zsh</code> · <code>Fish</code></p>
+<p>PHP also provides <code>cases()</code>, <code>from()</code> and <code>tryFrom()</code>.</p>
 <h4 id="api-sugarcraft-cli-stage"><code>Stage</code> <small>final class</small></h4>
 <p>Render a numbered &quot;stage&quot; line — an arrow / marker glyph + step number + message. Designed for build-script style output where each major action gets its own line:</p>
 <table class="api-table">
@@ -440,6 +478,14 @@ echo $logo->render(ColorProfile::detectTerminal(null, STDOUT));</code></pre>
 <tr><td><code>static warn(string $message, ?Theme $theme = null, int|AutoWidth|null $width = AutoWidth::Auto): string</code></td><td></td></tr>
 <tr><td><code>static info(string $message, ?Theme $theme = null, int|AutoWidth|null $width = AutoWidth::Auto): string</code></td><td></td></tr>
 <tr><td><code>static prompt(string $message, ?Theme $theme = null, int|AutoWidth|null $width = AutoWidth::Auto): string</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-cli-terminal"><code>Terminal</code> <small>final class</small></h4>
+<p>What a CLI can learn about the terminal it writes to.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static columns(mixed $stream = null): ?int</code></td><td>The column count to lay output for <code>$stream</code> out at, or null when nothing credible answers.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-cli-theme"><code>Theme</code> <small>final class</small></h4>

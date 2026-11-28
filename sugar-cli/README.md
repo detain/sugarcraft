@@ -201,9 +201,9 @@ echo StatusLine::error('connection refused'), "\n";
 
 `CommandSpec` declares a command once — options, subcommands and the rules
 between them — and `parse()` turns argv into a `ParsedArgs` or a
-`UsageError`. Help, completions and man pages are planned to be generated
-from the same object; those generators have not landed yet, so today the
-spec drives `parse()` only. Every builder call returns a new instance.
+`UsageError`. Help, completions and man pages are generated from the same
+object (see [Generated from the spec](#generated-from-the-spec)). Every
+builder call returns a new instance.
 
 ```php
 use SugarCraft\Cli\{CommandSpec, Option, ParsedArgs, UsageError, ValueType};
@@ -266,6 +266,41 @@ params. A malformed spec (duplicate names, a rule naming an undeclared
 option, a required option with a default) throws instead, since it is a
 programmer error.
 
+### Generated from the spec
+
+```php
+use SugarCraft\Cli\{Completion, HelpText, Manpage, Shell, Terminal};
+
+echo HelpText::fromSpec($spec)->render();          // help for candy-code
+echo HelpText::fromSpec($spec, 'run')->render();   // help for candy-code run
+echo Completion::script($spec, Shell::Zsh);        // Shell::Bash, Shell::Zsh, Shell::Fish
+file_put_contents('candy-code.1', Manpage::render($spec));
+```
+
+- **Help.** `HelpText::fromSpec()` returns a `HelpPage` laid out by
+  `HelpText::render()`: the usage synopsis (required options spelled out),
+  the description, subcommands, ungrouped options, one section per group,
+  and the persistent options inherited from ancestors. Option rows carry
+  `[required]`, `[env: …]`, `[default: …]` and `[possible values: …]`
+  notes. `withTheme()`, `withWidth()` and `withTitleCase()` match
+  `render()`'s arguments; `withLabels()` replaces every English word the
+  page adds (keys in `HelpPage::DEFAULT_LABELS`), so a localized CLI passes
+  its own.
+- **Completions.** Each script follows the parse rules: subcommands
+  descend, value options take the next word, `--` ends options. It offers
+  allowed values after a value option (files when free-form), the options
+  the command accepts when the word starts with `-`, and subcommands
+  otherwise. Every name and value is a quoted literal, so a spec cannot
+  inject shell code.
+- **Man page.** roff with NAME, SYNOPSIS, OPTIONS, one section per group,
+  COMMANDS (every subcommand at any depth, with its own options) and
+  ENVIRONMENT. Optional section number and footer date.
+- **Terminal width.** `Terminal::columns(?resource $stream = null): ?int`
+  answers the exported `COLUMNS` first, then — only for a terminal stream
+  (STDOUT by default) — the live window size; a pipe or file without
+  `COLUMNS` is null. The presenters never call it: pass its answer as
+  `$width` where a measured width is wanted.
+
 ## Output assumptions
 
 **Charset.** The color ladder (see `Theme::detect()` above) governs escape
@@ -314,16 +349,19 @@ leaves every other decision to you.
   state — fang's `fang.json` user-theme loading is the application's job.
   `Theme` is the persistence boundary: your chosen palette arrives as an
   argument and never from disk.
-- **No shell-outs, and width never touches a device.** Width comes from
-  the environment or an explicit parameter — see `AutoWidth` above; the
-  library never issues a terminal ioctl to measure one. (Theme detection
-  does ask whether the stream is a tty via PHP's `stream_isatty()`, which
-  an ioctl backs inside PHP itself — still no subprocess, and no
-  size-probing.)
+- **Rendering never touches a device.** A presenter's width comes from
+  the environment or an explicit parameter — see `AutoWidth` above; no
+  render issues a terminal ioctl to measure one. (Theme detection does ask
+  whether the stream is a tty via PHP's `stream_isatty()`, which an ioctl
+  backs inside PHP itself — still no subprocess, and no size-probing.)
+  `Terminal::columns()` is the one call that measures a window, and only
+  when you make it: it goes through sugar-core's `Tty`, whose last-resort
+  arm can run `stty`.
 - The charmbracelet/fang label describes the *shape* of the output, not a
   parity promise: sugar-cli renders the same kind of status and help
-  pages, without cobra-style typed flag metadata (required/optional/default
-  markers are whatever you put in your key strings).
+  pages. `HelpText::render()` lays out whatever key strings you pass;
+  the required/default markers come from the spec only through
+  `HelpText::fromSpec()`.
 
 ## Demos
 

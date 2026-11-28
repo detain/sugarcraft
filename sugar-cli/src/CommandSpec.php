@@ -11,9 +11,10 @@ use SugarCraft\Core\Concerns\Mutable;
  * Declarative description of a command: its options, subcommands, the
  * rules between options (requires, conflicts) and how many positional
  * arguments it takes. {@see parse()} turns an argv list into
- * {@see ParsedArgs} or a {@see UsageError}. It is meant to be the single
- * input that help, completions and man pages are generated from once those
- * generators land; today only parse() reads it.
+ * {@see ParsedArgs} or a {@see UsageError}. It is the single input the
+ * generators read too: {@see HelpText::fromSpec()} for the help page,
+ * {@see Completion::script()} for bash, zsh and fish completions, and
+ * {@see Manpage::render()} for the man page.
  *
  *     $spec = CommandSpec::new('candy-code')
  *         ->withOption(Option::value('model')->withShort('m')->withEnv('CANDY_CODE_MODEL'))
