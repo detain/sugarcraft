@@ -38,7 +38,9 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  * A unix socketpair carries the NDJSON bridge; the parent end is
  * {@see ProcessContainment::closeOnExec()}-ed so no descendant inherits it.
  * The loop is `stream_select` over stdout, stderr and the bridge in
- * {@see SLICE_SECONDS} slices, calling `$onWait` once per slice so an embedder
+ * {@see SLICE_SECONDS} slices (the bridge's write side joins while an answer
+ * larger than the socket buffer is still draining to the child), calling
+ * `$onWait` once per slice so an embedder
  * (the serve loop, a TUI) can pump its own machinery while the script runs.
  *
  * ## Bounds — process bounds, not LLM bounds, so E646 is untouched
@@ -224,6 +226,53 @@ final class ScriptRunner
                 $pausedSeconds = 0.0;
                 $callCount = 0;
                 $selectFailures = 0;
+                // Bytes owed to the child, oldest first. The bridge end is
+                // non-blocking, so one fwrite() of a frame larger than the
+                // socket's send buffer writes only a PREFIX: MEASURED on a
+                // host with the stock 208 KiB wmem_default, a clipped 1 MiB
+                // response lost its tail and newline, the child's fgets()
+                // waited for a line that never came, and the wall clock
+                // killed a script that had done nothing wrong (exit -1). The
+                // remainder therefore rides here and drains through the
+                // select loop's write set as the child reads.
+                $outbox = '';
+                // While anything is owed, no further frame is decoded and the
+                // bridge is not read: the prelude never sends before it has
+                // its answer, and a script that writes without reading must
+                // not grow parent memory without bound — it stalls itself,
+                // and its own clock ends it.
+                $pump = static function () use (
+                    $bridge,
+                    $dispatch,
+                    $catalog,
+                    $parentEnd,
+                    &$callCount,
+                    &$calls,
+                    &$capBreaches,
+                    &$notes,
+                    &$return,
+                    &$pausedSeconds,
+                    &$outbox,
+                ): void {
+                    while ($outbox === '' && ($frame = $bridge->next()) !== null) {
+                        $frameBytes = $bridge->lastFrameBytes();
+                        $pauseStart = microtime(true);
+                        $return = self::handleFrame(
+                            $frame,
+                            $frameBytes,
+                            $dispatch,
+                            $catalog,
+                            $callCount,
+                            $outbox,
+                            $calls,
+                            $capBreaches,
+                            $notes,
+                            $return,
+                        );
+                        $pausedSeconds += microtime(true) - $pauseStart;
+                        $outbox = self::flush($parentEnd, $outbox);
+                    }
+                };
 
                 while (true) {
                     $elapsed = (microtime(true) - $startedAt) - $pausedSeconds;
@@ -236,18 +285,23 @@ final class ScriptRunner
                         $onWait();
                     }
 
+                    // Frames decoded while an earlier answer was still
+                    // draining are acted on the moment the outbox empties.
+                    $pump();
+
                     $slice = min(self::SLICE_SECONDS, max($wallSeconds - $elapsed, 0.001));
                     $watch = [];
                     foreach ($readable as $name => $stream) {
-                        if (!$eof[$name]) {
-                            $watch[] = $stream;
+                        if ($eof[$name] || ($name === 'bridge' && $outbox !== '')) {
+                            continue;
                         }
+                        $watch[] = $stream;
                     }
-                    if ($watch === []) {
+                    $write = $outbox !== '' ? [$parentEnd] : null;
+                    if ($watch === [] && $write === null) {
                         break;
                     }
 
-                    $write = null;
                     $except = null;
                     $seconds = (int) $slice;
                     $micros = (int) (($slice - $seconds) * 1_000_000);
@@ -262,6 +316,10 @@ final class ScriptRunner
                     }
                     $selectFailures = 0;
 
+                    if ($write !== null && $write !== []) {
+                        $outbox = self::flush($parentEnd, $outbox);
+                    }
+
                     foreach ($readable as $name => $stream) {
                         if (!in_array($stream, $watch, true)) {
                             continue;
@@ -274,23 +332,7 @@ final class ScriptRunner
 
                         if ($name === 'bridge') {
                             $bridge->feed($chunk);
-                            while (($frame = $bridge->next()) !== null) {
-                                $frameBytes = $bridge->lastFrameBytes();
-                                $pauseStart = microtime(true);
-                                $return = self::handleFrame(
-                                    $frame,
-                                    $frameBytes,
-                                    $dispatch,
-                                    $catalog,
-                                    $callCount,
-                                    $parentEnd,
-                                    $calls,
-                                    $capBreaches,
-                                    $notes,
-                                    $return,
-                                );
-                                $pausedSeconds += microtime(true) - $pauseStart;
-                            }
+                            $pump();
                             if ($bridge->discardingOversize()) {
                                 // A child streaming past a cap without
                                 // terminating a frame: the breach is NAMED
@@ -382,6 +424,9 @@ final class ScriptRunner
      * @param array<string, mixed> $frame
      * @param array<string, int>   $capBreaches in-out: named breaches
      * @param list<array<string, mixed>> $calls in-out: the ledger
+     * @param string               $outbox in-out: bytes owed to the child;
+     *                               every answer is appended, never written
+     *                               here (see {@see flush()})
      * @param list<string>         $notes in-out
      */
     private static function handleFrame(
@@ -390,7 +435,7 @@ final class ScriptRunner
         \Closure $dispatch,
         \Closure $catalog,
         int &$callCount,
-        $parentEnd,
+        string &$outbox,
         array &$calls,
         array &$capBreaches,
         array &$notes,
@@ -402,7 +447,7 @@ final class ScriptRunner
             // A bridge-synthesised refusal (malformed or oversized line). The
             // id, if the bytes named one, gets the echo; an uncorrelatable
             // one answers id null and the prelude surfaces it to the script.
-            self::writeFrame($parentEnd, ScriptBridge::encode(ScriptBridge::errorFrame($id, (string) $frame['error'])));
+            self::writeFrame($outbox, ScriptBridge::encode(ScriptBridge::errorFrame($id, (string) $frame['error'])));
 
             return $return;
         }
@@ -416,7 +461,7 @@ final class ScriptRunner
                         $id,
                         'script-runner: call budget of ' . self::MAX_CALLS . ' exceeded',
                     ));
-                    self::writeFrame($parentEnd, $line);
+                    self::writeFrame($outbox, $line);
                     $calls[] = ['name' => $name, 'outcome' => ScriptRun::OUTCOME_DENIED, 'bytes' => $frameBytes + strlen($line)];
 
                     return $return;
@@ -452,7 +497,7 @@ final class ScriptRunner
                 if ($dropped > 0) {
                     $capBreaches['response'] = ($capBreaches['response'] ?? 0) + $dropped;
                 }
-                self::writeFrame($parentEnd, $line);
+                self::writeFrame($outbox, $line);
                 $calls[] = [
                     'name' => $name,
                     'outcome' => $isError ? ScriptRun::OUTCOME_ERROR : ScriptRun::OUTCOME_OK,
@@ -465,7 +510,7 @@ final class ScriptRunner
                 try {
                     $rows = $catalog();
                 } catch (\Throwable $t) {
-                    self::writeFrame($parentEnd, ScriptBridge::encode(ScriptBridge::errorFrame(
+                    self::writeFrame($outbox, ScriptBridge::encode(ScriptBridge::errorFrame(
                         $id,
                         'script-runner: catalog raised ' . get_class($t),
                     )));
@@ -492,7 +537,7 @@ final class ScriptRunner
                 if ($listDropped > 0) {
                     $capBreaches['response'] = ($capBreaches['response'] ?? 0) + $listDropped;
                 }
-                self::writeFrame($parentEnd, $line);
+                self::writeFrame($outbox, $line);
 
                 return $return;
 
@@ -515,7 +560,7 @@ final class ScriptRunner
                 return $frame['value'] ?? null;
 
             default:
-                self::writeFrame($parentEnd, ScriptBridge::encode(ScriptBridge::errorFrame(
+                self::writeFrame($outbox, ScriptBridge::encode(ScriptBridge::errorFrame(
                     $id,
                     'script-runner: unknown method ' . json_encode($frame['method'] ?? null),
                 )));
@@ -524,15 +569,33 @@ final class ScriptRunner
         }
     }
 
-    /**
-     * Best-effort write of one encoded frame. A child that has closed the
-     * bridge fails the write quietly; the loop notices EOF on its own, and a
-     * script still waiting on the parent dies with the group in the finally —
-     * no second teardown channel is worth its drift risk.
-     */
-    private static function writeFrame($parentEnd, string $line): void
+    /** Queue one encoded frame for the child; {@see flush()} delivers it. */
+    private static function writeFrame(string &$outbox, string $line): void
     {
-        @fwrite($parentEnd, $line);
+        $outbox .= $line;
+    }
+
+    /**
+     * One non-blocking write of the outbox; returns what is still owed.
+     *
+     * A short write keeps the remainder for the next writable slice — a frame
+     * is never cut, because the child reads whole lines and a lost tail is a
+     * response that never arrives. A failed write means the child has closed
+     * the bridge: what was owed is dropped, the loop notices EOF on its own,
+     * and a script still waiting on the parent dies with the group in the
+     * finally — no second teardown channel is worth its drift risk.
+     */
+    private static function flush($parentEnd, string $outbox): string
+    {
+        if ($outbox === '') {
+            return '';
+        }
+        $written = @fwrite($parentEnd, $outbox);
+        if ($written === false) {
+            return '';
+        }
+
+        return substr($outbox, $written);
     }
 
     /**
