@@ -35,6 +35,9 @@ namespace SugarCraft\Log;
  * - A path that cannot be opened (missing, unreadable, or not a regular
  *   file) answers no lines and offset 0, never an error: a log nobody has
  *   written yet is an answer.
+ * - A symlink at the path is refused the same way, even one pointing at a
+ *   regular file: the shape is checked with lstat, never stat, so the tail
+ *   is never followed out of the directory that holds the log.
  *
  * Immutable: every with*() returns a new instance through mutate().
  *
@@ -120,20 +123,23 @@ final readonly class LogTailWindow
 
     /**
      * A read handle on a regular file at the path, or null. The shape is
-     * checked before opening, so a fifo already at the path is never opened
-     * (opening one blocks until a writer comes), and again on the handle, so
-     * a directory or symlink target swapped in between the check and the
-     * open is caught too. A fifo swapped in inside that window is not: the
-     * fopen() itself blocks on it before the handle check runs. That residual
-     * race is accepted, since it needs a racing writer in a directory the
-     * same user already owns.
+     * checked with lstat before opening, so a symlink at the path is refused
+     * rather than followed, and a fifo already there is never opened (opening
+     * one blocks until a writer comes). It is checked again on the handle, so
+     * a directory, or a symlink to one, swapped in between the check and the
+     * open is caught too. A symlink to a regular file, or a fifo, swapped in
+     * inside that window is not: PHP's fopen() has no O_NOFOLLOW, and it
+     * blocks on a fifo before the handle check runs. That residual race is
+     * accepted, since it needs a racing writer in a directory the same user
+     * already owns.
      *
      * @return resource|null
      */
     private function open(): mixed
     {
         \clearstatcache(true, $this->path);
-        if (!\is_file($this->path)) {
+        $stat = @\lstat($this->path);
+        if ($stat === false || ((int) $stat['mode'] & 0o170000) !== 0o100000) {
             return null;
         }
         $handle = @\fopen($this->path, 'rb');

@@ -215,13 +215,13 @@ final class LogTailWindowTest extends TestCase
         self::assertSame([[], 0], LogTailWindow::new($path)->lines(10));
     }
 
-    public function testSymlinkToARegularFileIsRead(): void
+    public function testSymlinkToARegularFileIsRefusedNotFollowed(): void
     {
         $target = $this->file('target.log', "a\nb\n");
         $link = $this->dir . '/link.log';
         \symlink($target, $link);
 
-        self::assertSame([['a', 'b'], 4], LogTailWindow::new($link)->lines(10));
+        self::assertSame([[], 0], LogTailWindow::new($link)->lines(10));
     }
 
     public function testNegativeCountThrows(): void
