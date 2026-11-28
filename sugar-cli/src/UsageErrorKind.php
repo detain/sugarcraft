@@ -34,10 +34,10 @@ enum UsageErrorKind
     /** A required option given neither on argv nor in its env variable (params: option, env). */
     case MissingOption;
 
-    /** An option given without one it requires (params: option, requires). */
+    /** An option given without one it requires (params: option, requires, env). */
     case MissingRequirement;
 
-    /** Two options of one conflict set given together (params: option, other). */
+    /** Two options of one conflict set given together (params: option, other, env, otherEnv). */
     case ConflictingOptions;
 
     /** Fewer positionals than the command's minimum (params: command, min, given). */

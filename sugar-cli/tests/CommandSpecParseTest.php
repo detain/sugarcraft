@@ -113,6 +113,15 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame(1000.0, $parsed->value('ratio'));
     }
 
+    public function testFloatAcceptsEveryDecimalShape(): void
+    {
+        $spec = CommandSpec::new('app')->withOption(Option::value('ratio')->withType(ValueType::Float));
+
+        foreach (['.5' => 0.5, '5.' => 5.0, '-2' => -2.0, '+1.5E-1' => 0.15] as $raw => $expected) {
+            self::assertSame($expected, $this->ok($spec, ['--ratio=' . $raw])->value('ratio'), (string) $raw);
+        }
+    }
+
     public function testIntAcceptsTheFullIntegerRange(): void
     {
         $spec = CommandSpec::new('app')

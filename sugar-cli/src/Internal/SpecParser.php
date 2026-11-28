@@ -233,6 +233,11 @@ final class SpecParser
 
         $present = static fn (string $name): bool => ($sources[$name] ?? null) === ValueSource::Argv
             || ($sources[$name] ?? null) === ValueSource::Env;
+        // The variable an option's value came from, so a rule error can name
+        // it: the user typed neither option when both came from the env.
+        $envSource = static fn (string $name): ?string => ($sources[$name] ?? null) === ValueSource::Env
+            ? $options[$name]->env()
+            : null;
 
         foreach ($path as $spec) {
             foreach ($spec->conflictSets() as $set) {
@@ -244,6 +249,8 @@ final class SpecParser
                 return self::error(UsageErrorKind::ConflictingOptions, [
                     'option' => '--' . $hits[0],
                     'other' => '--' . $hits[1],
+                    'env' => $envSource($hits[0]),
+                    'otherEnv' => $envSource($hits[1]),
                 ], $names);
             }
         }
@@ -273,6 +280,7 @@ final class SpecParser
                         return self::error(UsageErrorKind::MissingRequirement, [
                             'option' => '--' . $name,
                             'requires' => '--' . $need,
+                            'env' => $envSource($name),
                         ], $names);
                     }
                 }
@@ -448,8 +456,11 @@ final class SpecParser
             ValueType::Int => preg_match('/^[+-]?\d+\z/', $raw) === 1 && is_int(0 + $raw)
                 ? 0 + $raw
                 : self::invalid($option, $raw, 'an integer', $env, $names),
-            // `1e400` is numeric but casts to INF; reject it like Int overflow.
-            ValueType::Float => is_numeric($raw) && is_finite((float) $raw)
+            // is_numeric() without its surrounding whitespace, so ` 1.5` is
+            // rejected as Int rejects ` 5`. `1e400` matches but casts to INF;
+            // reject it like Int overflow.
+            ValueType::Float => preg_match('/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\z/', $raw) === 1
+                && is_finite((float) $raw)
                 ? (float) $raw
                 : self::invalid($option, $raw, 'a number', $env, $names),
         };

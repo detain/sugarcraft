@@ -29,9 +29,9 @@ final class UsageErrorTest extends TestCase
             ->withOption(Option::value('mode')->withChoices(['fast', 'slow'])->withEnv('APP_MODE'))
             ->withOption(Option::value('effort')->withEnum(Effort::class))
             ->withOption(Option::flag('debug')->withEnv('APP_DEBUG'))
-            ->withOption(Option::flag('json'))
-            ->withOption(Option::flag('plain'))
-            ->withOption(Option::value('key'))
+            ->withOption(Option::flag('json')->withEnv('APP_JSON'))
+            ->withOption(Option::flag('plain')->withEnv('APP_PLAIN'))
+            ->withOption(Option::value('key')->withEnv('APP_KEY'))
             ->withOption(Option::value('cert'))
             ->conflicts('json', 'plain')
             ->requires('key', 'cert')
@@ -144,6 +144,22 @@ final class UsageErrorTest extends TestCase
         yield 'conflicting options' => [
             ['--json', '--plain'], [], UsageErrorKind::ConflictingOptions,
             'options "--json" and "--plain" cannot be used together',
+        ];
+        yield 'conflicting options both from env' => [
+            [], ['APP_JSON' => '1', 'APP_PLAIN' => 'yes'], UsageErrorKind::ConflictingOptions,
+            'options "--json" (from APP_JSON) and "--plain" (from APP_PLAIN) cannot be used together',
+        ];
+        yield 'missing requirement from env' => [
+            [], ['APP_KEY' => 'k'], UsageErrorKind::MissingRequirement,
+            'option "--key" (from APP_KEY) requires "--cert"',
+        ];
+        yield 'float with a leading space' => [
+            ['--ratio', ' 1.5'], [], UsageErrorKind::InvalidValue,
+            'invalid value " 1.5" for option "--ratio": expected a number',
+        ];
+        yield 'float with a trailing space' => [
+            ['--ratio', '1.5 '], [], UsageErrorKind::InvalidValue,
+            'invalid value "1.5 " for option "--ratio": expected a number',
         ];
         yield 'too few arguments' => [
             ['run'], [], UsageErrorKind::TooFewArguments,

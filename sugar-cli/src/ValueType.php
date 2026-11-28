@@ -17,6 +17,6 @@ enum ValueType
     /** Optional sign then digits only (`-3`, `42`); anything else is a usage error. */
     case Int;
 
-    /** Any numeric string PHP accepts (`1.5`, `-2`, `1e3`). */
+    /** Optional sign, decimal digits, optional exponent (`1.5`, `-2`, `1e3`); no surrounding whitespace. */
     case Float;
 }

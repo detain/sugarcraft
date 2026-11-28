@@ -112,11 +112,13 @@ final class UsageError
             UsageErrorKind::MissingOption => isset($p['env']) && is_string($p['env'])
                 ? sprintf('required option "%s" is missing (or set %s)', $p['option'], $p['env'])
                 : sprintf('required option "%s" is missing', $p['option']),
-            UsageErrorKind::MissingRequirement => sprintf('option "%s" requires "%s"', $p['option'], $p['requires']),
+            UsageErrorKind::MissingRequirement => sprintf('option "%s"%s requires "%s"', $p['option'], $from, $p['requires']),
             UsageErrorKind::ConflictingOptions => sprintf(
-                'options "%s" and "%s" cannot be used together',
+                'options "%s"%s and "%s"%s cannot be used together',
                 $p['option'],
+                $from,
                 $p['other'],
+                isset($p['otherEnv']) && is_string($p['otherEnv']) ? sprintf(' (from %s)', $p['otherEnv']) : '',
             ),
             UsageErrorKind::TooFewArguments => sprintf(
                 '"%s" expects at least %d %s, got %d',
