@@ -1,0 +1,51 @@
+.TH "CANDY\-CODE" 1 "" "candy\-code" "User Commands"
+.SH NAME
+candy\-code \- An agentic coding assistant.
+.SH SYNOPSIS
+.B candy\-code
+[options] <command>
+.SH "OPTIONS"
+.TP
+\fB\-v\fR, \fB\-\-verbose\fR...
+Print more detail
+.TP
+\fB\-\-json\fR
+Emit JSON
+.TP
+\fB\-\-tag\fR \fITAG\fR...
+Attach a tag
+.SH "MODEL"
+.TP
+\fB\-m\fR, \fB\-\-model\fR \fIMODEL\fR
+Model to use
+.br
+Environment: CANDY_CODE_MODEL.
+.TP
+\fB\-\-effort\fR \fIEFFORT\fR
+Reasoning effort
+.br
+Default: low. Possible values: low, high.
+.SH COMMANDS
+.TP
+\fBcandy\-code run\fR [options] \-\-max\-turns <MAX_TURNS> <arg>
+Run one prompt
+.RS
+.TP
+\fB\-\-max\-turns\fR \fIMAX_TURNS\fR
+Turn limit
+.br
+Required.
+.RE
+.TP
+\fBcandy\-code config\fR [options] <command>
+Read settings
+.TP
+\fBcandy\-code config get\fR [options] <arg>
+Print one setting
+.TP
+\fBcandy\-code doctor\fR [options] [<arg>...]
+Check the install's health
+.SH ENVIRONMENT
+.TP
+.B CANDY_CODE_MODEL
+Used for \-\-model of candy\-code when it is not given.
