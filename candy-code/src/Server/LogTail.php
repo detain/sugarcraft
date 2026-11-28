@@ -60,16 +60,27 @@ final class LogTail
      * blank lines kept and counted, a carriage return kept on its line, the
      * window's first (possibly partial) line dropped when the file outruns
      * it, the offset taken from the handle that read the window, and an
-     * unopenable path answering no lines at offset 0. Both callers lstat-check
-     * a regular file and ask for at least one line first, so the window's
-     * own refusal of a symlink, fifo or directory, and of a negative count,
-     * never reaches them.
+     * unopenable path answering no lines at offset 0.
+     *
+     * The public surface is kept as it was before the read moved onto the
+     * window, for direct callers that do not pre-check: $count is applied
+     * as `array_slice($lines, -$count)` over every line in the window, so 0
+     * answers every line and a negative count drops that many from the
+     * front instead of throwing, and a symlink at $path is followed to its
+     * target (the window itself refuses one by lstat). Both current callers
+     * lstat-check a regular file and ask for at least one line first, so
+     * neither difference reaches them.
      *
      * @return array{0: list<string>, 1: int}
      */
     public static function tail(string $path, int $count): array
     {
-        return LogTailWindow::new($path)->withWindowBytes(self::WINDOW_BYTES)->lines($count);
+        $target = \realpath($path);
+        [$lines, $offset] = LogTailWindow::new($target === false ? $path : $target)
+            ->withWindowBytes(self::WINDOW_BYTES)
+            ->lines(\PHP_INT_MAX);
+
+        return [\array_slice($lines, -$count), $offset];
     }
 
     /**
