@@ -442,6 +442,100 @@ final class CommandSpecParseTest extends TestCase
         self::assertSame(['app', 'run'], $error->command());
     }
 
+    public function testNonPersistentRequiredParentOptionDoesNotFailTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('token')->withRequired())
+            ->withSubcommand(CommandSpec::new('run'));
+
+        self::assertSame(UsageErrorKind::MissingOption, $this->usageError($spec, [])->kind());
+        $parsed = $this->ok($spec, ['run']);
+        self::assertSame(['app', 'run'], $parsed->command());
+        self::assertNull($parsed->value('token'));
+        self::assertNull($parsed->source('token'));
+    }
+
+    public function testNonPersistentParentEnvDoesNotReachTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('model')->withEnv('APP_MODEL'))
+            ->withOption(Option::flag('json')->withEnv('APP_JSON'))
+            ->withSubcommand(CommandSpec::new('run'));
+        $env = ['APP_MODEL' => 'gpt', 'APP_JSON' => '1'];
+
+        $root = $this->ok($spec, [], $env);
+        self::assertSame('gpt', $root->value('model'));
+        self::assertTrue($root->value('json'));
+
+        $parsed = $this->ok($spec, ['run'], $env);
+        self::assertNull($parsed->value('model'));
+        self::assertNull($parsed->source('model'));
+        self::assertFalse($parsed->value('json'));
+        self::assertFalse($parsed->has('json'));
+    }
+
+    public function testNonPersistentParentEnvDoesNotFailTheSubcommandWhenInvalid(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('count')->withType(ValueType::Int)->withEnv('APP_COUNT'))
+            ->withSubcommand(CommandSpec::new('run'));
+
+        self::assertSame(UsageErrorKind::InvalidValue, $this->usageError($spec, [], ['APP_COUNT' => 'x'])->kind());
+        self::assertNull($this->ok($spec, ['run'], ['APP_COUNT' => 'x'])->value('count'));
+    }
+
+    public function testNonPersistentParentDefaultDoesNotReachTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('effort')->withDefault('low'))
+            ->withOption(Option::flag('color')->withDefault(true))
+            ->withSubcommand(CommandSpec::new('run'));
+
+        self::assertSame('low', $this->ok($spec, [])->value('effort'));
+
+        $parsed = $this->ok($spec, ['run']);
+        self::assertNull($parsed->value('effort'));
+        self::assertNull($parsed->source('effort'));
+        self::assertFalse($parsed->value('color'));
+        self::assertNull($parsed->source('color'));
+    }
+
+    public function testNonPersistentParentEnvDoesNotSatisfyAParentRequirementAtTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('key'))
+            ->withOption(Option::value('cert')->withEnv('APP_CERT'))
+            ->requires('key', 'cert')
+            ->withSubcommand(CommandSpec::new('run'));
+
+        // Typed at the root's level, --key is still checked at the leaf, but
+        // the root-only APP_CERT no longer counts for --cert there.
+        $this->ok($spec, ['--key', 'k'], ['APP_CERT' => 'c']);
+        $error = $this->usageError($spec, ['--key', 'k', 'run'], ['APP_CERT' => 'c']);
+        self::assertSame(UsageErrorKind::MissingRequirement, $error->kind());
+        $this->ok($spec, ['--key', 'k', '--cert', 'c', 'run']);
+    }
+
+    public function testPersistentParentOptionCarriesRequiredEnvAndDefaultIntoTheSubcommand(): void
+    {
+        $spec = CommandSpec::new('app')
+            ->withOption(Option::value('token')->withRequired()->withPersistent())
+            ->withOption(Option::value('model')->withEnv('APP_MODEL')->withPersistent())
+            ->withOption(Option::value('effort')->withDefault('low')->withPersistent())
+            ->withSubcommand(CommandSpec::new('run'));
+
+        $missing = $this->usageError($spec, ['run']);
+        self::assertSame(UsageErrorKind::MissingOption, $missing->kind());
+        self::assertSame(['app', 'run'], $missing->command());
+
+        $parsed = $this->ok($spec, ['run', '--token', 't'], ['APP_MODEL' => 'gpt']);
+        self::assertSame('t', $parsed->value('token'));
+        self::assertSame('gpt', $parsed->value('model'));
+        self::assertSame(ValueSource::Env, $parsed->source('model'));
+        self::assertSame('low', $parsed->value('effort'));
+        self::assertSame(ValueSource::Default, $parsed->source('effort'));
+    }
+
     public function testCommandWithSubcommandsAndArgumentsTakesUnknownWordAsArgument(): void
     {
         $spec = CommandSpec::new('app')->withSubcommand(CommandSpec::new('run'))->withMaxArguments(1);

@@ -168,6 +168,11 @@ final class SpecParser
     ): ParsedArgs|UsageError {
         $options = self::pathOptions($path);
         self::assertRules($path, $options);
+        // The leaf's parse: its own options plus persistent ancestors. A
+        // non-persistent ancestor option keeps only what argv typed at its
+        // own command's level; its env, default and withRequired() stop at
+        // the subcommand, as only withPersistent() options carry into it.
+        [$leafOptions] = self::visible($path);
 
         $suppressed = [];
         foreach ($path as $spec) {
@@ -192,6 +197,11 @@ final class SpecParser
                     default => $occurrences[count($occurrences) - 1],
                 };
                 $sources[$name] = ValueSource::Argv;
+                continue;
+            }
+
+            if (!isset($leafOptions[$name])) {
+                $values[$name] = self::emptyValue($option);
                 continue;
             }
 
@@ -226,12 +236,7 @@ final class SpecParser
                 $sources[$name] = ValueSource::Default;
                 continue;
             }
-            $values[$name] = match (true) {
-                !$option->takesValue() && $option->repeatable() => 0,
-                !$option->takesValue() => false,
-                $option->repeatable() => [],
-                default => null,
-            };
+            $values[$name] = self::emptyValue($option);
         }
 
         $present = static fn (string $name): bool => ($sources[$name] ?? null) === ValueSource::Argv
@@ -258,7 +263,7 @@ final class SpecParser
             }
         }
 
-        foreach ($options as $option) {
+        foreach ($leafOptions as $option) {
             if ($option->required() && !$present($option->name())) {
                 // A conflict set silenced this env variable: telling the user
                 // to set it would be wrong, since it already is.
@@ -404,6 +409,17 @@ final class SpecParser
                 ));
             }
         }
+    }
+
+    /** The value of an option nothing supplied, in the shape argv would give it. */
+    private static function emptyValue(Option $option): mixed
+    {
+        return match (true) {
+            !$option->takesValue() && $option->repeatable() => 0,
+            !$option->takesValue() => false,
+            $option->repeatable() => [],
+            default => null,
+        };
     }
 
     /**
