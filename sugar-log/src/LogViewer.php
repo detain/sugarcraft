@@ -16,8 +16,8 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
- * A TEA log viewer: the newest records of a log file, through a
- * {@see LogFilter}, following the file as it grows.
+ * A TEA log viewer: the records of a log file a {@see LogFilter} keeps,
+ * following the file as it grows.
  *
  * ```php
  * $viewer = LogViewer::new(LogReader::new('/var/log/app.log', LogFormat::Json))
@@ -26,9 +26,9 @@ use SugarCraft\Style\Style;
  * ```
  *
  * Reading the file is a side effect, so it only happens inside a Cmd:
- * {@see init()} reads the tail at once and starts the viewer's one follow
+ * {@see init()} reads at once and starts the viewer's one follow
  * chain. The chain runs for the viewer's whole life: every
- * {@see tick()} interval it reads the tail if the viewer follows and only
+ * {@see tick()} interval it reads if the viewer follows and only
  * waits if it does not, so a viewer resumed or pointed at another file with
  * a setter picks the change up at the next tick without any Cmd from the
  * caller, as long as it follows: a paused viewer keeps the records it holds
@@ -37,20 +37,21 @@ use SugarCraft\Style\Style;
  * renders the records it already holds, with the last read's error, if
  * any, on its bottom row.
  *
- * Each read replaces the held records with the file's last
- * {@see withTailSize()} records rather than appending a diff, so a replace
- * needs no guess about where the old tail ended: two identical lines in a
- * row, a truncated file and a rotated one all come out exactly as the file
- * reads. The viewer is a window on the end of the file, not a log of every
- * line: while fewer than tailSize lines arrive between two reads, new lines
- * land below the older ones as an append would. When more arrive — a burst
- * within one interval, or the lines written while the viewer was paused or
- * before a {@see withReader()} — the next read holds only the newest
- * tailSize, and the older new lines are never shown. Nothing marks that gap;
- * size the tail above the lines one interval can bring.
+ * Reads go through the filter. The first read takes the last
+ * {@see withTailSize()} records the filter keeps, scanning back through the
+ * file as far as it takes to find them, so matches far from the end show
+ * too. Every later read resumes from a {@see LogCursor} where the one before
+ * stopped and appends every matching record written since: a burst within
+ * one interval, or the lines written while the viewer was paused, all land
+ * below the older ones, none skipped. The viewer holds at most
+ * {@see withMaxRecords()} records, dropping the oldest first. A line still
+ * missing its newline waits for it. A truncated or replaced file starts over
+ * from its tail, as does the next read after {@see withReader()},
+ * {@see withFilter()} or a failed read.
  *
- * The filter is applied at render time, so a filter change re-renders the
- * records already held without touching the file.
+ * The filter is also applied at render time, so a stricter filter narrows
+ * the records already held at once; the next read, from the tail again,
+ * brings back the records a looser filter now keeps.
  *
  * Keys: `f` toggles follow. Every other message is ignored.
  *
@@ -68,8 +69,11 @@ final class LogViewer implements Model
     /** How long, in seconds, a following viewer waits between reads unless told otherwise. */
     public const DEFAULT_INTERVAL = 1.0;
 
-    /** How many records each read takes from the end of the file unless told otherwise. */
+    /** How many matching records the first read takes from the end of the file unless told otherwise. */
     public const DEFAULT_TAIL_SIZE = 500;
+
+    /** How many records the viewer holds, at most, unless told otherwise. */
+    public const DEFAULT_MAX_RECORDS = 10_000;
 
     /** Rows {@see view()} renders unless told otherwise. */
     public const DEFAULT_HEIGHT = 10;
@@ -77,12 +81,13 @@ final class LogViewer implements Model
     private static int $nextId = 0;
 
     /**
-     * @param list<LogRecord>   $records     The newest records the last read found, unfiltered, oldest first.
+     * @param list<LogRecord>   $records     The records read so far that the filter kept then, oldest first, at most $maxRecords.
+     * @param ?LogCursor        $cursor      Where the next read resumes; null reads from the tail.
      * @param ?int              $width       Columns per row; null leaves rows unpadded and unclipped.
      * @param array<int, Style> $levelStyles Row style per Level->value.
      * @param ?string           $error       Why the last read failed; null after a good read.
      * @param int               $id          Routes this viewer's {@see LogTailMsg}s back to it.
-     * @param int               $generation  Bumped when follow toggles or the reader changes, so a read issued before has its records dropped.
+     * @param int               $generation  Bumped when follow toggles or the reader or filter changes, so a read issued before has its records dropped.
      */
     private function __construct(
         public readonly LogReader $reader,
@@ -91,6 +96,8 @@ final class LogViewer implements Model
         public readonly bool $follow,
         public readonly float $interval,
         public readonly int $tailSize,
+        public readonly int $maxRecords,
+        public readonly ?LogCursor $cursor,
         public readonly int $height,
         public readonly ?int $width,
         public readonly bool $showTimestamps,
@@ -117,6 +124,8 @@ final class LogViewer implements Model
             follow: true,
             interval: self::DEFAULT_INTERVAL,
             tailSize: self::DEFAULT_TAIL_SIZE,
+            maxRecords: self::DEFAULT_MAX_RECORDS,
+            cursor: null,
             height: self::DEFAULT_HEIGHT,
             width: null,
             showTimestamps: false,
@@ -158,12 +167,7 @@ final class LogViewer implements Model
             if ($msg->viewerId !== $this->id) {
                 return [$this, null];
             }
-            $next = $this;
-            if ($msg->generation === $this->generation) {
-                $next = $msg->error === null
-                    ? $this->mutate(['records' => $msg->records, 'error' => null])
-                    : $this->mutate(['error' => $msg->error]);
-            }
+            $next = $msg->generation === $this->generation ? $this->taking($msg) : $this;
 
             // Only the chain's own read schedules the next tick, so the chain
             // outlives a dropped read and a refresh() never forks a second
@@ -219,7 +223,7 @@ final class LogViewer implements Model
     }
 
     /**
-     * A Cmd that reads the tail now and hands it back as a {@see LogTailMsg},
+     * A Cmd that reads now and hands the result back as a {@see LogTailMsg},
      * without waiting for the next tick: after {@see withReader()} or
      * {@see withFollow()} it catches up at once instead of an interval later.
      * It is a one-off read and never starts a second follow chain.
@@ -254,20 +258,27 @@ final class LogViewer implements Model
     }
 
     /**
-     * Read another file. Reads of the old one in flight are dropped; a
-     * following viewer's chain reads the new one at its next tick, or issue
+     * Read another file, from its tail. Reads of the old one in flight are
+     * dropped; a following viewer's chain reads the new one at its next tick, or issue
      * {@see refresh()} to read it at once. A paused viewer reads nothing on a
      * tick, so it keeps showing the old file's records until it resumes or a
      * {@see refresh()} reads the new one.
      */
     public function withReader(LogReader $reader): self
     {
-        return $this->mutate(['reader' => $reader, 'generation' => $this->generation + 1]);
+        return $this->mutate(['reader' => $reader, 'cursor' => null, 'generation' => $this->generation + 1]);
     }
 
+    /**
+     * Keep only the records $filter matches. The held records are narrowed
+     * at once; reads in flight are dropped, and the next read starts over
+     * from the tail through $filter, so a looser filter brings back the
+     * records the old one left out. A paused viewer reads nothing on a tick,
+     * so issue {@see refresh()} for that read while paused.
+     */
     public function withFilter(LogFilter $filter): self
     {
-        return $this->mutate(['filter' => $filter]);
+        return $this->mutate(['filter' => $filter, 'cursor' => null, 'generation' => $this->generation + 1]);
     }
 
     /**
@@ -297,12 +308,10 @@ final class LogViewer implements Model
     }
 
     /**
-     * How many records each read takes from the end of the file. A strict
-     * filter shows only the matches among them, so size it for the filter.
-     * Each read replaces what is held, so when more than $records lines
-     * arrive between two reads (a burst, or a pause) only the newest $records
-     * are ever shown and the rest are skipped without a mark; size it above
-     * the lines one interval can bring.
+     * How many matching records a read from the tail takes: the first read,
+     * and the one after a reader or filter change, a failed read or a
+     * truncated file. Later reads append every matching record written since,
+     * however many.
      *
      * @throws \InvalidArgumentException When $records is less than one.
      */
@@ -313,6 +322,20 @@ final class LogViewer implements Model
         }
 
         return $this->mutate(['tailSize' => $records]);
+    }
+
+    /**
+     * The most records the viewer holds; past it the oldest are dropped.
+     *
+     * @throws \InvalidArgumentException When $records is less than one.
+     */
+    public function withMaxRecords(int $records): self
+    {
+        if ($records < 1) {
+            throw new \InvalidArgumentException(Lang::t('viewer.not_positive', ['name' => 'maxRecords', 'value' => (string) $records]));
+        }
+
+        return $this->mutate(['maxRecords' => $records, 'records' => \array_slice($this->records, -$records)]);
     }
 
     /** @throws \InvalidArgumentException When $rows is less than one. */
@@ -373,21 +396,50 @@ final class LogViewer implements Model
         return $this->mutate(['levelStyles' => $styles->levels]);
     }
 
-    /** A Cmd that reads the tail when it runs, not when it is built. */
+    /** A Cmd that reads on from the cursor when it runs, not when it is built. */
     private function read(bool $chained): \Closure
     {
         $reader = $this->reader;
+        $filter = $this->filter;
+        $from = $this->cursor;
         $tailSize = $this->tailSize;
+        $maxRecords = $this->maxRecords;
         $id = $this->id;
         $generation = $this->generation;
 
-        return static function () use ($reader, $tailSize, $id, $generation, $chained): Msg {
+        return static function () use ($reader, $filter, $from, $tailSize, $maxRecords, $id, $generation, $chained): Msg {
             try {
-                return new LogTailMsg($id, $generation, $reader->tail($tailSize), null, $chained);
+                $chunk = $reader->follow($from, $tailSize, $filter, $maxRecords);
             } catch (\RuntimeException $e) {
-                return new LogTailMsg($id, $generation, [], $e->getMessage(), $chained);
+                return new LogTailMsg($id, $generation, [], $e->getMessage(), $chained, $from);
             }
+
+            return new LogTailMsg($id, $generation, $chunk->records, null, $chained, $from, $chunk->cursor, $chunk->fresh);
         };
+    }
+
+    /** Folds in a read of the current generation. */
+    private function taking(LogTailMsg $msg): self
+    {
+        if ($msg->error !== null) {
+            // The file may come back as another file: start over from its tail.
+            return $this->mutate(['error' => $msg->error, 'cursor' => null]);
+        }
+        if ($msg->fresh) {
+            $records = $msg->records;
+        } elseif ($this->cursor !== null && $this->cursor->equals($msg->from)) {
+            $records = [...$this->records, ...$msg->records];
+        } else {
+            // Resumed from a cursor already read past (a refresh beside a
+            // tick): its lines are held already.
+            return $this;
+        }
+
+        return $this->mutate([
+            'records' => \array_slice($records, -$this->maxRecords),
+            'cursor' => $msg->cursor,
+            'error' => null,
+        ]);
     }
 
     private function row(LogRecord $record): string

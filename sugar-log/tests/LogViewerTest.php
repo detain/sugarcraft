@@ -145,6 +145,8 @@ final class LogViewerTest extends TestCase
         self::assertSame([], $viewer->records);
         self::assertSame(LogViewer::DEFAULT_INTERVAL, $viewer->interval);
         self::assertSame(LogViewer::DEFAULT_TAIL_SIZE, $viewer->tailSize);
+        self::assertSame(LogViewer::DEFAULT_MAX_RECORDS, $viewer->maxRecords);
+        self::assertNull($viewer->cursor);
         self::assertSame(LogViewer::DEFAULT_HEIGHT, $viewer->height);
         self::assertNull($viewer->width);
         self::assertNull($viewer->error);
@@ -253,7 +255,7 @@ final class LogViewerTest extends TestCase
         self::assertSame(['p', 'q'], self::messages($after->records));
     }
 
-    public function testEachReadTakesAtMostTheTailSize(): void
+    public function testTheFirstReadTakesAtMostTheTailSize(): void
     {
         $path = $this->file('app.log', self::json('INFO', 'a') . self::json('INFO', 'b') . self::json('INFO', 'c'));
         [$viewer] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json))->withTailSize(2));
@@ -261,22 +263,86 @@ final class LogViewerTest extends TestCase
         self::assertSame(['b', 'c'], self::messages($viewer->records));
     }
 
-    public function testABurstLargerThanTheTailSizeShowsOnlyTheNewestRecords(): void
+    public function testABurstLargerThanTheTailSizeIsAppendedWhole(): void
     {
         $path = $this->file('app.log', self::json('INFO', 'old'));
         [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json))->withTailSize(3));
         self::assertInstanceOf(\Closure::class, $tick);
 
-        // Five lines in one interval outrun a tail of three: the read is a
-        // window on the end of the file, so n1 and n2 are never held.
+        // Five lines in one interval outrun a tail of three: the read resumes
+        // where the last one stopped, so none of them is skipped.
         foreach (['n1', 'n2', 'n3', 'n4', 'n5'] as $msg) {
             \file_put_contents($path, self::json('INFO', $msg), \FILE_APPEND);
         }
         [$next] = $viewer->update(self::chainRead($viewer, $tick));
 
         self::assertInstanceOf(LogViewer::class, $next);
-        self::assertSame(['n3', 'n4', 'n5'], self::messages($next->records));
-        self::assertNull($next->error, 'the skipped lines are not reported as an error');
+        self::assertSame(['old', 'n1', 'n2', 'n3', 'n4', 'n5'], self::messages($next->records));
+        self::assertNull($next->error);
+    }
+
+    public function testTheLinesWrittenWhilePausedAreAllAppendedOnResume(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'old'));
+        [$viewer] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json))->withTailSize(2));
+        [$paused] = $viewer->update(self::f());
+
+        $written = [];
+        for ($i = 0; $i < 50; ++$i) {
+            $written[] = 'p' . $i;
+            \file_put_contents($path, self::json('INFO', 'p' . $i), \FILE_APPEND);
+        }
+        [$resumed, $read] = $paused->update(self::f());
+        self::assertInstanceOf(\Closure::class, $read);
+        [$after] = $resumed->update($read());
+
+        self::assertSame(['old', ...$written], self::messages($after->records));
+    }
+
+    public function testTheViewerHoldsAtMostMaxRecordsDroppingTheOldest(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'a') . self::json('INFO', 'b'));
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json))->withMaxRecords(3));
+        self::assertInstanceOf(\Closure::class, $tick);
+
+        foreach (['c', 'd', 'e'] as $msg) {
+            \file_put_contents($path, self::json('INFO', $msg), \FILE_APPEND);
+        }
+        [$next] = $viewer->update(self::chainRead($viewer, $tick));
+
+        self::assertSame(['c', 'd', 'e'], self::messages($next->records));
+        self::assertSame(['d', 'e'], self::messages($next->withMaxRecords(2)->records), 'lowering the cap trims what is held');
+    }
+
+    public function testALineStillMissingItsNewlineWaitsForIt(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'one') . '{"level":"INFO","msg":"tw');
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json)));
+        self::assertInstanceOf(\Closure::class, $tick);
+        self::assertSame(['one'], self::messages($viewer->records));
+
+        \file_put_contents($path, 'o"}' . "\n", \FILE_APPEND);
+        [$next] = $viewer->update(self::chainRead($viewer, $tick));
+
+        self::assertSame(['one', 'two'], self::messages($next->records), 'the line is taken once, whole');
+    }
+
+    public function testARefreshBesideATickNeverAppendsALineTwice(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'one'));
+        [$viewer, $tick] = self::started(LogViewer::new(LogReader::new($path, LogFormat::Json)));
+        self::assertInstanceOf(\Closure::class, $tick);
+
+        \file_put_contents($path, self::json('INFO', 'two'), \FILE_APPEND);
+        $refreshed = $viewer->refresh()();
+        $chained = self::chainRead($viewer, $tick);
+        self::assertInstanceOf(LogTailMsg::class, $refreshed);
+
+        [$once] = $viewer->update($refreshed);
+        [$still, $next] = $once->update($chained);
+
+        self::assertSame(['one', 'two'], self::messages($still->records));
+        self::assertInstanceOf(\Closure::class, $next, 'the chain goes on');
     }
 
     public function testFKeyPausesFollowAndDropsTheReadAlreadyInFlight(): void
@@ -523,6 +589,45 @@ final class LogViewerTest extends TestCase
         self::assertCount(4, $viewer->visibleRecords(), 'the unfiltered model is untouched');
     }
 
+    public function testAFilteredViewerFindsMatchesFarBeforeTheTailWindow(): void
+    {
+        $lines = '';
+        for ($i = 1; $i <= 10_000; ++$i) {
+            $lines .= $i >= 100 && $i <= 102 ? self::json('ERROR', 'e' . $i) : self::json('INFO', 'i' . $i);
+        }
+        $path = $this->file('app.log', $lines);
+        $viewer = LogViewer::new(LogReader::new($path, LogFormat::Json))
+            ->withFilter(LogFilter::new()->withMinLevel(Level::Error))
+            ->withColor(false)
+            ->withHeight(3);
+
+        [$viewer, $tick] = self::started($viewer);
+        self::assertInstanceOf(\Closure::class, $tick);
+
+        self::assertSame(['e100', 'e101', 'e102'], self::messages($viewer->visibleRecords()));
+        self::assertSame("[ERR] e100\n[ERR] e101\n[ERR] e102", $viewer->view());
+
+        \file_put_contents($path, self::json('INFO', 'noise') . self::json('ERROR', 'late'), \FILE_APPEND);
+        [$after] = $viewer->update(self::chainRead($viewer, $tick));
+        self::assertSame(['e100', 'e101', 'e102', 'late'], self::messages($after->records), 'only matches are held');
+    }
+
+    public function testALooserFilterReadsTheTailAgainThroughIt(): void
+    {
+        $path = $this->file('app.log', self::json('INFO', 'a') . self::json('ERROR', 'b') . self::json('INFO', 'c'));
+        $viewer = LogViewer::new(LogReader::new($path, LogFormat::Json))->withFilter(LogFilter::new()->withMinLevel(Level::Error));
+        [$viewer, $tick] = self::started($viewer);
+        self::assertInstanceOf(\Closure::class, $tick);
+        self::assertSame(['b'], self::messages($viewer->records));
+
+        $loose = $viewer->withFilter(LogFilter::new());
+        self::assertNull($loose->cursor);
+        self::assertSame($viewer->generation + 1, $loose->generation, 'reads through the old filter are dropped');
+        [$after] = $loose->update(self::chainRead($loose, $tick));
+
+        self::assertSame(['a', 'b', 'c'], self::messages($after->records));
+    }
+
     public function testNewTakesAFilter(): void
     {
         $filter = LogFilter::new()->withMinLevel(Level::Error);
@@ -681,6 +786,7 @@ final class LogViewerTest extends TestCase
         yield 'withFollow' => [static fn (LogViewer $v): LogViewer => $v->withFollow(false), 'follow'];
         yield 'withInterval' => [static fn (LogViewer $v): LogViewer => $v->withInterval(2.5), 'interval'];
         yield 'withTailSize' => [static fn (LogViewer $v): LogViewer => $v->withTailSize(7), 'tailSize'];
+        yield 'withMaxRecords' => [static fn (LogViewer $v): LogViewer => $v->withMaxRecords(7), 'maxRecords'];
         yield 'withHeight' => [static fn (LogViewer $v): LogViewer => $v->withHeight(3), 'height'];
         yield 'withWidth' => [static fn (LogViewer $v): LogViewer => $v->withWidth(50), 'width'];
         yield 'withShowTimestamps' => [static fn (LogViewer $v): LogViewer => $v->withShowTimestamps(true), 'showTimestamps'];
@@ -726,6 +832,7 @@ final class LogViewerTest extends TestCase
         yield 'negative interval' => [static fn (LogViewer $v): mixed => $v->withInterval(-1.0)];
         yield 'NaN interval' => [static fn (LogViewer $v): mixed => $v->withInterval(\NAN)];
         yield 'zero tail size' => [static fn (LogViewer $v): mixed => $v->withTailSize(0)];
+        yield 'zero max records' => [static fn (LogViewer $v): mixed => $v->withMaxRecords(0)];
         yield 'zero height' => [static fn (LogViewer $v): mixed => $v->withHeight(0)];
         yield 'zero width' => [static fn (LogViewer $v): mixed => $v->withWidth(0)];
     }

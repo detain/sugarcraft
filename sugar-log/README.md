@@ -475,7 +475,13 @@ Untrusted data can never forge or reshape a record:
 `LogReader::new($path, $format)->tail($n)` returns the last `$n` records as
 `LogRecord` values, oldest first. It reads backwards from the end of the file
 in fixed chunks, so tailing a large log costs the lines asked for, not the
-file size. `LogFormat::Json` and `LogFormat::Logfmt` recover the level,
+file size; `tail($n, $filter)` returns the last `$n` records a `LogFilter`
+keeps, reading back as far as it takes to find them. `follow($cursor, $n,
+$filter, $limit)` reads on from a `LogCursor`: the matching records written
+since it (at most the newest `$limit`), or, with no cursor or when the file
+was truncated or replaced, the last `$n` from the tail (`$chunk->fresh` says
+which). It takes complete lines only, so a line still being written is left
+for the next read, and the `LogChunk` it returns carries the next cursor. `LogFormat::Json` and `LogFormat::Logfmt` recover the level,
 message, time, prefix, caller and context fields; `LogFormat::Text` keeps the
 line as the message and lifts only the level: the short label the text
 formatter writes (`WRN`), with any color stripped first, looked for where the
@@ -517,21 +523,22 @@ Reading across rotation is not part of the reader yet.
 
 `LogViewer::new($reader, $filter)` is a sugar-core `Model` that shows the
 newest records of a log through a `LogFilter` and follows the file as it
-grows. The file is only read inside Cmds: `init()` reads the tail at once and
+grows. The file is only read inside Cmds: `init()` reads at once and
 starts the viewer's one follow chain, a `Cmd::tick` every `withInterval()`
-seconds (`tick()`) that reads the tail when the viewer follows and only waits
+seconds (`tick()`) that reads when the viewer follows and only waits
 when it does not. `refresh()` is a one-off read beside the chain and never
-starts a second one. Each read replaces the held records with the file's last
-`withTailSize()` records, so new lines land below the older ones, repeated
-identical lines all show, and a truncated file reads as it is. The viewer is
-a window on the end of the file, not a record of every line: when more than
-`withTailSize()` lines arrive between two reads (a burst within one interval,
-or the lines written while it was paused or before `withReader()`), the next
-read holds only the newest of them, and the older new lines are never shown,
-with nothing marking the gap. Size the tail above the lines one interval can
-bring. The filter
-applies at render time: `withFilter()` re-renders the records already held
-without reading the file.
+starts a second one. Reads go through the filter: the first takes the last
+`withTailSize()` records the filter keeps, scanning back through the file as
+far as it takes, so a filter for rare errors finds them far from the end.
+Every later read resumes where the one before stopped and appends every
+matching record written since, so a burst within one interval and the lines
+written while the viewer was paused all show, repeated identical lines
+included. The viewer holds at most `withMaxRecords()` records (10,000 by
+default), dropping the oldest. A line still missing its newline waits for it;
+a truncated or replaced file, `withReader()`, `withFilter()` and a failed read
+all start over from the tail. The filter also applies at render time, so a
+stricter `withFilter()` narrows the records already held at once, and the next
+read brings back what a looser one keeps.
 
 `f` toggles follow; `withFollow()` does the same in code. Either one drops
 the reads already in flight, so a paused viewer takes no late read. The chain

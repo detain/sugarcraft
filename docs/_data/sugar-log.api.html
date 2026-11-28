@@ -59,6 +59,23 @@
 <tr><td><code>static restoreTerminal(bool $force = false): void</code></td><td>Restore the terminal to a usable state: exit altscreen and show cursor.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-log-logchunk"><code>LogChunk</code> <small>final readonly class</small></h4>
+<p>What one LogReader::follow() read found.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public array $records, public ?LogCursor $cursor, public bool $fresh)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logcursor"><code>LogCursor</code> <small>final readonly class</small></h4>
+<p>Where a LogReader::follow() read stopped: the byte just past the last complete line it took, in the file it took it from.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $offset, public int $inode)</code></td><td></td></tr>
+<tr><td><code>equals(?self $other): bool</code></td><td>True when $other points at the same byte of the same file.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-log-logfilter"><code>LogFilter</code> <small>final readonly class</small></h4>
 <p>Which LogRecords to keep: <code>LogFilter::new()-&gt;withMinLevel(Level::Warn) -&gt;withField(&#039;svc&#039;, &#039;api&#039;)-&gt;apply($records)</code>.</p>
 <table class="api-table">
@@ -84,7 +101,8 @@
 <tr><td><code>withPath(string $path): self</code></td><td></td></tr>
 <tr><td><code>withFormat(LogFormat $format): self</code></td><td></td></tr>
 <tr><td><code>withPartsOrder(PartsOrder $partsOrder): self</code></td><td>The PartsOrder the text lines were written with; JSON and logfmt ignore it.</td></tr>
-<tr><td><code>tail(int $n): array</code></td><td>The last $n records of the file, oldest first.</td></tr>
+<tr><td><code>tail(int $n, ?LogFilter $filter = null): array</code></td><td>The last $n records of the file, oldest first. With a $filter, the last $n records the filter keeps: the scan goes on back through the file until it has them, so matches far from the end are found too, at the cost of reading back to them.</td></tr>
+<tr><td><code>follow(?LogCursor $from, int $n, ?LogFilter $filter = null, ?int $limit = null): LogChunk</code></td><td>Follow the file from $from: the records written since that cursor, or, with no cursor or when the file was truncated or replaced since it was taken, the last $n records as tail() finds them ($fresh then says to replace rather than extend). Either way only records $filter keeps come back, and the returned cursor resumes the next read.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logrecord"><code>LogRecord</code> <small>final readonly class</small></h4>
@@ -98,11 +116,11 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logtailmsg"><code>LogTailMsg</code> <small>final readonly class</small></h4>
-<p>The result of one LogViewer read: the file&#039;s last records, as the viewer&#039;s read Cmd found them when it ran.</p>
+<p>The result of one LogViewer read, as the viewer&#039;s read Cmd found it when it ran: the records the filter keeps that were written since $from ($fresh false: the viewer appends them), or the file&#039;s last matching records ($fresh true: they replace what the viewer holds).</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
 <tbody>
-<tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null, public bool $chained = false)</code></td><td></td></tr>
+<tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null, public bool $chained = false, public ?LogCursor $from = null, public ?LogCursor $cursor = null, public bool $fresh = true)</code></td><td></td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logtickmsg"><code>LogTickMsg</code> <small>final readonly class</small></h4>
@@ -114,7 +132,7 @@
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logviewer"><code>LogViewer</code> <small>final class</small></h4>
-<p>A TEA log viewer: the newest records of a log file, through a LogFilter, following the file as it grows.</p>
+<p>A TEA log viewer: the records of a log file a LogFilter keeps, following the file as it grows.</p>
 <p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
 <table class="api-table">
 <thead><tr><th>Method</th><th>Summary</th></tr></thead>
@@ -124,14 +142,15 @@
 <tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
 <tr><td><code>view(): string</code></td><td>The filtered records that fit, one row each, exactly $height rows. Blank rows fill the space the records leave, after them: a view holding fewer records than its height shows them from the top row, so the newest sits on the bottom row only once the records fill the view.</td></tr>
 <tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
-<tr><td><code>refresh(): \Closure</code></td><td>A Cmd that reads the tail now and hands it back as a LogTailMsg, without waiting for the next tick: after withReader() or withFollow() it catches up at once instead of an interval later. It is a one-off read and never starts a second follow chain.</td></tr>
+<tr><td><code>refresh(): \Closure</code></td><td>A Cmd that reads now and hands the result back as a LogTailMsg, without waiting for the next tick: after withReader() or withFollow() it catches up at once instead of an interval later. It is a one-off read and never starts a second follow chain.</td></tr>
 <tr><td><code>tick(): \Closure</code></td><td>A Cmd that hands back a LogTickMsg after $interval seconds: one beat of the follow chain init() starts. The viewer decides on taking the tick whether to read, so nothing is read here. The chain reschedules itself; issuing this yourself starts a second one.</td></tr>
 <tr><td><code>visibleRecords(): array</code></td><td>The held records the filter keeps, oldest first — every record the viewer could show, before the height cut.</td></tr>
-<tr><td><code>withReader(LogReader $reader): self</code></td><td>Read another file. Reads of the old one in flight are dropped; a following viewer&#039;s chain reads the new one at its next tick, or issue refresh() to read it at once. A paused viewer reads nothing on a tick, so it keeps showing the old file&#039;s records until it resumes or a refresh() reads the new one.</td></tr>
-<tr><td><code>withFilter(LogFilter $filter): self</code></td><td></td></tr>
+<tr><td><code>withReader(LogReader $reader): self</code></td><td>Read another file, from its tail. Reads of the old one in flight are dropped; a following viewer&#039;s chain reads the new one at its next tick, or issue refresh() to read it at once. A paused viewer reads nothing on a tick, so it keeps showing the old file&#039;s records until it resumes or a refresh() reads the new one.</td></tr>
+<tr><td><code>withFilter(LogFilter $filter): self</code></td><td>Keep only the records $filter matches. The held records are narrowed at once; reads in flight are dropped, and the next read starts over from the tail through $filter, so a looser filter brings back the records the old one left out. A paused viewer reads nothing on a tick, so issue refresh() for that read while paused.</td></tr>
 <tr><td><code>withFollow(bool $follow): self</code></td><td>Follow the file or freeze on what is held. A change drops the reads in flight, so a paused viewer takes no late read. The follow chain keeps running while paused without reading, so a resumed viewer reads again at the next tick; issue refresh() to read at once (the <code>f</code> key does). Setting the current value changes nothing.</td></tr>
 <tr><td><code>withInterval(float $seconds): self</code></td><td></td></tr>
-<tr><td><code>withTailSize(int $records): self</code></td><td>How many records each read takes from the end of the file. A strict filter shows only the matches among them, so size it for the filter. Each read replaces what is held, so when more than $records lines arrive between two reads (a burst, or a pause) only the newest $records are ever shown and the rest are skipped without a mark; size it above the lines one interval can bring.</td></tr>
+<tr><td><code>withTailSize(int $records): self</code></td><td>How many matching records a read from the tail takes: the first read, and the one after a reader or filter change, a failed read or a truncated file. Later reads append every matching record written since, however many.</td></tr>
+<tr><td><code>withMaxRecords(int $records): self</code></td><td>The most records the viewer holds; past it the oldest are dropped.</td></tr>
 <tr><td><code>withHeight(int $rows): self</code></td><td></td></tr>
 <tr><td><code>withWidth(?int $columns): self</code></td><td>Pad and clip every row to $columns cells; null renders rows at their own width. A clipped row ends in <code>…</code>.</td></tr>
 <tr><td><code>withShowTimestamps(bool $show): self</code></td><td>Show a structured record&#039;s time as <code>[time]</code>. A text line shows as written either way.</td></tr>

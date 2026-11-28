@@ -13,9 +13,13 @@ use SugarCraft\Log\Formatter\TextFormatter;
  * has the lines it needs, so the cost follows the lines asked for, not the
  * file size — tailing a multi-gigabyte log reads a few kilobytes.
  *
+ * {@see follow()} reads on from a {@see LogCursor}, so a follower takes
+ * every line written since its last read, not just the newest few.
+ *
  * Immutable: every with*() returns a new reader through mutate(). Rotation
  * (following a log across a rename to `.1`) is not handled here; it waits on
- * plan decision D6.
+ * plan decision D6. {@see follow()} only notices that the file under the
+ * path was replaced, and starts over from the new file's tail.
  *
  * Original SugarCraft read side: charmbracelet/log has no reader.
  */
@@ -59,7 +63,10 @@ final readonly class LogReader
     }
 
     /**
-     * The last $n records of the file, oldest first.
+     * The last $n records of the file, oldest first. With a $filter, the last
+     * $n records the filter keeps: the scan goes on back through the file
+     * until it has them, so matches far from the end are found too, at the
+     * cost of reading back to them.
      *
      * Blank lines are not records and do not count toward $n. A final line
      * without its newline (a write in flight) is returned like any other —
@@ -71,7 +78,7 @@ final readonly class LogReader
      * @throws \InvalidArgumentException When $n is negative.
      * @throws \RuntimeException         When the path exists but is not a readable regular file.
      */
-    public function tail(int $n): array
+    public function tail(int $n, ?LogFilter $filter = null): array
     {
         if ($n < 0) {
             throw new \InvalidArgumentException(Lang::t('reader.negative_count', ['count' => (string) $n]));
@@ -79,73 +86,226 @@ final readonly class LogReader
         if ($n === 0) {
             return [];
         }
+        $handle = $this->open();
+        if ($handle === null) {
+            return [];
+        }
 
-        return \array_map($this->parse(...), $this->lastLines($n));
+        try {
+            return $this->backwards($handle, (int) (\fstat($handle)['size'] ?? 0), $n, $filter);
+        } finally {
+            \fclose($handle);
+        }
     }
 
     /**
-     * @return list<string> oldest first, blank lines skipped
+     * Follow the file from $from: the records written since that cursor, or,
+     * with no cursor or when the file was truncated or replaced since it was
+     * taken, the last $n records as {@see tail()} finds them ($fresh then
+     * says to replace rather than extend). Either way only records $filter
+     * keeps come back, and the returned cursor resumes the next read.
+     *
+     * Only complete lines are read: a final line still missing its newline
+     * is left for the read after it lands, so it is never taken twice or
+     * torn in two. $limit caps the records a resumed read returns, keeping
+     * the newest, so a reader that fell far behind does not hold them all;
+     * null takes every one.
+     *
+     * @throws \InvalidArgumentException When $n or $limit is negative.
+     * @throws \RuntimeException         When the path exists but is not a readable regular file.
      */
-    private function lastLines(int $n): array
+    public function follow(?LogCursor $from, int $n, ?LogFilter $filter = null, ?int $limit = null): LogChunk
+    {
+        foreach ([$n, $limit ?? 0] as $count) {
+            if ($count < 0) {
+                throw new \InvalidArgumentException(Lang::t('reader.negative_count', ['count' => (string) $count]));
+            }
+        }
+        $handle = $this->open();
+        if ($handle === null) {
+            return new LogChunk([], null, true);
+        }
+
+        try {
+            $stat = \fstat($handle);
+            $inode = (int) ($stat['ino'] ?? 0);
+            $end = self::lineEnd($handle, (int) ($stat['size'] ?? 0));
+            $cursor = new LogCursor($end, $inode);
+
+            // A cursor holds only while the bytes before it are still the
+            // ones it was taken past: same file, not shorter, and a line
+            // still ending there. Anything else starts over from the tail.
+            if ($from !== null && $from->inode === $inode && $from->offset <= $end
+                && self::endsALine($handle, $from->offset)) {
+                return new LogChunk($this->forwards($handle, $from->offset, $end, $filter, $limit), $cursor, false);
+            }
+
+            return new LogChunk($n === 0 ? [] : $this->backwards($handle, $end, $n, $filter), $cursor, true);
+        } finally {
+            \fclose($handle);
+        }
+    }
+
+    /**
+     * @return resource|null null when nothing exists at the path
+     *
+     * @throws \RuntimeException When the path exists but is not a readable regular file.
+     */
+    private function open(): mixed
     {
         \clearstatcache(true, $this->path);
         if (!\file_exists($this->path)) {
-            return [];
+            return null;
         }
         $handle = \is_file($this->path) ? @\fopen($this->path, 'rb') : false;
         if ($handle === false) {
             throw new \RuntimeException(Lang::t('reader.unreadable', ['path' => $this->path]));
         }
 
-        try {
-            $position = (int) (\fstat($handle)['size'] ?? 0);
-            // The unfinished line, as the chunks read so far, newest first.
-            // Only each new chunk is searched for newlines, and the pieces are
-            // joined once the line is complete, so a line many chunks long
-            // costs its length, not its length squared.
-            /** @var list<string> $carry */
-            $carry = [];
-            /** @var list<string> $newestFirst */
-            $newestFirst = [];
-
-            while ($position > 0 && \count($newestFirst) < $n) {
-                $step = \min(self::CHUNK_BYTES, $position);
-                $position -= $step;
-                \fseek($handle, $position);
-                $pieces = \explode("\n", self::readExactly($handle, $step));
-                if (\count($pieces) === 1) {
-                    $carry[] = $pieces[0];
-                    continue;
-                }
-
-                $carry[] = \array_pop($pieces);
-                self::collect(\implode('', \array_reverse($carry)), $newestFirst);
-                // The first piece may continue into bytes not read yet, so it
-                // waits for the next step (or for the start of the file).
-                $carry = [\array_shift($pieces)];
-                for ($i = \count($pieces) - 1; $i >= 0 && \count($newestFirst) < $n; --$i) {
-                    self::collect($pieces[$i], $newestFirst);
-                }
-            }
-
-            if ($position === 0 && \count($newestFirst) < $n) {
-                self::collect(\implode('', \array_reverse($carry)), $newestFirst);
-            }
-        } finally {
-            \fclose($handle);
-        }
-
-        return \array_reverse($newestFirst);
+        return $handle;
     }
 
     /**
-     * @param list<string> $into
+     * The last $n kept records of the bytes before $position, oldest first.
+     *
+     * @param resource $handle
+     * @return list<LogRecord>
      */
-    private static function collect(string $piece, array &$into): void
+    private function backwards(mixed $handle, int $position, int $n, ?LogFilter $filter): array
+    {
+        // The unfinished line, as the chunks read so far, newest first.
+        // Only each new chunk is searched for newlines, and the pieces are
+        // joined once the line is complete, so a line many chunks long
+        // costs its length, not its length squared.
+        /** @var list<string> $carry */
+        $carry = [];
+        /** @var list<LogRecord> $newestFirst */
+        $newestFirst = [];
+
+        while ($position > 0 && \count($newestFirst) < $n) {
+            $step = \min(self::CHUNK_BYTES, $position);
+            $position -= $step;
+            \fseek($handle, $position);
+            $pieces = \explode("\n", self::readExactly($handle, $step));
+            if (\count($pieces) === 1) {
+                $carry[] = $pieces[0];
+                continue;
+            }
+
+            $carry[] = \array_pop($pieces);
+            $this->keep(\implode('', \array_reverse($carry)), $newestFirst, $filter);
+            // The first piece may continue into bytes not read yet, so it
+            // waits for the next step (or for the start of the file).
+            $carry = [\array_shift($pieces)];
+            for ($i = \count($pieces) - 1; $i >= 0 && \count($newestFirst) < $n; --$i) {
+                $this->keep($pieces[$i], $newestFirst, $filter);
+            }
+        }
+
+        if ($position === 0 && \count($newestFirst) < $n) {
+            $this->keep(\implode('', \array_reverse($carry)), $newestFirst, $filter);
+        }
+
+        return \array_slice(\array_reverse($newestFirst), -$n);
+    }
+
+    /**
+     * The kept records of the bytes from $position to $end, oldest first,
+     * at most the newest $limit of them.
+     *
+     * @param resource $handle
+     * @return list<LogRecord>
+     */
+    private function forwards(mixed $handle, int $position, int $end, ?LogFilter $filter, ?int $limit): array
+    {
+        if ($limit === 0) {
+            return [];
+        }
+        \fseek($handle, $position);
+        /** @var list<string> $carry */
+        $carry = [];
+        /** @var list<LogRecord> $records */
+        $records = [];
+
+        while ($position < $end) {
+            $bytes = self::readExactly($handle, \min(self::CHUNK_BYTES, $end - $position));
+            if ($bytes === '') {
+                break; // truncated under us: keep what was read
+            }
+            $position += \strlen($bytes);
+            $pieces = \explode("\n", $bytes);
+            if (\count($pieces) === 1) {
+                $carry[] = $pieces[0];
+                continue;
+            }
+
+            $carry[] = \array_shift($pieces);
+            $this->keep(\implode('', $carry), $records, $filter);
+            $carry = [\array_pop($pieces)];
+            foreach ($pieces as $piece) {
+                $this->keep($piece, $records, $filter);
+            }
+            if ($limit !== null && \count($records) > 2 * $limit) {
+                $records = \array_slice($records, -$limit);
+            }
+        }
+        // $end sits just past a newline, so a carry left over is a line the
+        // file lost under the read: it is not taken.
+
+        return $limit === null ? $records : \array_slice($records, -$limit);
+    }
+
+    /**
+     * The offset just past the last newline before $size: where the complete
+     * lines end. 0 when there is none.
+     *
+     * @param resource $handle
+     */
+    private static function lineEnd(mixed $handle, int $size): int
+    {
+        $position = $size;
+        while ($position > 0) {
+            $step = \min(self::CHUNK_BYTES, $position);
+            $position -= $step;
+            \fseek($handle, $position);
+            $at = \strrpos(self::readExactly($handle, $step), "\n");
+            if ($at !== false) {
+                return $position + $at + 1;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * True when $offset is the start of the file or follows a newline.
+     *
+     * @param resource $handle
+     */
+    private static function endsALine(mixed $handle, int $offset): bool
+    {
+        if ($offset === 0) {
+            return true;
+        }
+        \fseek($handle, $offset - 1);
+
+        return \fread($handle, 1) === "\n";
+    }
+
+    /**
+     * Parses $piece onto $into when it is a line and $filter keeps it.
+     *
+     * @param list<LogRecord> $into
+     */
+    private function keep(string $piece, array &$into, ?LogFilter $filter): void
     {
         $line = \rtrim($piece, "\r");
-        if (\trim($line) !== '') {
-            $into[] = $line;
+        if (\trim($line) === '') {
+            return;
+        }
+        $record = $this->parse($line);
+        if ($filter === null || $filter->matches($record)) {
+            $into[] = $record;
         }
     }
 
