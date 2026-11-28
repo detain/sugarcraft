@@ -97,6 +97,42 @@
 <tr><td><code>field(string $key): mixed</code></td><td>The context entry named $key, or null when absent.</td></tr>
 </tbody>
 </table>
+<h4 id="api-sugarcraft-log-logtailmsg"><code>LogTailMsg</code> <small>final readonly class</small></h4>
+<p>The result of one LogViewer read: the file&#039;s last records, as the viewer&#039;s read Cmd found them when it ran.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logviewer"><code>LogViewer</code> <small>final class</small></h4>
+<p>A TEA log viewer: the newest records of a log file, through a LogFilter, following the file as it grows.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(LogReader $reader, ?LogFilter $filter = null): self</code></td><td>A following viewer over $reader. With no $filter every record shows. Nothing is read until the Cmd from init() runs.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td>The first read, whether or not the viewer follows: a viewer that never read has nothing to show.</td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td>The filtered records that fit, one row each, exactly $height rows: blank rows fill the space the records leave.</td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>refresh(): \Closure</code></td><td>A Cmd that reads the tail now and hands it back as a LogTailMsg. Issue it after withReader() or withFollow(), which drop the reads already in flight.</td></tr>
+<tr><td><code>tick(): ?\Closure</code></td><td>A Cmd that reads the tail after $interval seconds, or null when the viewer does not follow. The read happens when the tick fires, not when the Cmd is built.</td></tr>
+<tr><td><code>visibleRecords(): array</code></td><td>The held records the filter keeps, oldest first — every record the viewer could show, before the height cut.</td></tr>
+<tr><td><code>withReader(LogReader $reader): self</code></td><td>Read another file. Drops reads of the old one in flight; issue refresh() to start again.</td></tr>
+<tr><td><code>withFilter(LogFilter $filter): self</code></td><td></td></tr>
+<tr><td><code>withFollow(bool $follow): self</code></td><td>Follow the file or freeze on what is held. A change drops the reads in flight, so a paused viewer takes no late read and a resumed one never runs two tick chains; issue refresh() after resuming (the <code>f</code> key does). Setting the current value changes nothing.</td></tr>
+<tr><td><code>withInterval(float $seconds): self</code></td><td></td></tr>
+<tr><td><code>withTailSize(int $records): self</code></td><td>How many records each read takes from the end of the file. A strict filter shows only the matches among them, so size it for the filter.</td></tr>
+<tr><td><code>withHeight(int $rows): self</code></td><td></td></tr>
+<tr><td><code>withWidth(?int $columns): self</code></td><td>Pad and clip every row to $columns cells; null renders rows at their own width. A clipped row ends in <code>…</code>.</td></tr>
+<tr><td><code>withShowTimestamps(bool $show): self</code></td><td>Show a structured record&#039;s time as <code>[time]</code>. A text line shows as written either way.</td></tr>
+<tr><td><code>withShowLevel(bool $show): self</code></td><td>Show a structured record&#039;s level as <code>[INF]</code>. A text line shows as written either way.</td></tr>
+<tr><td><code>withScrollToBottom(bool $bottom): self</code></td><td>Show the newest records (true) or the oldest of those held (false) when they overflow the height.</td></tr>
+<tr><td><code>withColor(bool $color): self</code></td><td>Color each row by its level; false renders plain text.</td></tr>
+<tr><td><code>withStyles(Styles $styles): self</code></td><td>Take the level palette from $styles. The styles are read once here, so editing $styles afterwards does not reach this viewer.</td></tr>
+</tbody>
+</table>
 <h4 id="api-sugarcraft-log-logger"><code>Logger</code> <small>final class</small></h4>
 <p>Minimal colorful leveled logger. Mirrors charmbracelet/log&#039;s Logger API.</p>
 <table class="api-table">

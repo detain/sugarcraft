@@ -294,6 +294,7 @@ $log-&gt;info('where am I');</code></pre>
     <tr><td><code>ValueCoercion</code></td><td><code>stringify()</code>, <code>coerce()</code></td><td>Turns arbitrary context values into printable text.</td></tr>
     <tr><td><code>LogReader</code></td><td><code>new($path, $format, $partsOrder)</code>, <code>tail($n)</code>, <code>withPath()</code>, <code>withFormat()</code>, <code>withPartsOrder()</code></td><td>Reads the last records of a JSON, logfmt or text log from its end, without loading the whole file.</td></tr>
     <tr><td><code>LogFilter</code></td><td><code>new()</code>, <code>withMinLevel()</code>, <code>withField()</code>, <code>matches()</code>, <code>apply()</code></td><td>Keeps the <code>LogRecord</code>s that meet a level threshold and field values.</td></tr>
+    <tr><td><code>LogViewer</code></td><td><code>new($reader, $filter)</code>, <code>init()</code>, <code>update()</code>, <code>view()</code>, <code>refresh()</code>, <code>tick()</code>, <code>withFilter()</code>, <code>withFollow()</code>, <code>withHeight()</code>, <code>withWidth()</code></td><td>A TEA model that shows filtered records and follows the file through Cmd ticks; <code>f</code> toggles follow.</td></tr>
     <tr><td><code>LogRecord</code></td><td><code>field()</code>, <code>hasField()</code></td><td>One parsed line: <code>line</code>, <code>level</code>, <code>message</code>, <code>time</code>, <code>prefix</code>, <code>caller</code>, <code>fields</code>.</td></tr>
     </table>
 
@@ -394,6 +395,42 @@ $log-&gt;info('where am I');</code></pre>
 <tr><td><code>__construct(public string $line, public ?Level $level, public string $message, public ?string $time = null, public ?string $prefix = null, public ?string $caller = null, public array $fields = [])</code></td><td></td></tr>
 <tr><td><code>hasField(string $key): bool</code></td><td>True when the record carries a context entry named $key (even a null one).</td></tr>
 <tr><td><code>field(string $key): mixed</code></td><td>The context entry named $key, or null when absent.</td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logtailmsg"><code>LogTailMsg</code> <small>final readonly class</small></h4>
+<p>The result of one LogViewer read: the file&#039;s last records, as the viewer&#039;s read Cmd found them when it ran.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>__construct(public int $viewerId, public int $generation, public array $records, public ?string $error = null)</code></td><td></td></tr>
+</tbody>
+</table>
+<h4 id="api-sugarcraft-log-logviewer"><code>LogViewer</code> <small>final class</small></h4>
+<p>A TEA log viewer: the newest records of a log file, through a LogFilter, following the file as it grows.</p>
+<p>Not listed: the methods of <code>SugarCraft\Core\Concerns\Mutable</code>, a trait declared outside src/.</p>
+<table class="api-table">
+<thead><tr><th>Method</th><th>Summary</th></tr></thead>
+<tbody>
+<tr><td><code>static new(LogReader $reader, ?LogFilter $filter = null): self</code></td><td>A following viewer over $reader. With no $filter every record shows. Nothing is read until the Cmd from init() runs.</td></tr>
+<tr><td><code>init(): ?\Closure</code></td><td>The first read, whether or not the viewer follows: a viewer that never read has nothing to show.</td></tr>
+<tr><td><code>update(Msg $msg): array</code></td><td></td></tr>
+<tr><td><code>view(): string</code></td><td>The filtered records that fit, one row each, exactly $height rows: blank rows fill the space the records leave.</td></tr>
+<tr><td><code>subscriptions(): ?Subscriptions</code></td><td></td></tr>
+<tr><td><code>refresh(): \Closure</code></td><td>A Cmd that reads the tail now and hands it back as a LogTailMsg. Issue it after withReader() or withFollow(), which drop the reads already in flight.</td></tr>
+<tr><td><code>tick(): ?\Closure</code></td><td>A Cmd that reads the tail after $interval seconds, or null when the viewer does not follow. The read happens when the tick fires, not when the Cmd is built.</td></tr>
+<tr><td><code>visibleRecords(): array</code></td><td>The held records the filter keeps, oldest first — every record the viewer could show, before the height cut.</td></tr>
+<tr><td><code>withReader(LogReader $reader): self</code></td><td>Read another file. Drops reads of the old one in flight; issue refresh() to start again.</td></tr>
+<tr><td><code>withFilter(LogFilter $filter): self</code></td><td></td></tr>
+<tr><td><code>withFollow(bool $follow): self</code></td><td>Follow the file or freeze on what is held. A change drops the reads in flight, so a paused viewer takes no late read and a resumed one never runs two tick chains; issue refresh() after resuming (the <code>f</code> key does). Setting the current value changes nothing.</td></tr>
+<tr><td><code>withInterval(float $seconds): self</code></td><td></td></tr>
+<tr><td><code>withTailSize(int $records): self</code></td><td>How many records each read takes from the end of the file. A strict filter shows only the matches among them, so size it for the filter.</td></tr>
+<tr><td><code>withHeight(int $rows): self</code></td><td></td></tr>
+<tr><td><code>withWidth(?int $columns): self</code></td><td>Pad and clip every row to $columns cells; null renders rows at their own width. A clipped row ends in <code>…</code>.</td></tr>
+<tr><td><code>withShowTimestamps(bool $show): self</code></td><td>Show a structured record&#039;s time as <code>[time]</code>. A text line shows as written either way.</td></tr>
+<tr><td><code>withShowLevel(bool $show): self</code></td><td>Show a structured record&#039;s level as <code>[INF]</code>. A text line shows as written either way.</td></tr>
+<tr><td><code>withScrollToBottom(bool $bottom): self</code></td><td>Show the newest records (true) or the oldest of those held (false) when they overflow the height.</td></tr>
+<tr><td><code>withColor(bool $color): self</code></td><td>Color each row by its level; false renders plain text.</td></tr>
+<tr><td><code>withStyles(Styles $styles): self</code></td><td>Take the level palette from $styles. The styles are read once here, so editing $styles afterwards does not reach this viewer.</td></tr>
 </tbody>
 </table>
 <h4 id="api-sugarcraft-log-logger"><code>Logger</code> <small>final class</small></h4>

@@ -24,4 +24,5 @@ return [
     'logger.unopenable_stream' => 'не удалось открыть файл журнала \'{path}\'',
     'reader.negative_count' => 'число строк должно быть нулём или больше; получено {count}',
     'reader.unreadable' => 'не удалось прочитать файл журнала \'{path}\'',
+    'viewer.not_positive' => '{name} должно быть больше нуля; получено {value}',
 ];

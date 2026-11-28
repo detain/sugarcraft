@@ -24,4 +24,5 @@ return [
     'logger.unopenable_stream' => 'não é possível abrir o arquivo de log \'{path}\'',
     'reader.negative_count' => 'o número de linhas deve ser zero ou mais; recebido {count}',
     'reader.unreadable' => 'não é possível ler o arquivo de log \'{path}\'',
+    'viewer.not_positive' => '{name} deve ser maior que zero; recebido {value}',
 ];

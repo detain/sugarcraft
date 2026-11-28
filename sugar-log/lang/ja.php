@@ -24,4 +24,5 @@ return [
     'logger.unopenable_stream' => 'ログファイル \'{path}\' を開けません',
     'reader.negative_count' => '行数は 0 以上である必要があります（{count} が指定されました）',
     'reader.unreadable' => 'ログファイル \'{path}\' を読み取れません',
+    'viewer.not_positive' => '{name} は 0 より大きい必要があります（{value} が指定されました）',
 ];

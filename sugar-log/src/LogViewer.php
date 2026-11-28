@@ -1,0 +1,406 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Log;
+
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Concerns\Mutable;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Style\Style;
+
+/**
+ * A TEA log viewer: the newest records of a log file, through a
+ * {@see LogFilter}, following the file as it grows.
+ *
+ * ```php
+ * $viewer = LogViewer::new(LogReader::new('/var/log/app.log', LogFormat::Json))
+ *     ->withFilter(LogFilter::new()->withMinLevel(Level::Warn))
+ *     ->withHeight(20);
+ * ```
+ *
+ * Reading the file is a side effect, so it only happens inside a Cmd:
+ * {@see init()} returns {@see refresh()}, which reads the tail at once, and
+ * while following, every {@see LogTailMsg} the viewer takes schedules the
+ * next read through {@see tick()} — a `Cmd::tick` that reads when it fires.
+ * {@see update()} only folds the result in, and {@see view()} only renders
+ * the records it already holds.
+ *
+ * Each read replaces the held records with the file's last
+ * {@see withTailSize()} records rather than appending a diff. On screen it
+ * is the same — new lines arrive at the bottom — but a replace needs no
+ * guess about where the old tail ended: two identical lines in a row, a
+ * truncated file and a rotated one all come out exactly as the file reads.
+ *
+ * The filter is applied at render time, so a filter change re-renders the
+ * records already held without touching the file.
+ *
+ * Keys: `f` toggles follow. Every other message is ignored.
+ *
+ * Immutable: every with*() returns a new viewer through mutate(). The read
+ * side of the display that sugar-dashboard's `Components\System\LogViewer`
+ * renders (severity-colored rows, optional timestamps and level prefix,
+ * bottom-anchored scrolling, padded and clipped rows).
+ *
+ * Original SugarCraft read side: charmbracelet/log has no reader.
+ */
+final class LogViewer implements Model
+{
+    use Mutable;
+
+    /** How long, in seconds, a following viewer waits between reads unless told otherwise. */
+    public const DEFAULT_INTERVAL = 1.0;
+
+    /** How many records each read takes from the end of the file unless told otherwise. */
+    public const DEFAULT_TAIL_SIZE = 500;
+
+    /** Rows {@see view()} renders unless told otherwise. */
+    public const DEFAULT_HEIGHT = 10;
+
+    private static int $nextId = 0;
+
+    /**
+     * @param list<LogRecord>   $records     The newest records the last read found, unfiltered, oldest first.
+     * @param ?int              $width       Columns per row; null leaves rows unpadded and unclipped.
+     * @param array<int, Style> $levelStyles Row style per Level->value.
+     * @param ?string           $error       Why the last read failed; null after a good read.
+     * @param int               $id          Routes this viewer's {@see LogTailMsg}s back to it.
+     * @param int               $generation  Bumped when follow toggles or the reader changes, so a read issued before is dropped.
+     */
+    private function __construct(
+        public readonly LogReader $reader,
+        public readonly LogFilter $filter,
+        public readonly array $records,
+        public readonly bool $follow,
+        public readonly float $interval,
+        public readonly int $tailSize,
+        public readonly int $height,
+        public readonly ?int $width,
+        public readonly bool $showTimestamps,
+        public readonly bool $showLevel,
+        public readonly bool $scrollToBottom,
+        public readonly bool $color,
+        public readonly array $levelStyles,
+        public readonly ?string $error,
+        public readonly int $id,
+        public readonly int $generation,
+    ) {
+    }
+
+    /**
+     * A following viewer over $reader. With no $filter every record shows.
+     * Nothing is read until the Cmd from {@see init()} runs.
+     */
+    public static function new(LogReader $reader, ?LogFilter $filter = null): self
+    {
+        return new self(
+            reader: $reader,
+            filter: $filter ?? LogFilter::new(),
+            records: [],
+            follow: true,
+            interval: self::DEFAULT_INTERVAL,
+            tailSize: self::DEFAULT_TAIL_SIZE,
+            height: self::DEFAULT_HEIGHT,
+            width: null,
+            showTimestamps: false,
+            showLevel: true,
+            scrollToBottom: true,
+            color: true,
+            levelStyles: (new Styles())->levels,
+            error: null,
+            id: ++self::$nextId,
+            generation: 0,
+        );
+    }
+
+    /** The first read, whether or not the viewer follows: a viewer that never read has nothing to show. */
+    public function init(): ?\Closure
+    {
+        return $this->refresh();
+    }
+
+    /**
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof LogTailMsg) {
+            if ($msg->viewerId !== $this->id || $msg->generation !== $this->generation) {
+                return [$this, null];
+            }
+            $next = $msg->error === null
+                ? $this->mutate(['records' => $msg->records, 'error' => null])
+                : $this->mutate(['error' => $msg->error]);
+
+            // A failed read keeps following: the file may appear or come back.
+            return [$next, $next->tick()];
+        }
+
+        if ($msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'f'
+            && !$msg->ctrl && !$msg->alt) {
+            $next = $this->withFollow(!$this->follow);
+
+            // Catch up at once on resume instead of waiting a whole interval.
+            return [$next, $next->follow ? $next->refresh() : null];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * The filtered records that fit, one row each, exactly {@see $height}
+     * rows: blank rows fill the space the records leave.
+     */
+    public function view(): string
+    {
+        $visible = $this->visibleRecords();
+        $shown = $this->scrollToBottom
+            ? \array_slice($visible, \max(0, \count($visible) - $this->height))
+            : \array_slice($visible, 0, $this->height);
+
+        $rows = \array_map($this->row(...), $shown);
+        $blank = \str_repeat(' ', $this->width ?? 0);
+        while (\count($rows) < $this->height) {
+            $rows[] = $blank;
+        }
+
+        return \implode("\n", $rows);
+    }
+
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
+    }
+
+    /**
+     * A Cmd that reads the tail now and hands it back as a {@see LogTailMsg}.
+     * Issue it after {@see withReader()} or {@see withFollow()}, which drop
+     * the reads already in flight.
+     */
+    public function refresh(): \Closure
+    {
+        $reader = $this->reader;
+        $tailSize = $this->tailSize;
+        $id = $this->id;
+        $generation = $this->generation;
+
+        return static fn (): Msg => self::read($reader, $tailSize, $id, $generation);
+    }
+
+    /**
+     * A Cmd that reads the tail after {@see $interval} seconds, or null when
+     * the viewer does not follow. The read happens when the tick fires, not
+     * when the Cmd is built.
+     */
+    public function tick(): ?\Closure
+    {
+        if (!$this->follow) {
+            return null;
+        }
+        $reader = $this->reader;
+        $tailSize = $this->tailSize;
+        $id = $this->id;
+        $generation = $this->generation;
+
+        return Cmd::tick(
+            $this->interval,
+            static fn (): Msg => self::read($reader, $tailSize, $id, $generation),
+        );
+    }
+
+    /**
+     * The held records the filter keeps, oldest first — every record the
+     * viewer could show, before the height cut.
+     *
+     * @return list<LogRecord>
+     */
+    public function visibleRecords(): array
+    {
+        return $this->filter->apply($this->records);
+    }
+
+    /** Read another file. Drops reads of the old one in flight; issue {@see refresh()} to start again. */
+    public function withReader(LogReader $reader): self
+    {
+        return $this->mutate(['reader' => $reader, 'generation' => $this->generation + 1]);
+    }
+
+    public function withFilter(LogFilter $filter): self
+    {
+        return $this->mutate(['filter' => $filter]);
+    }
+
+    /**
+     * Follow the file or freeze on what is held. A change drops the reads in
+     * flight, so a paused viewer takes no late read and a resumed one never
+     * runs two tick chains; issue {@see refresh()} after resuming (the `f`
+     * key does). Setting the current value changes nothing.
+     */
+    public function withFollow(bool $follow): self
+    {
+        if ($follow === $this->follow) {
+            return $this->mutate([]);
+        }
+
+        return $this->mutate(['follow' => $follow, 'generation' => $this->generation + 1]);
+    }
+
+    /** @throws \InvalidArgumentException When $seconds is not greater than zero. */
+    public function withInterval(float $seconds): self
+    {
+        if (\is_nan($seconds) || $seconds <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('viewer.not_positive', ['name' => 'interval', 'value' => (string) $seconds]));
+        }
+
+        return $this->mutate(['interval' => $seconds]);
+    }
+
+    /**
+     * How many records each read takes from the end of the file. A strict
+     * filter shows only the matches among them, so size it for the filter.
+     *
+     * @throws \InvalidArgumentException When $records is less than one.
+     */
+    public function withTailSize(int $records): self
+    {
+        if ($records < 1) {
+            throw new \InvalidArgumentException(Lang::t('viewer.not_positive', ['name' => 'tailSize', 'value' => (string) $records]));
+        }
+
+        return $this->mutate(['tailSize' => $records]);
+    }
+
+    /** @throws \InvalidArgumentException When $rows is less than one. */
+    public function withHeight(int $rows): self
+    {
+        if ($rows < 1) {
+            throw new \InvalidArgumentException(Lang::t('viewer.not_positive', ['name' => 'height', 'value' => (string) $rows]));
+        }
+
+        return $this->mutate(['height' => $rows]);
+    }
+
+    /**
+     * Pad and clip every row to $columns cells; null renders rows at their
+     * own width. A clipped row ends in `…`.
+     *
+     * @throws \InvalidArgumentException When $columns is less than one.
+     */
+    public function withWidth(?int $columns): self
+    {
+        if ($columns !== null && $columns < 1) {
+            throw new \InvalidArgumentException(Lang::t('viewer.not_positive', ['name' => 'width', 'value' => (string) $columns]));
+        }
+
+        return $this->mutate(['width' => $columns]);
+    }
+
+    /** Show a structured record's time as `[time]`. A text line shows as written either way. */
+    public function withShowTimestamps(bool $show): self
+    {
+        return $this->mutate(['showTimestamps' => $show]);
+    }
+
+    /** Show a structured record's level as `[INF]`. A text line shows as written either way. */
+    public function withShowLevel(bool $show): self
+    {
+        return $this->mutate(['showLevel' => $show]);
+    }
+
+    /** Show the newest records (true) or the oldest of those held (false) when they overflow the height. */
+    public function withScrollToBottom(bool $bottom): self
+    {
+        return $this->mutate(['scrollToBottom' => $bottom]);
+    }
+
+    /** Color each row by its level; false renders plain text. */
+    public function withColor(bool $color): self
+    {
+        return $this->mutate(['color' => $color]);
+    }
+
+    /**
+     * Take the level palette from $styles. The styles are read once here, so
+     * editing $styles afterwards does not reach this viewer.
+     */
+    public function withStyles(Styles $styles): self
+    {
+        return $this->mutate(['levelStyles' => $styles->levels]);
+    }
+
+    private static function read(LogReader $reader, int $tailSize, int $id, int $generation): LogTailMsg
+    {
+        try {
+            return new LogTailMsg($id, $generation, $reader->tail($tailSize));
+        } catch (\RuntimeException $e) {
+            return new LogTailMsg($id, $generation, [], $e->getMessage());
+        }
+    }
+
+    private function row(LogRecord $record): string
+    {
+        // Log bytes come from outside the process: one row each, no escapes.
+        $text = \str_replace(["\n", "\t"], ' ', Sanitize::untrustedForDisplay($this->rowText($record)));
+        if ($this->width !== null) {
+            $text = Width::padRight(Width::clipCells($text, $this->width), $this->width);
+        }
+
+        $style = $record->level === null ? null : ($this->levelStyles[$record->level->value] ?? null);
+        if (!$this->color || $style === null) {
+            return $text;
+        }
+
+        return $style->render($text);
+    }
+
+    private function rowText(LogRecord $record): string
+    {
+        // A text line (or one the format could not parse) is its own message.
+        if ($record->message === $record->line) {
+            return $record->line;
+        }
+
+        $parts = [];
+        if ($this->showTimestamps && $record->time !== null) {
+            $parts[] = '[' . $record->time . ']';
+        }
+        if ($this->showLevel && $record->level !== null) {
+            $parts[] = '[' . $record->level->shortLabel() . ']';
+        }
+        if ($record->prefix !== null && $record->prefix !== '') {
+            $parts[] = $record->prefix;
+        }
+        if ($record->message !== '') {
+            $parts[] = $record->message;
+        }
+        foreach ($record->fields as $key => $value) {
+            $parts[] = $key . '=' . self::fieldValue($value);
+        }
+
+        return \implode(' ', $parts);
+    }
+
+    private static function fieldValue(mixed $value): string
+    {
+        $written = match (true) {
+            $value === null => 'null',
+            \is_bool($value) => $value ? 'true' : 'false',
+            \is_string($value) => $value,
+            \is_int($value), \is_float($value) => (string) $value,
+            default => \json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '?',
+        };
+
+        // Quote what would not read back as one value, the way logfmt does.
+        if (\is_string($value) && ($value === '' || \preg_match('/[\s"=]/', $value) === 1)) {
+            return \json_encode($value, \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE) ?: '""';
+        }
+
+        return $written;
+    }
+}

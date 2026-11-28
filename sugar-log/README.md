@@ -29,7 +29,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 - **Error-stream routing** — optional second stream for severe records (threshold defaults to `Error`) while keeping all other output on `STDOUT`
 - **Hook system** — register callbacks per log level via `HookRegistry::onLevel()` — fired via `PsrBridge` (direct `Logger` calls never dispatch hooks)
 - **Configurable log-part ordering** — `PartsOrder` DTO controls which parts appear and in what sequence
-- **Read side** — `LogReader` tails a JSON, logfmt or text log from its end without loading the file, and `LogFilter` keeps records by level and field (see [Reading logs](#reading-logs))
+- **Read side** — `LogReader` tails a JSON, logfmt or text log from its end without loading the file, and `LogFilter` keeps records by level and field (see [Reading logs](#reading-logs)); `LogViewer` is a TEA model that shows them and follows the file through Cmd ticks (see [Viewing logs](#viewing-logs))
 
 ## Install
 
@@ -511,8 +511,58 @@ assert(count($hot) === 1 && $hot[0]->message === 'oven hot');
 unlink($path);
 ```
 
-Following a file live and reading across rotation are not part of the reader
-yet.
+Reading across rotation is not part of the reader yet.
+
+## Viewing logs
+
+`LogViewer::new($reader, $filter)` is a sugar-core `Model` that shows the
+newest records of a log through a `LogFilter` and follows the file as it
+grows. The file is only read inside Cmds: `init()` returns `refresh()`, which
+reads the tail at once, and while following, every read the viewer takes
+schedules the next one through `tick()` (a `Cmd::tick` that reads when it
+fires, every `withInterval()` seconds). Each read replaces the held records
+with the file's last `withTailSize()` records, so new lines land at the
+bottom, repeated identical lines all show, and a truncated file reads as it
+is. The filter applies at render time: `withFilter()` re-renders the records
+already held without reading the file.
+
+`f` toggles follow; `withFollow()` does the same in code. Either one drops
+the reads already in flight, so a paused viewer takes no late read; after
+`withFollow(true)` or `withReader()`, issue `refresh()` (the `f` key does
+this itself). A failed read keeps the records, sets `$viewer->error` and keeps
+following. `view()` renders exactly `withHeight()` rows, newest at the bottom
+(`withScrollToBottom(false)` shows the oldest held), colored by level
+(`withColor()`, `withStyles()`), padded and clipped to `withWidth()` when one
+is set. JSON and logfmt records render as `[INF] message key=value`, with
+`withShowTimestamps()` and `withShowLevel()` controlling the time and level;
+text lines render as written, with escapes and control bytes removed.
+
+```php
+use SugarCraft\Log\Formatter\JsonFormatter;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\LogFilter;
+use SugarCraft\Log\LogFormat;
+use SugarCraft\Log\Logger;
+use SugarCraft\Log\LogReader;
+use SugarCraft\Log\LogViewer;
+
+$path = tempnam(sys_get_temp_dir(), 'sugar-log-');
+$log = Logger::new(formatter: new JsonFormatter(), stream: $path);
+$log->info('oven on');
+$log->warn('oven hot', ['temp' => 260]);
+
+$viewer = LogViewer::new(LogReader::new($path, LogFormat::Json))
+    ->withFilter(LogFilter::new()->withMinLevel(Level::Warn))
+    ->withHeight(1)
+    ->withColor(false);
+
+// What a Program does: run the init Cmd and feed its Msg to update().
+[$viewer, $tick] = $viewer->update(($viewer->init())());
+
+assert($viewer->view() === '[WRN] oven hot temp=260');
+assert($tick !== null); // following: the next read is scheduled
+unlink($path);
+```
 
 ## Panic handlers
 
